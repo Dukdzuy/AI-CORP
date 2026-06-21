@@ -1,0 +1,21 @@
+{
+  "mockServerState": {
+    "expectations": [
+      {
+        "httpRequest": {
+          "method": "POST",
+          "path": "/v1/chat/completions"
+        },
+        "httpResponse": {
+          "statusCode": 200,
+          "headers": {
+            "Content-Type": ["application/json"]
+          },
+          "body": {
+            "string": "{\"id\":\"mock-response\",\"object\":\"chat.completion\",\"created\":1234567890,\"model\":\"claude-sonnet-4\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Mock response from 9Router\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":100,\"completion_tokens\":50,\"total_tokens\":150},\"x-actual-model-used\":\"claude-sonnet-4\",\"x-actual-provider\":\"anthropic\",\"x-rtk-tokens-saved\":10}"
+          }
+        }
+      }
+    ]
+  }
+}

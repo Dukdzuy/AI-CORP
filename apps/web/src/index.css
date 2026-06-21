@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* ===== Global Reset & Dark Base ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: #0d1117;
+  color: #e6edf3;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Scrollbar Styling ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #161b22;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* ===== Ant Design Overrides ===== */
+.ant-layout {
+  background: #0d1117;
+}
+
+.ant-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.ant-card:hover {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.ant-tabs-tab {
+  color: #8b949e !important;
+}
+
+.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: #e6edf3 !important;
+}
+
+.ant-tabs-ink-bar {
+  background: #1677ff !important;
+}
+
+/* ===== Utility Classes ===== */
+.gradient-text {
+  background: linear-gradient(135deg, #1677ff 0%, #722ed1 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-card {
+  background: rgba(22, 27, 34, 0.8) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(48, 54, 61, 0.8) !important;
+}

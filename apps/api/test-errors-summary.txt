@@ -1,0 +1,104 @@
+
+--- E:\AI CORP\apps\api\src\modules\tools\tool.registry.spec.ts ---
+
+--- E:\AI CORP\apps\api\src\modules\llm\nine-router-provider.spec.ts ---
+- NineRouterProvider chat should send chat request and return ChatResult
+  TypeError: Cannot read properties of undefined (reading 'model')
+- NineRouterProvider chat should handle fallback when actual model differs from requested
+  TypeError: Cannot read properties of undefined (reading 'model')
+- NineRouterProvider chat should extract RTK tokens saved when present
+  TypeError: Cannot read properties of undefined (reading 'model')
+- NineRouterProvider chat should extract provider from response headers
+  TypeError: Cannot read properties of undefined (reading 'model')
+- NineRouterProvider chat should include temperature and maxTokens in request
+  TypeError: Cannot read properties of undefined (reading 'model')
+- NineRouterProvider chat should handle errors gracefully
+  Error: expect(received).rejects.toThrow(expected)
+- NineRouterProvider chat should handle authentication errors
+  Error: expect(received).rejects.toThrow(expected)
+- NineRouterProvider validateConfig should return false when configuration is invalid
+  Error: expect(received).toBe(expected) // Object.is equality
+- NineRouterProvider validateConfig should handle authentication validation failures
+  Error: expect(received).toBe(expected) // Object.is equality
+- NineRouterProvider token usage tracking should accurately track prompt, completion, and total tokens
+  TypeError: Cannot read properties of undefined (reading 'model')
+- NineRouterProvider token usage tracking should handle missing usage data
+  TypeError: Cannot read properties of undefined (reading 'model')
+- NineRouterProvider tool calls should include tool calls in response when present
+  TypeError: Cannot read properties of undefined (reading 'model')
+
+--- E:\AI CORP\apps\api\src\modules\llm\anthropic-direct.provider.spec.ts ---
+- AnthropicDirectProvider initialization should warn when ANTHROPIC_API_KEY is not set
+  Error: Property `logger` does not exist in the provided object
+- AnthropicDirectProvider chat should successfully make a chat request and return ChatResult
+  Error: Anthropic API error: Cannot read properties of undefined (reading 'content')
+- AnthropicDirectProvider chat should handle tool use responses
+  Error: Anthropic API error: Cannot read properties of undefined (reading 'content')
+- AnthropicDirectProvider chat should extract system message separately from messages array
+  Error: Anthropic API error: Cannot read properties of undefined (reading 'content')
+- AnthropicDirectProvider chat should handle empty system message
+  Error: Anthropic API error: Cannot read properties of undefined (reading 'content')
+- AnthropicDirectProvider chat should use default values for optional parameters
+  Error: Anthropic API error: Cannot read properties of undefined (reading 'content')
+- AnthropicDirectProvider chat should throw error when API call fails
+  Error: expect(received).rejects.toThrow(expected)
+- AnthropicDirectProvider chat should handle non-Error exceptions
+  Error: expect(received).rejects.toThrow(expected)
+- AnthropicDirectProvider validateConfig should return true when API key is configured and API is accessible
+  Error: expect(jest.fn()).toHaveBeenCalledWith(...expected)
+- AnthropicDirectProvider validateConfig should return false when API call fails
+  Error: expect(received).toBe(expected) // Object.is equality
+- AnthropicDirectProvider Requirements validation should satisfy Requirement 4: LLM Gateway Integration (fallback provider)
+  Error: Anthropic API error: Cannot read properties of undefined (reading 'content')
+
+--- E:\AI CORP\apps\api\src\modules\memory\memory.service.spec.ts ---
+- MemoryService searchMemories should respect limit parameter
+  Error: expect(received).toBeLessThanOrEqual(expected)
+
+--- E:\AI CORP\apps\api\src\modules\memory\embedding.service.spec.ts ---
+- EmbeddingService batchGenerateEmbeddings should continue processing if one batch fails
+  Error: expect(received).toHaveLength(expected)
+
+--- E:\AI CORP\apps\api\src\modules\llm\llm-provider.factory.spec.ts ---
+- LLMProviderFactory getProvider should return a provider for ninerouter config
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory getProvider should return a provider for anthropic-direct config
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory getProvider should default to anthropic-direct when provider not specified
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory getProvider should default to anthropic-direct for unknown provider
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory getProvider should cache provider instances by model
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory getProvider should create different providers for different models
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory getProvider should cache provider instances by provider type
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory getProvider should respect fallbackProvider in config
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory clearCache should clear cached providers
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory clearCache should allow provider re-instantiation after cache clear
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory provider implementations should successfully create ninerouter provider
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory provider implementations should successfully create anthropic-direct provider
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory factory configuration validation should handle config with all optional fields
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory factory configuration validation should handle config with minimal required fields
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory integration scenarios should support switching between providers
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+- LLMProviderFactory integration scenarios should handle multiple agents with different providers
+  Error: Nest can't resolve dependencies of the LLMProviderFactory (?). Please make sure that the argument NineRouterHealthService at index [0] is available in the RootTestModule context.
+
+--- E:\AI CORP\apps\api\src\modules\tools\sandbox.executor.spec.ts ---
+- SandboxExecutor isResourceExhaustionError should handle null error gracefully
+  TypeError: Cannot read properties of null (reading 'message')
+- SandboxExecutor - Integration Tests (requires Docker) Docker Integration - Container Security should allow writing to /tmp directory
+  Error: expect(received).toBe(expected) // Object.is equality
+- SandboxExecutor - Integration Tests (requires Docker) Docker Integration - Timeout Handling should complete commands within timeout
+  Error: expect(received).toBe(expected) // Object.is equality
+- SandboxExecutor - Integration Tests (requires Docker) Docker Integration - Execution Accuracy should capture command output correctly
+  Error: expect(received).toBe(expected) // Object.is equality

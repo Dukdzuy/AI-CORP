@@ -1,0 +1,26 @@
+{
+  "name": "ai-corp-platform",
+  "version": "0.1.0",
+  "description": "AI Corp - Virtual Company Simulation Platform",
+  "private": true,
+  "packageManager": "pnpm@8.0.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "db:push": "turbo run db:push",
+    "db:migrate": "turbo run db:migrate"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.1.0",
+    "turbo": "^1.11.0",
+    "typescript": "^5.3.3"
+  }
+}

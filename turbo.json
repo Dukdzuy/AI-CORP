@@ -1,0 +1,41 @@
+{
+  "version": "1",
+  "globalEnv": [
+    "DATABASE_URL",
+    "REDIS_URL",
+    "NINE_ROUTER_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "NODE_ENV"
+  ],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"],
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "cache": false
+    },
+    "format": {
+      "cache": false
+    },
+    "db:push": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    }
+  }
+}

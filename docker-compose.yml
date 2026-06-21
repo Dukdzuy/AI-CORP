@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ai-corp-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ai_corp_dev
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-postgres.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-corp-network
+
+  # Redis for caching and task queues
+  redis:
+    image: redis:7-alpine
+    container_name: ai-corp-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-corp-network
+
+  # 9Router LLM Gateway (mocked for local development)
+  # In production, this would be a real 9Router instance at your deployment
+  nine-router-mock:
+    image: mockserver/mockserver:latest
+    container_name: ai-corp-nine-router
+    ports:
+      - '20128:1080'
+    environment:
+      MOCKSERVER_PROPERTY_FILE: /config/mockserver-init.properties
+    volumes:
+      - ./scripts/nine-router-mock.json:/mockserver/expectations.json
+    networks:
+      - ai-corp-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  ai-corp-network:
+    driver: bridge

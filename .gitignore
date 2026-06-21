@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production.local
+
+# Build output
+dist/
+build/
+.turbo/
+
+# Development
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Prisma
+prisma/migrations/
+.env.test
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+*.lcov
+
+# Temporary
+*.tmp
+.cache

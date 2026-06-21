@@ -1,0 +1,115 @@
+import { io, Socket } from 'socket.io-client';
+import { useAuthStore } from '../../stores/authStore';
+import { useWebsocketStore } from '../../stores/websocketStore';
+import {
+  WebSocketEventType,
+  AgentThinkingEvent,
+  AgentActionEvent,
+  AgentMessageEvent,
+  TaskUpdatedEvent,
+  WorkflowStateChangedEvent,
+  ApprovalRequiredEvent,
+  SystemNotificationEvent,
+} from '@ai-corp/shared-types';
+
+const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+
+type EventHandler<T> = (data: T) => void;
+
+const eventHandlers: Map<string, Set<EventHandler<any>>> = new Map();
+
+let socket: Socket | null = null;
+
+export const socketClient = {
+  connect: () => {
+    if (socket?.connected) return;
+
+    const { token } = useAuthStore.getState();
+
+    socket = io(WS_URL, {
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+    });
+
+    const wsStore = useWebsocketStore.getState();
+
+    socket.on('connect', () => {
+      wsStore.setStatus('connected');
+      console.log('[WS] Connected to server');
+    });
+
+    socket.on('disconnect', () => {
+      wsStore.setStatus('disconnected');
+      console.log('[WS] Disconnected from server');
+    });
+
+    socket.on('reconnecting', () => {
+      wsStore.setStatus('reconnecting');
+      console.log('[WS] Reconnecting...');
+    });
+
+    socket.on('reconnect', () => {
+      wsStore.setStatus('connected');
+      console.log('[WS] Reconnected to server');
+    });
+
+    // Register all AI Corp event listeners
+    const registerEvent = <T>(eventType: WebSocketEventType) => {
+      socket!.on(eventType, (data: T) => {
+        wsStore.recordMessage();
+        const handlers = eventHandlers.get(eventType);
+        handlers?.forEach((handler) => handler(data));
+      });
+    };
+
+    registerEvent<AgentThinkingEvent>(WebSocketEventType.AGENT_THINKING);
+    registerEvent<AgentActionEvent>(WebSocketEventType.AGENT_ACTION);
+    registerEvent<AgentMessageEvent>(WebSocketEventType.AGENT_MESSAGE);
+    registerEvent<TaskUpdatedEvent>(WebSocketEventType.TASK_UPDATED);
+    registerEvent<WorkflowStateChangedEvent>(WebSocketEventType.WORKFLOW_STATE_CHANGED);
+    registerEvent<ApprovalRequiredEvent>(WebSocketEventType.HUMAN_APPROVAL_REQUIRED);
+    registerEvent<SystemNotificationEvent>(WebSocketEventType.SYSTEM_NOTIFICATION);
+
+    // Listen for system health events (circuit breaker, degraded, etc.)
+    socket.on('system_event', (data: any) => {
+      wsStore.recordMessage();
+      const handlers = eventHandlers.get('system_event');
+      handlers?.forEach((handler) => handler(data));
+    });
+  },
+
+  disconnect: () => {
+    socket?.disconnect();
+    socket = null;
+    useWebsocketStore.getState().setStatus('disconnected');
+  },
+
+  on: <T>(event: WebSocketEventType | string, handler: EventHandler<T>): (() => void) => {
+    if (!eventHandlers.has(event)) {
+      eventHandlers.set(event, new Set());
+    }
+    eventHandlers.get(event)!.add(handler);
+
+    // Return cleanup function
+    return () => {
+      eventHandlers.get(event)?.delete(handler);
+    };
+  },
+
+  emit: (event: string, data?: unknown) => {
+    if (!socket?.connected) {
+      console.warn('[WS] Cannot emit — not connected');
+      return;
+    }
+    socket.emit(event, data);
+  },
+
+  get connected() {
+    return socket?.connected ?? false;
+  },
+};
+
+export default socketClient;

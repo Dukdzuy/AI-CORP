@@ -1,0 +1,273 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// User & Authentication
+// ============================================================================
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String
+  role          String    @default("board_member")
+  passwordHash  String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  projects      Project[]
+  approvals     Approval[]
+}
+
+// ============================================================================
+// Projects, Milestones, Tasks
+// ============================================================================
+
+model Project {
+  id              String    @id @default(uuid())
+  name            String
+  description     String    @db.Text
+  goal            String    @db.Text
+  status          String    @default("active") // active, paused, completed, cancelled
+  budget          Decimal?  @db.Decimal(10, 2)
+  costAccrued     Decimal   @default(0) @db.Decimal(10, 2)
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  createdBy       User      @relation(fields: [createdById], references: [id])
+  milestones      Milestone[]
+  tasks           Task[]
+  workflowRuns    WorkflowRun[]
+  agentMessages   AgentMessage[]
+  apiUsageLogs    ApiUsageLog[]
+
+  @@index([createdById])
+  // Requirement 17.2: budget must be positive when provided
+  // Validated in application layer via ProjectController
+}
+
+/// Requirement 12: Task Management - Kanban status transitions
+/// Valid transitions: todo -> in_progress -> review -> done
+/// or todo -> done (in some cases)
+model Task {
+  id            String    @id @default(uuid())
+  projectId     String
+  milestoneId   String?
+  title         String
+  description   String    @db.Text
+  status        String    @default("todo") // todo, in_progress, review, done
+  priority      String    @default("medium") // low, medium, high
+  assignedAgent String?
+  estimatedCost Decimal?  @db.Decimal(10, 2)
+  actualCost    Decimal   @default(0) @db.Decimal(10, 2)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  project       Project   @relation(fields: [projectId], references: [id])
+  milestone     Milestone? @relation(fields: [milestoneId], references: [id])
+  workflowSteps WorkflowStep[]
+
+  @@index([projectId])
+  @@index([projectId, status])
+  // Requirement 12.5: Status transitions validated in TaskController
+  // Requirement 17: Kanban rules enforcement in application layer
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  projectId   String
+  name        String
+  description String    @db.Text
+  status      String    @default("pending") // pending, in_progress, completed
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  project     Project   @relation(fields: [projectId], references: [id])
+  tasks       Task[]
+
+  @@index([projectId])
+}
+
+// ============================================================================
+// Agent Configuration
+// ============================================================================
+
+/// Requirement 15: Agent Configuration - One configuration per role
+/// Requirement 17.1: Agent.role is unique across all agents
+model Agent {
+  id                String    @id @default(uuid())
+  role              String    @unique // CEO, PM, DEV, QA, MARKETING - Requirement 17.1: unique
+  name              String
+  systemPrompt      String    @db.Text
+  modelRouteConfig  Json      // { provider, model, fallbackProvider?, tags? }
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  memories          AgentMemory[]
+  messages          AgentMessage[]
+}
+
+// ============================================================================
+// Agent Memory (with vector embeddings)
+// ============================================================================
+
+model AgentMemory {
+  id          String    @id @default(uuid())
+  agentId     String
+  agentRole   String
+  namespace   String    // e.g., "coding_conventions", "brand_voice", "lessons_learned"
+  content     String    @db.Text
+  embedding   String?                       // JSON array of floats, e.g. "[0.001,0.002,...]" - switches to pgvector in production
+  importance  Int       @default(5)        // 1-10 scale, Requirement 17.3: must be in [1-10]
+  metadata    Json                         // { projectId?, timestamp, tags[] }
+  createdAt   DateTime  @default(now())
+
+  agent       Agent     @relation(fields: [agentId], references: [id])
+
+  @@index([agentRole, namespace])
+  @@index([createdAt])
+  // Requirement 17.3: importance validation [1-10] enforced in MemoryService
+  // Note: pgvector HNSW index created via raw SQL migration for semantic search performance
+}
+
+// ============================================================================
+// Agent Messages (Meeting Room)
+// ============================================================================
+
+model AgentMessage {
+  id          String    @id @default(uuid())
+  projectId   String
+  fromAgentId String
+  fromRole    String
+  toRole      String?   // null means broadcast to all
+  message     String    @db.Text
+  messageType String    @default("chat") // chat, thinking, action, notification
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+
+  project     Project   @relation(fields: [projectId], references: [id])
+  agent       Agent     @relation(fields: [fromAgentId], references: [id])
+
+  @@index([projectId, createdAt])
+}
+
+// ============================================================================
+// Workflow Orchestration
+// ============================================================================
+
+model WorkflowRun {
+  id            String    @id @default(uuid())
+  projectId     String
+  workflowDefId String
+  status        String    @default("running") // running, paused, completed, failed, cancelled
+  currentNodeId String?
+  context       Json      // Workflow execution context
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  project       Project   @relation(fields: [projectId], references: [id])
+  steps         WorkflowStep[]
+  approvals     Approval[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model WorkflowStep {
+  id            String    @id @default(uuid())
+  workflowRunId String
+  taskId        String?
+  nodeId        String
+  agentRole     String?
+  status        String    @default("pending") // pending, running, completed, failed, skipped
+  input         Json?
+  output        Json?
+  error         String?   @db.Text
+  retryCount    Int       @default(0)
+  startedAt     DateTime?
+  completedAt   DateTime? // Requirement 17.6: completedAt must be after startedAt when both are set
+  durationMs    Int?      // Execution time in milliseconds
+
+  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id])
+  task          Task?       @relation(fields: [taskId], references: [id])
+
+  @@index([workflowRunId, nodeId])
+  @@index([status])
+  // Requirement 17.6: Timestamp ordering validation enforced in WorkflowService
+}
+
+// ============================================================================
+// Human Approval
+// ============================================================================
+
+/// Requirement 17.7: Approval.status can only transition from "pending" to "approved" or "rejected"
+model Approval {
+  id            String    @id @default(uuid())
+  workflowRunId String
+  userId        String
+  approvalType  String
+  status        String    @default("pending") // pending, approved, rejected - transitions validated in app layer
+  requestData   Json
+  comment       String?   @db.Text
+  requestedAt   DateTime  @default(now())
+  respondedAt   DateTime?
+
+  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
+
+  @@index([workflowRunId])
+  @@index([status])
+  // Requirement 17.7: Status transition validation enforced in ApprovalService
+}
+
+// ============================================================================
+// API Usage Logging (9Router integration)
+// ============================================================================
+
+model ApiUsageLog {
+  id                  String    @id @default(uuid())
+  projectId           String?
+  agentRole           String
+  requestedModel      String    // Model requested by agent
+  actualModelUsed     String    // Actual model returned by provider (used for cost calculation)
+  actualProvider      String    // Provider that handled the request (9Router, Anthropic, etc.)
+  isFallbackTriggered Boolean   @default(false) // Whether circuit breaker fallback was used
+  promptTokens        Int       // Token count for prompt/input
+  completionTokens    Int       // Token count for completion/output
+  totalTokens         Int       // Must equal promptTokens + completionTokens (validated in app layer)
+  rtkTokenSaved       Int?      // Tokens saved by RTK compression (non-negative and <= promptTokens)
+  estimatedCost       Decimal   @db.Decimal(10, 6) // Cost calculated from requestedModel pricing
+  actualCost          Decimal   @db.Decimal(10, 6) // Cost calculated from actualModelUsed pricing
+  responseTimeMs      Int       // LLM response latency in milliseconds
+  createdAt           DateTime  @default(now())
+
+  project             Project?  @relation(fields: [projectId], references: [id])
+
+  @@index([projectId, createdAt])
+  @@index([agentRole, createdAt])
+}
+
+// ============================================================================
+// LLM Gateway Status - Circuit Breaker and Health Monitoring
+// ============================================================================
+
+model LLMGatewayStatus {
+  id                  String    @id @default(uuid())
+  gatewayName         String    @unique // "ninerouter" - identifies the gateway
+  status              String    // "online", "offline", "degraded" - current health status
+  lastHealthCheck     DateTime  // Timestamp of last health check
+  consecutiveFailures Int       @default(0) // Counter for consecutive failures (triggers circuit breaker at threshold 3)
+  metadata            Json?     // Additional health metrics (error details, latency, etc.)
+  updatedAt           DateTime  @updatedAt // Last status update timestamp
+}
