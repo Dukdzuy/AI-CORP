@@ -55,6 +55,8 @@ export abstract class BaseAgent {
       message: thought,
     } as any;
     this.websocketGateway.sendToProject(projectId, { type: 'agent:thinking', payload: event });
+    // Also broadcast to all clients for VirtualOffice
+    this.websocketGateway.broadcastEvent({ type: 'agent:thinking', payload: event });
   }
 
   /**
@@ -70,6 +72,8 @@ export abstract class BaseAgent {
       parameters
     };
     this.websocketGateway.sendToProject(projectId, { type: 'agent:action', payload: event });
+    // Also broadcast to all clients for VirtualOffice
+    this.websocketGateway.broadcastEvent({ type: 'agent:action', payload: event });
   }
 
   /**
@@ -100,9 +104,13 @@ export abstract class BaseAgent {
    */
   protected async saveMemory(namespace: string, content: string, importance: number = 5, projectId?: string): Promise<string> {
     const metadata: MemoryMetadata = { importance, projectId };
-    // Assuming agentId is a known context or we pass it
-    // For now we use the role as agentId in this abstract base since agentId might be tied to DB instance
-    return this.memoryService.saveMemory('agent-instance-' + this.role, this.role, namespace, content, metadata);
+    // Look up actual agent UUID from database
+    const agentId = await this.memoryService.getAgentIdByRole(this.role);
+    if (!agentId) {
+      this.logger.warn(`No agent found for role '${this.role}', skipping memory save`);
+      return 'skipped-no-agent';
+    }
+    return this.memoryService.saveMemory(agentId, this.role, namespace, content, metadata);
   }
 
   /**

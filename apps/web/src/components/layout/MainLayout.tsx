@@ -7,6 +7,7 @@ import {
   UserOutlined,
   SettingOutlined,
   LogoutOutlined,
+  RobotOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useWebsocketStore } from '../../stores/websocketStore';
@@ -40,6 +41,8 @@ export const MainLayout: React.FC = () => {
     ? '/projects'
     : location.pathname.startsWith('/admin')
     ? '/admin'
+    : location.pathname.startsWith('/agents')
+    ? '/agents'
     : '/';
 
   const menuItems = [
@@ -60,6 +63,12 @@ export const MainLayout: React.FC = () => {
       icon: <SettingOutlined />,
       label: 'Admin',
       onClick: () => navigate('/admin'),
+    },
+    {
+      key: '/agents',
+      icon: <RobotOutlined />,
+      label: 'Agent Models',
+      onClick: () => navigate('/agents'),
     },
   ];
 

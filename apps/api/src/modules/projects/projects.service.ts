@@ -61,7 +61,13 @@ export class ProjectsService {
   async listProjects() {
     return this.prisma.project.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { _count: { select: { tasks: true, milestones: true } } },
+      include: {
+        _count: { select: { tasks: true, milestones: true } },
+        workflowRuns: {
+          orderBy: { startedAt: 'desc' },
+          take: 1, // Only get the latest workflow run
+        },
+      },
     });
   }
 
@@ -109,6 +115,10 @@ export class ProjectsService {
       include: {
         milestones: true,
         tasks: true,
+        workflowRuns: {
+          orderBy: { startedAt: 'desc' },
+          take: 10,
+        },
       },
     });
 
@@ -135,6 +145,25 @@ export class ProjectsService {
 
   async pauseProject(id: string) {
     return this.updateProject(id, { status: 'paused' });
+  }
+
+  async deleteProject(id: string) {
+    const project = await this.prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      throw new NotFoundException(`Project with ID ${id} not found.`);
+    }
+
+    // Delete related records first
+    await this.prisma.workflowStep.deleteMany({ where: { workflowRun: { projectId: id } } });
+    await this.prisma.approval.deleteMany({ where: { workflowRun: { projectId: id } } });
+    await this.prisma.workflowRun.deleteMany({ where: { projectId: id } });
+    await this.prisma.task.deleteMany({ where: { projectId: id } });
+    await this.prisma.milestone.deleteMany({ where: { projectId: id } });
+    await this.prisma.agentMessage.deleteMany({ where: { projectId: id } });
+    await this.prisma.project.delete({ where: { id } });
+
+    this.logger.log(`Deleted project ${id}`);
+    return { success: true, id };
   }
 
   async incrementCost(id: string, cost: number) {

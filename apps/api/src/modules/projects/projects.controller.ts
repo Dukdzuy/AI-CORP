@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, UseGuards } from '@nestjs/common';
 import { ProjectsService, CreateProjectDto, UpdateProjectDto } from './projects.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -22,8 +22,15 @@ export class ProjectsController {
     return this.projectsService.getProjectDetails(id);
   }
 
+  @UseGuards(JwtAuthGuard)
   @Patch(':id')
   async updateProject(@Param('id') id: string, @Body() data: UpdateProjectDto) {
     return this.projectsService.updateProject(id, data);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete(':id')
+  async deleteProject(@Param('id') id: string) {
+    return this.projectsService.deleteProject(id);
   }
 }

@@ -19,7 +19,7 @@ export class PmAgent extends BaseAgent {
     websocketGateway: AppWebSocketGateway
   ) {
     const systemPrompt = `You are the Project Manager. Your objective is to break down milestones into actionable technical tasks for the development team.`;
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'oc/big-pickle', fallbackProvider: 'opencode' };
+    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
     super(AgentRole.PM, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
   }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Typography, Row, Col, Card, Statistic, Button, Empty, Skeleton, Tag, Progress, Space, Flex, Modal, Form, Input, InputNumber, message, Tabs } from 'antd';
+import { Typography, Row, Col, Card, Statistic, Button, Empty, Skeleton, Tag, Progress, Space, Flex, Modal, Form, Input, InputNumber, message, Tabs, Dropdown } from 'antd';
 import {
   PlusOutlined,
   RocketOutlined,
@@ -8,8 +8,13 @@ import {
   ClockCircleOutlined,
   DollarOutlined,
   BarChartOutlined,
+  DeleteOutlined,
+  PauseCircleOutlined,
+  StopOutlined,
+  MoreOutlined,
+  PlayCircleOutlined,
 } from '@ant-design/icons';
-import { useProjects, useCreateProject } from '../lib/api/hooks/projects';
+import { useProjects, useCreateProject, useDeleteProject, useUpdateProject } from '../lib/api/hooks/projects';
 import { useProjectStore } from '../stores/projectStore';
 import { useNavigate } from 'react-router-dom';
 import { Project, ProjectStatus } from '@ai-corp/shared-types';
@@ -25,13 +30,67 @@ const STATUS_CONFIG: Record<ProjectStatus, { color: string; icon: React.ReactNod
   [ProjectStatus.CANCELLED]: { color: 'red', icon: <ClockCircleOutlined />, label: 'Cancelled' },
 };
 
-const ProjectCard: React.FC<{ project: Project; onClick: () => void }> = ({ project, onClick }) => {
+const ProjectCard: React.FC<{
+  project: Project;
+  onClick: () => void;
+  onDelete?: (id: string, name: string) => void;
+  onPause?: (id: string) => void;
+  onResume?: (id: string) => void;
+}> = ({ project, onClick, onDelete, onPause, onResume }) => {
   const statusCfg = STATUS_CONFIG[project.status] ?? { color: 'default', icon: null, label: project.status };
 
-  // Calculate progress based on cost/budget if available
-  const progressPercent = project.budget != null && project.budget > 0
-    ? Math.min(100, Math.round((project.costAccrued / project.budget) * 100))
-    : null;
+  const menuItems = [
+    project.status === 'active' && {
+      key: 'pause',
+      icon: <PauseCircleOutlined />,
+      label: 'Pause',
+      onClick: (e: any) => { e.domEvent.stopPropagation(); onPause?.(project.id); },
+    },
+    project.status === 'paused' && {
+      key: 'resume',
+      icon: <PlayCircleOutlined />,
+      label: 'Resume',
+      onClick: (e: any) => { e.domEvent.stopPropagation(); onResume?.(project.id); },
+    },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined />,
+      label: 'Delete',
+      danger: true,
+      onClick: (e: any) => { e.domEvent.stopPropagation(); onDelete?.(project.id, project.name); },
+    },
+  ].filter(Boolean);
+
+  // Calculate progress based on workflow status if available
+  const workflowRun = project.workflowRuns?.[0];
+  let workflowProgress = 0;
+  let progressLabel = 'Starting...';
+  
+  if (workflowRun) {
+    // Map workflow status to progress
+    if (workflowRun.status === 'completed') {
+      workflowProgress = 100;
+      progressLabel = 'Completed';
+    } else if (workflowRun.status === 'failed') {
+      workflowProgress = 50;
+      progressLabel = 'Failed';
+    } else if (workflowRun.status === 'paused') {
+      workflowProgress = 75;
+      progressLabel = 'Paused';
+    } else {
+      // running - estimate based on current node
+      const nodes = ['start', 'breakdown', 'develop', 'review', 'market', 'approval', 'end'];
+      const nodeIndex = nodes.indexOf(workflowRun.currentNodeId || 'start');
+      workflowProgress = nodeIndex >= 0 ? Math.round((nodeIndex / nodes.length) * 100) : 25;
+      progressLabel = `Running: ${workflowRun.currentNodeId || 'start'}`;
+    }
+  } else {
+    // Fallback: calculate progress based on cost/budget if available
+    if (project.budget != null && project.budget > 0) {
+      workflowProgress = Math.min(100, Math.round((project.costAccrued / project.budget) * 100));
+      progressLabel = `${workflowProgress}% of budget`;
+    }
+  }
 
   return (
     <Card
@@ -51,9 +110,14 @@ const ProjectCard: React.FC<{ project: Project; onClick: () => void }> = ({ proj
           <Title level={5} style={{ color: '#e6edf3', margin: 0 }}>
             {project.name}
           </Title>
-          <Tag color={statusCfg.color} icon={statusCfg.icon}>
-            {statusCfg.label}
-          </Tag>
+          <Space>
+            <Tag color={statusCfg.color} icon={statusCfg.icon}>
+              {statusCfg.label}
+            </Tag>
+            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+              <Button type="text" size="small" icon={<MoreOutlined />} onClick={(e) => e.stopPropagation()} />
+            </Dropdown>
+          </Space>
         </Flex>
 
         <Paragraph
@@ -64,10 +128,10 @@ const ProjectCard: React.FC<{ project: Project; onClick: () => void }> = ({ proj
         </Paragraph>
 
         <div>
-          <Text style={{ color: '#8b949e', fontSize: 12 }}>Progress</Text>
+          <Text style={{ color: '#8b949e', fontSize: 12 }}>Progress: {progressLabel}</Text>
           <Progress
-            percent={progressPercent ?? 0}
-            strokeColor={progressPercent !== null && progressPercent >= 90 ? '#ff4d4f' : { from: '#1677ff', to: '#722ed1' }}
+            percent={workflowProgress}
+            strokeColor={workflowProgress >= 100 ? '#52c41a' : workflowProgress >= 50 ? { from: '#1677ff', to: '#722ed1' } : '#ff4d4f'}
             trailColor="#21262d"
             size="small"
             style={{ marginTop: 4 }}
@@ -100,12 +164,50 @@ export const Dashboard: React.FC = () => {
   const [form] = Form.useForm();
   const { data: projects, isLoading } = useProjects();
   const createProject = useCreateProject();
+  const deleteProject = useDeleteProject();
+  const updateProject = useUpdateProject();
   const { setSelectedProject } = useProjectStore();
   const navigate = useNavigate();
 
   const handleProjectClick = (project: Project) => {
     setSelectedProject(project);
     navigate(`/projects/${project.id}`);
+  };
+
+  const handleDeleteProject = async (projectId: string, projectName: string) => {
+    Modal.confirm({
+      title: 'Delete Project',
+      content: `Are you sure you want to delete "${projectName}"? This action cannot be undone.`,
+      okText: 'Delete',
+      okType: 'danger',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        try {
+          await deleteProject.mutateAsync(projectId);
+          message.success('Project deleted successfully!');
+        } catch (error) {
+          message.error('Failed to delete project.');
+        }
+      },
+    });
+  };
+
+  const handlePauseProject = async (projectId: string) => {
+    try {
+      await updateProject.mutateAsync({ id: projectId, status: 'paused' });
+      message.success('Project paused!');
+    } catch (error) {
+      message.error('Failed to pause project.');
+    }
+  };
+
+  const handleResumeProject = async (projectId: string) => {
+    try {
+      await updateProject.mutateAsync({ id: projectId, status: 'active' });
+      message.success('Project resumed!');
+    } catch (error) {
+      message.error('Failed to resume project.');
+    }
   };
 
   const handleCreateProject = async (values: { name: string; description: string; goal: string; budget?: number }) => {
@@ -409,7 +511,13 @@ export const Dashboard: React.FC = () => {
               <Row gutter={[16, 16]}>
                 {projects.map((project) => (
                   <Col xs={24} md={12} xl={8} key={project.id}>
-                    <ProjectCard project={project} onClick={() => handleProjectClick(project)} />
+                    <ProjectCard
+                      project={project}
+                      onClick={() => handleProjectClick(project)}
+                      onDelete={handleDeleteProject}
+                      onPause={handlePauseProject}
+                      onResume={handleResumeProject}
+                    />
                   </Col>
                 ))}
               </Row>

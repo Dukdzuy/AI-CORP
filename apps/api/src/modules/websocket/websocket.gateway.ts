@@ -82,8 +82,14 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
 
   /**
    * Send an event to a specific project room
+   * Emits both the specific event type and project_event for backwards compatibility
    */
   sendToProject(projectId: string, event: any) {
+    // Emit the specific event type directly (e.g., 'agent:thinking')
+    if (event.type && event.payload) {
+      this.server.to(projectId).emit(event.type, event.payload);
+    }
+    // Also emit as project_event for general listeners
     this.server.to(projectId).emit('project_event', event);
   }
 

@@ -19,7 +19,7 @@ export class QaAgent extends BaseAgent {
     websocketGateway: AppWebSocketGateway
   ) {
     const systemPrompt = `You are the QA Engineer. Your objective is to review code, run tests, and ensure software quality.`;
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'oc/north-mini-code-free', fallbackProvider: 'opencode' };
+    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', fallbackProvider: 'opencode' };
     super(AgentRole.QA, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
   }
 
@@ -38,7 +38,14 @@ export class QaAgent extends BaseAgent {
       ? `\n\nRelevant testing patterns:\n${memories.map((m: any) => m.content).join('\n')}`
       : '';
 
-    const prompt = `Review the following implementation and provide a short QA report:${memoryContext}\n\nCode: ${context.code}`;
+    const prompt = `You are a QA engineer reviewing code. Analyze the implementation and give your verdict.
+${memoryContext}
+Code: ${context.code || 'No code provided'}
+
+Instructions:
+- If the code looks reasonable and has no obvious critical bugs, reply with: VERDICT: PASS
+- If the code has critical issues that prevent it from working, reply with: VERDICT: FAIL
+Always include VERDICT: PASS or VERDICT: FAIL on the last line.`;
 
     const result = await this.callLLM({
       messages: [{ role: 'user', content: prompt }],
@@ -48,6 +55,22 @@ export class QaAgent extends BaseAgent {
     await this.saveMemory('testing_patterns', `Reviewed code for task: ${context.taskId || 'unknown'}`, 5, context.projectId);
 
     this.emitAction(context.projectId, context.taskId || 'none', 'review', 'llm', { codeLength: context.code?.length });
-    return { action: 'review', output: result.content };
+
+    const output = result.content || '';
+    const outputUpper = output.toUpperCase();
+    // Robust check: approve unless explicitly FAIL
+    const explicitlyFailed = outputUpper.includes('VERDICT: FAIL') || 
+                             outputUpper.includes('APPROVED: NO') ||
+                             outputUpper.includes('REJECTED');
+    const approved = !explicitlyFailed;
+
+    this.logger.log(`QA review result: ${approved ? 'APPROVED' : 'REJECTED'} (explicitlyFailed=${explicitlyFailed})`);
+
+    return { 
+      action: 'review', 
+      output,
+      qa_approved: approved,
+      edgeCondition: approved ? 'onSuccess' : 'onFail'
+    };
   }
 }

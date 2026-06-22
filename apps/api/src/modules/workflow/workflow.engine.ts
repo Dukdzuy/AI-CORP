@@ -641,6 +641,28 @@ export class WorkflowEngine {
       };
       const result = await this.orchestrator.invokeAgent(node.agentRole, agentInput);
 
+      // Merge agent output back into workflow context variables
+      // This allows condition nodes to check agent results (e.g., qa_approved)
+      if (result?.action) {
+        const action = result.action;
+        // Merge all output fields into variables
+        if (action.output && typeof action.output === 'object') {
+          Object.assign(vars, action.output);
+        }
+        // Merge top-level action fields (like qa_approved, edgeCondition)
+        for (const [key, value] of Object.entries(action)) {
+          if (key !== 'output' && key !== 'action') {
+            vars[key] = value;
+          }
+        }
+        workflowCtx.variables = vars;
+        // Persist updated context to database
+        await this.prisma.workflowRun.update({
+          where: { id: run.id },
+          data: { context: workflowCtx as any }
+        });
+      }
+
       // Wire agent actions to task updates (Task 32.2)
       await this.updateTaskStatusForAgent(node.agentRole, run.projectId, result);
 

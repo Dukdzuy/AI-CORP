@@ -26,7 +26,7 @@ async function main() {
     console.log(`Admin user ${adminEmail} already exists`);
   }
 
-  // Seed Agent configurations with OpenCode free models
+  // Seed Agent configurations with OpenRouter models
   const agents = [
     {
       role: 'CEO',
@@ -40,7 +40,7 @@ async function main() {
 You should be visionary, strategic, and think about long-term success.`,
       modelRouteConfig: {
         provider: 'opencode',
-        model: 'oc/deepseek-v4-flash-free',
+        model: 'openrouter/openrouter/free',
         fallbackProvider: 'opencode',
         tags: ['strategic', 'planning'],
       },
@@ -59,7 +59,7 @@ You should be visionary, strategic, and think about long-term success.`,
 You should be organized, detail-oriented, and focus on execution.`,
       modelRouteConfig: {
         provider: 'opencode',
-        model: 'oc/big-pickle',
+        model: 'openrouter/openrouter/free',
         fallbackProvider: 'opencode',
         tags: ['planning', 'execution'],
       },
@@ -78,7 +78,7 @@ You should be organized, detail-oriented, and focus on execution.`,
 You should be technical, detail-oriented, and focused on code quality.`,
       modelRouteConfig: {
         provider: 'opencode',
-        model: 'oc/mimo-v2.5-free',
+        model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
         fallbackProvider: 'opencode',
         tags: ['implementation', 'technical'],
       },
@@ -97,7 +97,7 @@ You should be technical, detail-oriented, and focused on code quality.`,
 You should be meticulous, thorough, and focused on quality.`,
       modelRouteConfig: {
         provider: 'opencode',
-        model: 'oc/north-mini-code-free',
+        model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
         fallbackProvider: 'opencode',
         tags: ['testing', 'quality'],
       },
@@ -116,7 +116,7 @@ You should be meticulous, thorough, and focused on quality.`,
 You should be creative, persuasive, and focused on audience engagement.`,
       modelRouteConfig: {
         provider: 'opencode',
-        model: 'oc/nemotron-3-ultra-free',
+        model: 'openrouter/openrouter/owl-alpha',
         fallbackProvider: 'opencode',
         tags: ['marketing', 'content'],
       },
@@ -154,13 +154,14 @@ You should be creative, persuasive, and focused on audience engagement.`,
         lastHealthCheck: new Date(),
         consecutiveFailures: 0,
         metadata: {
-          description: 'OpenCode free model gateway',
+          description: 'OpenRouter + CX model gateway via 9Router',
           models: [
-            'oc/deepseek-v4-flash-free',
-            'oc/big-pickle',
-            'oc/mimo-v2.5-free',
-            'oc/north-mini-code-free',
-            'oc/nemotron-3-ultra-free',
+            'openrouter/openrouter/free',
+            'openrouter/openrouter/owl-alpha',
+            'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+            'cx/gpt-5.3-codex',
+            'cx/gpt-5.5',
+            'cx/gpt-5.4-mini',
           ],
         },
       },

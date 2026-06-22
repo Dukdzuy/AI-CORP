@@ -9,6 +9,7 @@ import { VirtualOffice } from './pages/VirtualOffice';
 import { ProjectDetail } from './pages/ProjectDetail';
 import { AgentDetail } from './pages/AgentDetail';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { AgentSettings } from './pages/AgentSettings';
 import socketClient from './lib/websocket/socket-client';
 import { useAuthStore } from './stores/authStore';
 
@@ -63,6 +64,7 @@ export function App() {
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/agents/:id" element={<AgentDetail />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/agents" element={<AgentSettings />} />
           </Route>
         </Routes>
       </Router>

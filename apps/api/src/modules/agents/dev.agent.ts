@@ -19,7 +19,7 @@ export class DevAgent extends BaseAgent {
     websocketGateway: AppWebSocketGateway
   ) {
     const systemPrompt = `You are the Lead Developer. Your objective is to implement tasks by writing code and executing tests.`;
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'oc/mimo-v2.5-free', fallbackProvider: 'opencode' };
+    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', fallbackProvider: 'opencode' };
     super(AgentRole.DEV, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
   }
 

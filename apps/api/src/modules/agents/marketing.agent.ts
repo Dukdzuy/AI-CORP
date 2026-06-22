@@ -19,7 +19,7 @@ export class MarketingAgent extends BaseAgent {
     websocketGateway: AppWebSocketGateway
   ) {
     const systemPrompt = `You are the Marketing Manager. Your objective is to draft announcements, blog posts, and prepare launch materials.`;
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'oc/nemotron-3-ultra-free', fallbackProvider: 'opencode' };
+    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/owl-alpha', fallbackProvider: 'opencode' };
     super(AgentRole.MARKETING, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
   }
 

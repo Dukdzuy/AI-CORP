@@ -46,6 +46,14 @@ export const socketClient = {
       console.log('[WS] Disconnected from server');
     });
 
+    socket.on('connect_error', (err) => {
+      console.warn('[WS] Connection error:', err.message);
+      if (err.message.includes('jwt') || err.message.includes('expired') || err.message.includes('unauthorized')) {
+        console.warn('[WS] Auth error, logging out');
+        useAuthStore.getState().logout();
+      }
+    });
+
     socket.on('reconnecting', () => {
       wsStore.setStatus('reconnecting');
       console.log('[WS] Reconnecting...');
@@ -76,6 +84,14 @@ export const socketClient = {
     // Listen for system health events (circuit breaker, degraded, etc.)
     socket.on('system_event', (data: any) => {
       wsStore.recordMessage();
+      console.log('[WS] system_event received:', data?.type, data?.payload ? 'has payload' : 'no payload');
+      // Dispatch broadcast agent events to their specific handlers
+      if (data?.type && data?.payload) {
+        const handlers = eventHandlers.get(data.type);
+        console.log('[WS] dispatching to', data?.type, 'handlers:', handlers?.size ?? 0);
+        handlers?.forEach((handler) => handler(data.payload));
+      }
+      // Also fire general system_event handlers
       const handlers = eventHandlers.get('system_event');
       handlers?.forEach((handler) => handler(data));
     });

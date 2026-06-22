@@ -60,6 +60,14 @@ export class MemoryService {
   ) {}
 
   /**
+   * Look up agent UUID by role from the Agent table.
+   */
+  async getAgentIdByRole(role: string): Promise<string | null> {
+    const agent = await this.prisma.agent.findFirst({ where: { role } });
+    return agent?.id ?? null;
+  }
+
+  /**
    * Save a memory for an agent with vector embedding.
    *
    * Preconditions:
@@ -141,7 +149,12 @@ export class MemoryService {
       }));
 
       return memory.id;
-    } catch (error) {
+    } catch (error: any) {
+      // Gracefully handle FK constraint violations (agent not in DB)
+      if (error?.code === 'P2003' || error?.message?.includes('Foreign key constraint')) {
+        this.logger.warn(`Skipping memory save - agent '${agentId}' not found in Agent table (FK constraint)`);
+        return 'skipped-no-agent';
+      }
       this.logger.error(
         `Failed to save memory: ${error instanceof Error ? error.message : String(error)}`
       );

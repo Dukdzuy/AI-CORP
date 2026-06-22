@@ -31,6 +31,20 @@ export interface Project {
   createdById: string;
   createdAt: Date;
   updatedAt: Date;
+  workflowRuns?: WorkflowRun[];
+  tasks?: Task[];
+  milestones?: Milestone[];
+}
+
+export interface WorkflowRun {
+  id: string;
+  projectId: string;
+  workflowDefId: string;
+  status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
+  currentNodeId?: string;
+  context: any;
+  startedAt: Date;
+  completedAt?: Date;
 }
 
 export interface Milestone {
