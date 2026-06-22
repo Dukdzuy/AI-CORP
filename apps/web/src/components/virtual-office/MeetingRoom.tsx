@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Typography, Space, Avatar, Empty } from 'antd';
 import { RobotOutlined, BulbOutlined, ThunderboltOutlined, MessageOutlined } from '@ant-design/icons';
 import { AgentRole } from '@ai-corp/shared-types';
+import { MeetingMessage } from '../../stores/meetingStore';
 
 const { Text } = Typography;
 
@@ -12,15 +13,6 @@ const ROLE_COLORS: Record<string, string> = {
   QA: '#fa8c16',
   MARKETING: '#eb2f96',
 };
-
-export interface MeetingMessage {
-  id: string;
-  fromRole: AgentRole;
-  toRole: AgentRole | 'all';
-  message: string;
-  type: 'chat' | 'thinking' | 'action' | 'notification';
-  timestamp: Date;
-}
 
 interface MeetingRoomProps {
   messages: MeetingMessage[];

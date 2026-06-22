@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Typography, Space, Card, Badge, Row, Col, Tag, Flex } from 'antd';
-import { RobotOutlined, TeamOutlined, MessageOutlined } from '@ant-design/icons';
+import { RobotOutlined, TeamOutlined, MessageOutlined, ClearOutlined } from '@ant-design/icons';
 import { WebSocketEventType, AgentThinkingEvent, AgentActionEvent, AgentMessageEvent, AgentRole } from '@ai-corp/shared-types';
 import { useWebsocketStore } from '../stores/websocketStore';
+import { useMeetingStore } from '../stores/meetingStore';
 import socketClient from '../lib/websocket/socket-client';
 import { AgentStatusCard, AgentStatus } from '../components/virtual-office/AgentStatusCard';
-import { MeetingRoom, MeetingMessage } from '../components/virtual-office/MeetingRoom';
+import { MeetingRoom } from '../components/virtual-office/MeetingRoom';
 
 const { Title, Text } = Typography;
 
@@ -15,11 +16,9 @@ export const VirtualOffice: React.FC = () => {
   const { status } = useWebsocketStore();
   const [agentStatuses, setAgentStatuses] = useState<Record<string, AgentStatus>>({});
   const [agentActivities, setAgentActivities] = useState<Record<string, string>>({});
-  const [messages, setMessages] = useState<MeetingMessage[]>([]);
-
-  const addMessage = useCallback((msg: MeetingMessage) => {
-    setMessages((prev) => [...prev.slice(-199), msg]);
-  }, []);
+  const messages = useMeetingStore((s) => s.messages);
+  const addMessage = useMeetingStore((s) => s.addMessage);
+  const clearMessages = useMeetingStore((s) => s.clearMessages);
 
   useEffect(() => {
     const unsubThinking = socketClient.on<AgentThinkingEvent>(
@@ -77,7 +76,7 @@ export const VirtualOffice: React.FC = () => {
       unsubAction();
       unsubMessage();
     };
-  }, [addMessage]);
+  }, []);
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto' }}>
@@ -149,6 +148,15 @@ export const VirtualOffice: React.FC = () => {
                   {messages.length} messages
                 </Tag>
               </Space>
+            }
+            extra={
+              messages.length > 0 ? (
+                <ClearOutlined
+                  style={{ color: '#8b949e', cursor: 'pointer' }}
+                  onClick={clearMessages}
+                  title="Clear messages"
+                />
+              ) : null
             }
             style={{
               background: '#0d1117',

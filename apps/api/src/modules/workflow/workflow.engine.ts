@@ -66,7 +66,9 @@ export class WorkflowEngine {
       this.workflowWorker = new Worker<WorkflowJobData>(
         'workflow-execution',
         async (job: Job<WorkflowJobData>) => {
-          return this.executeNodeJob(job.data);
+          const result = await this.executeNodeJob(job.data);
+          await this.handleJobCompletion(job.data.runId, job.data.nodeId, result);
+          return result;
         },
         {
           connection: this.redisConnection,
