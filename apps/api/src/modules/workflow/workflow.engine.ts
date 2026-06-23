@@ -200,7 +200,14 @@ export class WorkflowEngine {
         where: { id: runId },
         data: { status: 'completed', completedAt: new Date() }
       });
-      this.logger.log(`Workflow run ${runId} completed.`);
+
+      // Update the project status to completed
+      await this.prisma.project.update({
+        where: { id: run.projectId },
+        data: { status: 'completed' }
+      });
+
+      this.logger.log(`Workflow run ${runId} completed. Project ${run.projectId} marked as completed.`);
       
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,
@@ -653,6 +660,17 @@ export class WorkflowEngine {
         // Merge all output fields into variables
         if (action.output && typeof action.output === 'object') {
           Object.assign(vars, action.output);
+        } else if (typeof action.output === 'string' && action.output) {
+          // String output: store as 'output' key and also parse structured data
+          vars.output = action.output;
+          // Auto-create milestones from CEO agent output
+          if (action.action === 'planMilestones') {
+            await this.createMilestonesFromOutput(run.projectId, action.output);
+          }
+          // Auto-create tasks from PM agent output
+          if (action.action === 'breakdownTasks') {
+            await this.createTasksFromOutput(run.projectId, action.output);
+          }
         }
         // Merge top-level action fields (like qa_approved, edgeCondition)
         for (const [key, value] of Object.entries(action)) {
@@ -695,6 +713,92 @@ export class WorkflowEngine {
         status: 'failure',
         error: (error as Error).message
       };
+    }
+  }
+
+  /**
+   * Create milestones from CEO agent output text
+   */
+  private async createMilestonesFromOutput(projectId: string, output: string): Promise<void> {
+    try {
+      // Parse bullet points or numbered items from CEO output
+      const lines = output.split('\n').filter(l => l.trim().length > 0);
+      const milestoneLines = lines.filter(l => 
+        l.match(/^[\s]*[-*•]\s/) || l.match(/^[\s]*\d+[.)]\s/) || l.match(/^milestone/i)
+      );
+
+      if (milestoneLines.length === 0) {
+        // Fallback: create a single milestone from the first meaningful line
+        const firstMeaningful = lines.find(l => l.length > 10) || lines[0] || 'Project Planning';
+        await this.prisma.milestone.create({
+          data: {
+            projectId,
+            name: firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 100),
+            description: firstMeaningful.trim(),
+            status: 'pending',
+          },
+        });
+      } else {
+        for (const line of milestoneLines.slice(0, 10)) {
+          const name = line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^milestone[:\s]*/i, '').trim();
+          if (name.length > 2) {
+            await this.prisma.milestone.create({
+              data: {
+                projectId,
+                name: name.slice(0, 100),
+                description: name,
+                status: 'pending',
+              },
+            });
+          }
+        }
+      }
+      this.logger.log(`Created milestones from CEO output for project ${projectId}`);
+    } catch (error) {
+      this.logger.warn(`Failed to create milestones from output: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Create tasks from PM agent output text
+   */
+  private async createTasksFromOutput(projectId: string, output: string): Promise<void> {
+    try {
+      // Parse task items from PM output
+      const lines = output.split('\n').filter(l => l.trim().length > 0);
+      const taskLines = lines.filter(l => 
+        l.match(/^[\s]*[-*•]\s/) || l.match(/^[\s]*\d+[.)]\s/) || l.match(/^task/i)
+      );
+
+      if (taskLines.length === 0) {
+        // Fallback: create a single task
+        const firstMeaningful = lines.find(l => l.length > 5) || 'Implement feature';
+        await this.prisma.task.create({
+          data: {
+            projectId,
+            title: firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 200),
+            description: firstMeaningful.trim(),
+            status: 'todo',
+          },
+        });
+      } else {
+        for (const line of taskLines.slice(0, 20)) {
+          const title = line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^task[:\s]*/i, '').trim();
+          if (title.length > 2) {
+            await this.prisma.task.create({
+              data: {
+                projectId,
+                title: title.slice(0, 200),
+                description: title,
+                status: 'todo',
+              },
+            });
+          }
+        }
+      }
+      this.logger.log(`Created tasks from PM output for project ${projectId}`);
+    } catch (error) {
+      this.logger.warn(`Failed to create tasks from output: ${(error as Error).message}`);
     }
   }
 

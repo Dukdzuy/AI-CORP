@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Space, Card, Button, Spin, Skeleton, Tabs, Empty, Tag, Collapse, Timeline, Badge, Alert } from 'antd';
-import { ArrowLeftOutlined, RocketOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, ThunderboltOutlined, FileTextOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, RocketOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, ThunderboltOutlined, FileTextOutlined, ExclamationCircleOutlined, FolderOpenOutlined, CodeOutlined } from '@ant-design/icons';
 import { Task, WebSocketEventType, TaskUpdatedEvent, ApprovalRequiredEvent } from '@ai-corp/shared-types';
 import { useProject } from '../lib/api/hooks/projects';
 import { useTasks, taskKeys } from '../lib/api/hooks/tasks';
@@ -176,6 +176,100 @@ export const ProjectDetail: React.FC = () => {
                 <Card size="small" style={{ background: '#161b22', border: '1px solid #30363d' }}>
                   <Text strong style={{ color: '#e6edf3' }}>Approval Decision</Text>
                   <Paragraph style={{ color: '#8b949e', margin: '4px 0 0' }}>{latestContext.approvalDecision}</Paragraph>
+                </Card>
+              )}
+
+              {/* Output from agents */}
+              {latestContext.output && (
+                <Card size="small" style={{ background: '#161b22', border: '1px solid #30363d' }}>
+                  <Text strong style={{ color: '#e6edf3' }}>Agent Output</Text>
+                  <Paragraph style={{ color: '#8b949e', margin: '4px 0 0', whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 12, maxHeight: 300, overflow: 'auto' }}>
+                    {typeof latestContext.output === 'string' ? latestContext.output : JSON.stringify(latestContext.output, null, 2)}
+                  </Paragraph>
+                </Card>
+              )}
+
+              {/* Files written */}
+              {latestContext.filesWritten && Array.isArray(latestContext.filesWritten) && latestContext.filesWritten.length > 0 && (
+                <Card
+                  size="small"
+                  style={{ background: '#161b22', border: '1px solid #30363d' }}
+                  title={
+                    <Space>
+                      <FolderOpenOutlined style={{ color: '#52c41a' }} />
+                      <Text style={{ color: '#e6edf3' }}>Files Written ({latestContext.filesWritten.length})</Text>
+                    </Space>
+                  }
+                >
+                  <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                    {latestContext.filesWritten.map((filePath: string, idx: number) => (
+                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0d1117', border: '1px solid #21262d', borderRadius: 6, padding: '6px 10px' }}>
+                        <Space size={8}>
+                          <FileTextOutlined style={{ color: '#1677ff' }} />
+                          <Text style={{ color: '#c9d1d9', fontSize: 12, fontFamily: 'monospace' }}>{filePath}</Text>
+                        </Space>
+                        <Button
+                          size="small"
+                          type="text"
+                          icon={<CodeOutlined />}
+                          onClick={() => {
+                            const outputTab = document.querySelector('[data-node-key="output"]') as HTMLElement;
+                            const codeSection = outputTab?.closest('.ant-tabs-tabpane-active')?.querySelector('pre');
+                            if (codeSection) codeSection.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          style={{ color: '#1677ff', fontSize: 11 }}
+                        >
+                          View Code
+                        </Button>
+                      </div>
+                    ))}
+                  </Space>
+                </Card>
+              )}
+
+              {/* Code content */}
+              {latestContext.code && (
+                <Card
+                  size="small"
+                  style={{ background: '#161b22', border: '1px solid #30363d' }}
+                  title={
+                    <Space>
+                      <CodeOutlined style={{ color: '#fa8c16' }} />
+                      <Text style={{ color: '#e6edf3' }}>Source Code</Text>
+                      <Button
+                        size="small"
+                        type="text"
+                        icon={<FolderOpenOutlined />}
+                        onClick={() => {
+                          const codeStr = typeof latestContext.code === 'string' ? latestContext.code : JSON.stringify(latestContext.code, null, 2);
+                          const blob = new Blob([codeStr], { type: 'text/plain' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = latestContext.filesWritten?.[0] || 'code.txt';
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }}
+                        style={{ color: '#8b949e', fontSize: 11 }}
+                      >
+                        Download
+                      </Button>
+                    </Space>
+                  }
+                >
+                  <pre style={{
+                    background: '#0d1117',
+                    border: '1px solid #30363d',
+                    borderRadius: 6,
+                    padding: 12,
+                    fontSize: 12,
+                    color: '#c9d1d9',
+                    overflow: 'auto',
+                    maxHeight: 400,
+                    margin: 0,
+                  }}>
+                    {typeof latestContext.code === 'string' ? latestContext.code : JSON.stringify(latestContext.code, null, 2)}
+                  </pre>
                 </Card>
               )}
 

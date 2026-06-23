@@ -34,7 +34,20 @@ export class CeoAgent extends BaseAgent {
   async act(context: any): Promise<any> {
     this.logger.debug('CEO acting...');
     const goal = context.projectContext?.goal || context.goal || '';
-    const prompt = `Please plan up to 3 high-level milestones for the following project goal: ${goal}. Return your plan clearly.`;
+    const description = context.projectContext?.description || '';
+    const prompt = `You are the CEO planning a project.
+
+PROJECT GOAL: ${goal}
+PROJECT DESCRIPTION: ${description}
+
+Create 2-4 high-level milestones for this project. Each milestone should be a clear, deliverable objective.
+
+Format your response as a numbered list:
+1. Milestone name - Brief description of what will be delivered
+2. Milestone name - Brief description of what will be delivered
+3. Milestone name - Brief description of what will be delivered
+
+Be specific and actionable. Each milestone should be completable in a reasonable timeframe.`;
     
     const result = await this.callLLM({
       messages: [{ role: 'user', content: prompt }],

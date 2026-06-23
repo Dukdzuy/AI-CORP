@@ -38,14 +38,30 @@ export class PmAgent extends BaseAgent {
       ? `\n\nRelevant past learnings:\n${memories.map((m: any) => m.content).join('\n')}`
       : '';
 
-    const prompt = `Break down the following milestone into 2-3 actionable developer tasks:${memoryContext}\n\nMilestone: ${context.milestone}.`;
+    const goal = context.goal || context.projectContext?.goal || '';
+    const milestone = context.milestone || '';
+
+    const prompt = `You are the Project Manager breaking down milestones into developer tasks.
+
+PROJECT GOAL: ${goal}
+MILESTONE: ${milestone}
+${memoryContext}
+
+Create 2-4 specific, actionable tasks for developers. Each task should be clear enough for a developer to implement.
+
+Format your response as a numbered list:
+1. Task title - Brief description of what needs to be done
+2. Task title - Brief description of what needs to be done
+3. Task title - Brief description of what needs to be done
+
+Each task should be specific, measurable, and achievable.`;
 
     const result = await this.callLLM({
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 800
     }, context.projectId);
 
-    await this.saveMemory('task_breakdown', `Broke down milestone: ${context.milestone}`, 6, context.projectId);
+    await this.saveMemory('task_breakdown', `Broke down milestone: ${milestone}`, 6, context.projectId);
 
     this.emitAction(context.projectId, context.taskId || 'none', 'breakdownTasks', 'llm', { milestone: context.milestone });
     return { action: 'breakdownTasks', output: result.content };

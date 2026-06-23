@@ -87,7 +87,7 @@ const ProjectCard: React.FC<{
   } else {
     // Fallback: calculate progress based on cost/budget if available
     if (project.budget != null && project.budget > 0) {
-      workflowProgress = Math.min(100, Math.round((project.costAccrued / project.budget) * 100));
+      workflowProgress = Math.min(100, Math.round((Number(project.costAccrued ?? 0) / Number(project.budget ?? 1)) * 100));
       progressLabel = `${workflowProgress}% of budget`;
     }
   }
@@ -149,9 +149,9 @@ const ProjectCard: React.FC<{
           )}
           <Statistic
             title={<Text style={{ color: '#8b949e', fontSize: 12 }}>Cost</Text>}
-            value={project.costAccrued}
-            prefix={<DollarOutlined style={{ color: project.costAccrued > (project.budget ?? Infinity) ? '#ff4d4f' : '#8b949e' }} />}
-            valueStyle={{ color: project.costAccrued > (project.budget ?? Infinity) ? '#ff4d4f' : '#e6edf3', fontSize: 16 }}
+            value={Number(project.costAccrued ?? 0)}
+            prefix={<DollarOutlined style={{ color: Number(project.costAccrued ?? 0) > Number(project.budget ?? Infinity) ? '#ff4d4f' : '#8b949e' }} />}
+            valueStyle={{ color: Number(project.costAccrued ?? 0) > Number(project.budget ?? Infinity) ? '#ff4d4f' : '#e6edf3', fontSize: 16 }}
           />
         </Flex>
       </Space>
@@ -225,8 +225,8 @@ export const Dashboard: React.FC = () => {
   const activeCount = projects?.filter((p) => p.status === ProjectStatus.ACTIVE).length ?? 0;
   const completedCount = projects?.filter((p) => p.status === ProjectStatus.COMPLETED).length ?? 0;
 
-  // Calculate total cost across all projects
-  const totalCost = projects?.reduce((sum, p) => sum + p.costAccrued, 0) ?? 0;
+  // Calculate total cost across all projects (handle Prisma Decimal as string)
+  const totalCost = projects?.reduce((sum, p) => sum + Number(p.costAccrued ?? 0), 0) ?? 0;
 
   return (
     <div style={{ maxWidth: 1400, margin: '0 auto' }}>

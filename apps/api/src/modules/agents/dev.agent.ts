@@ -18,11 +18,18 @@ export class DevAgent extends BaseAgent {
     apiUsageService: ApiUsageService,
     websocketGateway: AppWebSocketGateway
   ) {
-    const systemPrompt = `You are the Lead Developer. Your objective is to implement tasks by writing code and executing tests.
-You MUST write actual implementation code. Do not describe what you would do - write the real code.
-Always output code inside a CODE block with the file path on the first line:
-<CODE filepath="relative/path/to/file">
-actual code here
+    const systemPrompt = `You are the Lead Developer. Your job is to write REAL, WORKING code for the project.
+
+RULES:
+1. Always output complete, runnable code in <CODE> blocks
+2. Use the EXACT file path on the first line after <CODE filepath="...">
+3. Write production-quality code, not placeholders
+4. Match the technology stack requested in the project description
+5. Each <CODE> block must be self-contained and functional
+
+FORMAT:
+<CODE filepath="path/to/file.ext">
+complete working code here
 </CODE>`;
     const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', fallbackProvider: 'opencode' };
     super(AgentRole.DEV, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
@@ -30,10 +37,11 @@ actual code here
 
   async think(context: any): Promise<any> {
     this.logger.debug('Dev thinking...');
-    this.emitThinking(context.projectId, `Analyzing task implementation requirements for: ${context.task}`);
+    const goal = context.goal || context.projectContext?.goal || '';
+    this.emitThinking(context.projectId, `Analyzing implementation requirements for: ${goal || context.task}`);
 
     const memories = await this.loadMemory('coding_conventions', JSON.stringify(context));
-    return { thought: `Analyzing task implementation requirements for: ${context.task}`, memories };
+    return { thought: `Analyzing implementation requirements for: ${goal || context.task}`, memories };
   }
 
   async act(context: any): Promise<any> {
@@ -43,20 +51,43 @@ actual code here
       ? `\n\nRelevant coding conventions:\n${memories.map((m: any) => m.content).join('\n')}`
       : '';
 
-    const prompt = `Implement the following task by writing actual code.${memoryContext}
+    // Extract project context
+    const goal = context.goal || context.projectContext?.goal || '';
+    const description = context.projectSummary || context.projectContext?.description || '';
+    const projectName = context.projectName || context.projectContext?.name || '';
+    const existingCode = context.code || '';
 
-Task: ${context.task}
+    const prompt = `You are implementing a software project. Write REAL, WORKING code.
 
-You MUST output code. Use this exact format:
+PROJECT: ${projectName || 'New Project'}
+GOAL: ${goal}
+DESCRIPTION: ${description}
+
+TASK: ${context.task}
+${memoryContext}
+
+${existingCode ? `EXISTING CODE:\n${existingCode}\n` : ''}
+
+INSTRUCTIONS:
+1. Analyze the PROJECT GOAL and DESCRIPTION carefully
+2. Choose the appropriate technology stack based on the description:
+   - If it mentions "Express", "Node.js", "server" → write Express.js server code
+   - If it mentions "React", "frontend", "web app" → write React component code
+   - If it mentions "TypeScript", "Ant Design" → use TypeScript + Ant Design
+   - If it mentions "HTML", "CSS" → write HTML/CSS/JS
+3. Write COMPLETE, RUNNABLE code - not pseudocode or placeholders
+4. Include all necessary imports, exports, and configuration
+5. Output code in this EXACT format for each file:
+
 <CODE filepath="src/index.js">
-// your implementation code here
+// your complete working code here
 </CODE>
 
-Write complete, working code. Do not use placeholders or TODOs.`;
+Write ALL files needed for the project to work. Make it production-quality.`;
 
     const result = await this.callLLM({
       messages: [{ role: 'user', content: prompt }],
-      maxTokens: 2000
+      maxTokens: 3000
     }, context.projectId);
 
     const llmOutput = result.content || '';
@@ -70,7 +101,6 @@ Write complete, working code. Do not use placeholders or TODOs.`;
     if (codeBlocks.length > 0) {
       for (const block of codeBlocks) {
         try {
-          const escapedContent = this.escapeForShell(block.content);
           const command = `mkdir -p $(dirname "${block.filepath}") && cat > "${block.filepath}" << 'HEREDOC_EOF'\n${block.content}\nHEREDOC_EOF`;
           await this.executeSandboxCommand(command, {
             maxMemoryMB: 256,
@@ -136,12 +166,5 @@ Write complete, working code. Do not use placeholders or TODOs.`;
       blocks.push({ filepath: match[1], content: match[2] });
     }
     return blocks;
-  }
-
-  /**
-   * Escape special characters for shell heredoc content
-   */
-  private escapeForShell(content: string): string {
-    return content.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   }
 }

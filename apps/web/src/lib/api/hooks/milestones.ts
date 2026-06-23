@@ -9,9 +9,7 @@ export const milestoneKeys = {
 };
 
 export const fetchMilestones = async (projectId: string): Promise<Milestone[]> => {
-  const { data } = await apiClient.get<Milestone[]>('/milestones', {
-    params: { projectId },
-  });
+  const { data } = await apiClient.get<Milestone[]>(`/projects/${projectId}/milestones`);
   return data;
 };
 

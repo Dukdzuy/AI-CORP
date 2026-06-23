@@ -38,16 +38,31 @@ export class MarketingAgent extends BaseAgent {
       ? `\n\nRelevant brand voice:\n${memories.map((m: any) => m.content).join('\n')}`
       : '';
 
-    const prompt = `Draft a short release announcement for the following completed project:${memoryContext}\n\nProject: ${context.projectSummary}`;
+    const goal = context.goal || context.projectContext?.goal || '';
+    const projectSummary = context.projectSummary || context.projectContext?.description || '';
+
+    const prompt = `You are the Marketing Manager drafting a release announcement.
+
+PROJECT: ${projectSummary}
+GOAL: ${goal}
+${memoryContext}
+
+Write a professional release announcement that:
+1. Highlights the key features and benefits
+2. Explains what problem it solves
+3. Includes a call-to-action
+4. Is concise but compelling (2-3 paragraphs)
+
+Target audience: Internal stakeholders and potential users.`;
 
     const result = await this.callLLM({
       messages: [{ role: 'user', content: prompt }],
       maxTokens: 800
     }, context.projectId);
 
-    await this.saveMemory('brand_voice', `Drafted announcement for: ${context.projectSummary}`, 5, context.projectId);
+    await this.saveMemory('brand_voice', `Drafted announcement for: ${projectSummary}`, 5, context.projectId);
 
-    this.emitAction(context.projectId, context.taskId || 'none', 'draftAnnouncement', 'llm', { projectSummary: context.projectSummary });
+    this.emitAction(context.projectId, context.taskId || 'none', 'draftAnnouncement', 'llm', { projectSummary });
     return { action: 'draftAnnouncement', output: result.content };
   }
 }

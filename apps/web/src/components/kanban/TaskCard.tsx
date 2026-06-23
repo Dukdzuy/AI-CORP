@@ -28,7 +28,9 @@ interface TaskCardProps {
 export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onClick }) => {
   const priority = PRIORITY_CONFIG[task.priority] ?? PRIORITY_CONFIG[TaskPriority.MEDIUM];
   const roleColor = task.assignedAgent ? ROLE_COLORS[task.assignedAgent] ?? '#8b949e' : undefined;
-  const costExceeded = task.estimatedCost != null && task.actualCost > task.estimatedCost;
+  const actualCost = Number(task.actualCost ?? 0);
+  const estimatedCost = task.estimatedCost != null ? Number(task.estimatedCost) : null;
+  const costExceeded = estimatedCost != null && actualCost > estimatedCost;
 
   return (
     <Card
@@ -100,12 +102,12 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onClick }
             <Text style={{ color: '#484f58', fontSize: 11 }}>Unassigned</Text>
           )}
 
-          {(task.estimatedCost != null || task.actualCost > 0) && (
+          {(estimatedCost != null || actualCost > 0) && (
             <Tooltip
               title={
-                task.estimatedCost != null
-                  ? `Estimated: $${task.estimatedCost.toFixed(2)} | Actual: $${task.actualCost.toFixed(2)}`
-                  : `Actual: $${task.actualCost.toFixed(2)}`
+                estimatedCost != null
+                  ? `Estimated: $${estimatedCost.toFixed(2)} | Actual: $${actualCost.toFixed(2)}`
+                  : `Actual: $${actualCost.toFixed(2)}`
               }
             >
               <div
@@ -122,9 +124,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onClick }
                 <DollarOutlined
                   style={{ color: costExceeded ? '#ff4d4f' : '#8b949e', fontSize: 10 }}
                 />
-                {task.estimatedCost != null && (
+                {estimatedCost != null && (
                   <Text style={{ color: '#8b949e', fontSize: 10, textDecoration: 'line-through' }}>
-                    {task.estimatedCost.toFixed(2)}
+                    {estimatedCost.toFixed(2)}
                   </Text>
                 )}
                 <Text
@@ -134,7 +136,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, onDragStart, onClick }
                     fontWeight: 600,
                   }}
                 >
-                  {task.actualCost.toFixed(2)}
+                  {actualCost.toFixed(2)}
                 </Text>
               </div>
             </Tooltip>

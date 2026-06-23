@@ -12,6 +12,7 @@ import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { HealthModule } from './modules/health/health.module';
+import { CostModule } from './modules/cost/cost.module';
 import { EnvValidator } from './modules/security/env-validator';
 
 @Module({
@@ -32,6 +33,7 @@ import { EnvValidator } from './modules/security/env-validator';
     AuthModule,
     OrchestratorModule,
     HealthModule,
+    CostModule,
   ],
   providers: [EnvValidator],
 })

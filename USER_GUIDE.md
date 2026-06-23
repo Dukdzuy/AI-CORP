@@ -1,559 +1,345 @@
-# Huong Dan Su Dung AI Corp Platform
+# Hướng Dẫn Sử Dung AI Corp Platform
 
-Day la huong dan chi tiet cach su dung AI Corp Platform nhu mot user binh thuong.
-
----
-
-## Muc Luc
-
-1. [Bat Dau](#1-bat-dau)
-2. [Dang Ky va Dang Nhap](#2-dang-ky-va-dang-nhap)
-3. [Tao Du An Moi](#3-tao-du-an-moi)
-4. [Quan Ly Du An](#4-quan-ly-du-an)
-5. [Theo Doi AI Agents](#5-theo-doi-ai-agents)
-6. [Duyet Approval](#6-duyet-approval)
-7. [Theo Doi Chi Phi](#7-theo-doi-chi-phi)
-8. [Doi Provider va Model](#8-doi-provider-va-model)
-9. [Cau Hinh He Thong](#9-cau-hinh-he-thong)
-10. [Xu Ly Van De](#10-xu-ly-van-de)
+Hướng dẫn chi tiết cách sử dụng AI Corp Platform.
 
 ---
 
-## 1. Bat Dau
+## Mục Lục
 
-### Yeu Cau
+1. [Bắt Đầu](#1-bắt-đầu)
+2. [Đăng Nhập](#2-đăng-nhập)
+3. [Tạo Dự Án](#3-tạo-dự-án)
+4. [Quản Lý Dự Án](#4-quản-lý-dự-án)
+5. [Theo Dõi AI Agents](#5-theo-dõi-ai-agents)
+6. [Duyệt Approval](#6-duyệt-approval)
+7. [Theo Dõi Chi Phí](#7-theo-dõi-chi-phí)
+8. [Cấu Hình Hệ Thống](#8-cấu-hình-hệ-thống)
+9. [Xử Lý Sự Cố](#9-xử-lý-sự-cố)
+
+---
+
+## 1. Bắt Đầu
+
+### Yêu Cầu
 
 - Node.js 18+
 - pnpm 8+
-- PostgreSQL (local hoac Neon cloud)
+- Docker Desktop
+- PostgreSQL 18
 
-### Cai Dat
+### Cài Đặt
 
 ```bash
-# Clone va cai dat
+# Clone và cài đặt
 git clone <repo-url>
 cd ai-corp
 pnpm install
 
-# Tao file .env
-cp apps/api/.env.example apps/api/.env
-```
-
-### Cau Hinh PostgreSQL
-
-#### Option 1: PostgreSQL local (Windows)
-
-```bash
-# Cai dat qua Chocolatey
-choco install postgresql --params "/Password:postgres"
-
-# Khoi dong service
-net start postgresql-x64-16
-
-# Tao database
-createdb -U postgres neondb
-```
-
-#### Option 2: PostgreSQL local (macOS/Linux)
-
-```bash
-# macOS
-brew install postgresql@16
-brew services start postgresql@16
-createdb neondb
-
-# Linux (Ubuntu/Debian)
-sudo apt install postgresql
-sudo systemctl start postgresql
-sudo -u postgres createdb neondb
-```
-
-#### Option 3: Docker
-
-```bash
-docker run -d --name pg -p 5432:5432 \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=neondb \
-  postgres:16
-```
-
-#### Option 4: Neon Cloud
-
-Dung URL trong file `.env` mac dinh.
-
-### Cau Hinh API Key
-
-Mo file `apps/api/.env` va dien:
-
-```env
-# 9Router API key (bat buoc cho LLM)
-NINE_ROUTER_API_KEY=sk-7a0cc2bd732248a3-ql7qzm-fdd42bd5
-
-# Database URL
-# Local: postgresql://postgres:postgres@localhost:5432/neondb
-# Neon: postgresql://neondb_owner:...@ep-...neon.tech/neondb?sslmode=require
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/neondb
-
-# Redis (optional - server runs in degraded mode if unavailable)
-REDIS_URL=redis://localhost:6379
-```
-
-### Khoi Dong
-
-```bash
-# Khoi dong database (neu chua chay)
-net start postgresql-x64-16   # Windows
-# hoac: brew services start postgresql@16  # macOS
-
-# Khoi dong backend
+# Cấu hình database
 cd apps/api
-pnpm db:push                  # Dong bo schema
-pnpm db:seed                  # Tao admin@aicorp.com / admin123
-pnpm dev                      # Backend :3000
+cp .env.example .env
+# Chỉnh sửa .env với DATABASE_URL phù hợp
 
-# Khoi dong frontend (terminal moi)
-cd apps/web
-pnpm dev                      # Frontend :5173
+# Khởi tạo database
+pnpm db:push
+pnpm db:seed    # Tạo admin@aicorp.com / admin123
+
+# Khởi động Redis
+docker run -d --name ai-corp-redis -p 6379:6379 redis:7-alpine
+
+# Khởi động backend
+pnpm dev        # Backend :3000
+
+# Khởi động frontend (terminal mới)
+cd ../web
+pnpm dev        # Frontend :5173
 ```
 
-Mo trinh duyet tai: **http://localhost:5173/auth**
+Mở trình duyệt tại: **http://localhost:5173**
 
 ---
 
-## 2. Dang Ky va Dang Nhap
+## 2. Đăng Nhập
 
-### Dang Nhap
+### Đăng Nhập
 
-1. Mo trinh duyet tai `http://localhost:5173/auth`
-2. Chon tab **Dang Nhap**
-3. Nhap thong tin:
+1. Mở `http://localhost:5173`
+2. Nhập thông tin:
    - **Email**: `admin@aicorp.com`
-   - **Mat khau**: `admin123`
-4. Click **Dang Nhap**
-5. Token JWT se duoc luu tu dong, chuyen sang Dashboard
+   - **Mật khẩu**: `admin123`
+3. Click **Đăng Nhập**
+4. Token JWT được lưu tự động, chuyển sang Dashboard
 
-### Dang Ky Tai Khoan Moi
+### Đăng Ký Tài Khoản Mới
 
-1. Mo trinh duyet tai `http://localhost:5173/auth`
-2. Chon tab **Dang Ky**
-3. Nhap thong tin:
-   - **Email**: email cua ban
-   - **Ten**: ten hien thi
-   - **Mat khau**: toi thieu 6 ky tu
-4. Click **Dang Ky**
-5. Sau khi dang ky, quay lai tab Dang Nhap
+1. Mở `http://localhost:5173/auth`
+2. Chọn tab **Đăng Ký**
+3. Nhập thông tin và click **Đăng Ký**
 
-### Phan Quyen
+### Phân Quyền
 
-| Vai Tro | Mo Ta |
+| Vai Trò | Mô Tả |
 |---------|-------|
-| `admin` | Quan tri vien, co day du quyen |
-| `board_member` | Co the xem du an, duyet approval, theo doi chi phi |
+| `admin` | Quản trị viên, đầy đủ quyền |
+| `board_member` | Xem dự án, duyệt approval, theo dõi chi phí |
 
 ---
 
-## 3. Tao Du An Moi
+## 3. Tạo Dự Án Mới
 
-### Bang Giao Dien
+### Qua Giao Diện
 
-1. Truy cap **Dashboard** (trang chu)
-2. Click nut **"+ Tao Du An Moi"**
-3. Dien thong tin:
+1. Truy cập **Dashboard** (trang chủ)
+2. Click nút **"+ Tạo Dự Án Mới"**
+3. Điền thông tin:
 
-| Truong | Mo Ta | Vi Du |
+| Trường | Mô Tả | Ví Dụ |
 |--------|-------|-------|
-| **Ten du an** | Ten ngan gon | "Website ban hang" |
-| **Mo ta** | Mo ta chi tiet | "Xay dung website ban hang hoan chinh" |
-| **Muc tieu** | Goal cua du an | "Tao website voi gio hang, thanh toan, quan ly" |
-| **Ngan sach** (tuy chon) | So tien toi da (USD) | 50.00 |
+| **Tên dự án** | Tên ngắn gọn | "Hello World Express Server" |
+| **Mô tả** | Mô tả chi tiết | "Tạo server Express đơn giản với GET /" |
+| **Mục tiêu** | Goal của dự án | "Create a simple hello world Express server" |
+| **Ngân sách** (tùy chọn) | Số tiền tối đa (USD) | 50.00 |
 
-4. Click **Tao**
+4. Click **Tạo**
 
-### Workflow Tu Dong
+### Workflow Tự Động
 
-Sau khi tao du an, workflow se tu dong chay:
+Sau khi tạo dự án, workflow tự động chạy:
 
 ```
-CEO (Ke hoach) → PM (Phan cong) → Dev (Lam viec) → QA (Kiem tra) → Marketing (Quang cao) → Duyet
+CEO (Lên kế hoạch) → PM (Phân công) → Dev (Làm việc) → QA (Kiểm tra) → Marketing (Quảng cáo) → Duyệt
 ```
 
-Ban co the theo doi tien do tai trang **Virtual Office**.
+Theo dõi tiến độ tại **Virtual Office**.
 
 ---
 
-## 4. Quan Ly Du An
+## 4. Quản Lý Dự Án
 
-### Xem Chi Tiet Du An
+### Xem Chi Tiết Dự Án
 
-1. Click vao the du an tren Dashboard
-2. Xem:
-   - Trang thai (Dang hoat dong, Tam dung, Hoan thanh)
-   - Danh sach cong viec (Kanban board)
-   - Chi phi da chi
+Click vào thẻ dự án trên Dashboard để xem:
 
-### Tam Dung Du An
-
-Neu muon dung tam:
-1. Vao chi tiet du an
-2. Click **"Tam Dung"**
-3. Workflow se dung lai, cac agent se nghi
-
-### Huy Du An
-
-1. Vao chi tiet du an
-2. Click **"Huy Du An"**
-3. Xac nhan huy
+| Tab | Nội Dung |
+|-----|----------|
+| **Project Output** | Kết quả hoàn thành, code đã viết, files |
+| **Kanban Board** | Danh sách công việc theo trạng thái |
+| **Milestones** | Các cột mốc của dự án |
+| **Workflow Runs** | Lịch sử chạy workflow |
 
 ### Kanban Board
 
-Xem va quan ly cong viec:
-
-| Cot | Mo Ta |
+| Cột | Mô Tả |
 |-----|-------|
-| **Todo** | Chua bat dau |
-| **In Progress** | Dang lam |
-| **Review** | Dang kiem tra |
-| **Done** | Hoan thanh |
+| **Todo** | Chưa bắt đầu |
+| **In Progress** | Đang làm |
+| **Review** | Đang kiểm tra |
+| **Done** | Hoàn thành |
 
-Co the keo tha task giua cac cot de thay doi trang thai.
+Kéo thả task giữa các cột để thay đổi trạng thái.
+
+### Tạm Dừng / Tiếp Tục
+
+1. Vào chi tiết dự án
+2. Click **"Tạm Dừng"** hoặc **"Tiếp Tục"**
+3. Workflow sẽ dừng hoặc chạy tiếp
+
+### Xóa Dự Án
+
+1. Vào chi tiết dự án
+2. Click **"Xóa"**
+3. Xác nhận xóa
 
 ---
 
-## 5. Theo Doi AI Agents
+## 5. Theo Dõi AI Agents
 
 ### Virtual Office
 
-Truy cap **Virtual Office** de xem agent dang lam gi:
+Truy cập **Virtual Office** để xem agents đang hoạt động:
 
-| Agent | Vi Tri | Chuc Nang |
+| Agent | Vị Trí | Chức Năng |
 |-------|--------|-----------|
-| **CEO** | Phong Hop | Lap ke hoach, quan ly du an |
-| **PM** | Ban Lam Viec | Phan cong cong viec |
-| **DEV** | Ban Code | viet code, test |
-| **QA** | Ban Kiem Tra | kiem tra code |
-| **MARKETING** | Phong Marketing | viet quang cao |
+| **CEO** | Phòng Họp | Lên kế hoạch, quản lý dự án |
+| **PM** | Bàn Làm Việc | Phân công công việc |
+| **DEV** | Bàn Code | Viết code, test |
+| **QA** | Bàn Kiểm Tra | Kiểm tra code |
+| **MARKETING** | Phòng Marketing | Viết quảng cáo |
 
-### Trang Thai Agent
+### Trạng Thái Agent
 
-| Mau Sac | Trang Thai |
+| Màu Sắc | Trạng Thái |
 |---------|-----------|
-| **Xanh la** | Dang hoat dong |
-| **Vang** | Dang suy nghi |
-| **Xanh duong** | Dang lam viec |
-| **Xam** | Nghi |
+| 🟢 **Xanh lá** | Đang hoạt động |
+| 🟡 **Vàng** | Đang suy nghĩ |
+| 🔵 **Xanh dương** | Đang làm việc |
+| ⚪ **Xám** | Nghỉ |
 
 ### Meeting Room
 
-Xem cac tin nhan giua cac agent:
-- Agent chia se ket qua lam viec
-- Cap nhat tien do
-- Thong bao quan trong
+Xem tin nhắn real-time giữa các agent:
+- Agent chia se kết quả làm việc
+- Cập nhật tiến độ
+- Thông báo quan trọng
+- Approval requests với nút Duyệt/Từ Chối
 
 ---
 
-## 6. Duyet Approval
+## 6. Duyệt Approval
 
-### Khi Nao Can Duyet?
+### Khi Nào Cần Duyệt?
 
-Workflow se dung lai va yeu cau duyet khi:
-- Du an hoan thanh
-- Co quyet dinh quan trong can xac nhan
-- Ngan sach vuot muc cho phep
+Workflow dừng và yêu cầu approval khi:
+- Dự án hoàn thành, cần phê duyệt cuối cùng
+- Ngân sách vượt ngưỡng cho phép
+- Quyết định quan trọng cần xác nhận
 
-### Cach Duyet
+### Cách Duyệt
 
-1. Nhan thong bao **"Approval Required"**
-2. Xem chi tiet:
-   - Loai approval
-   - Noi dung can duyet
-   - Boi canh workflow
-3. Chon:
-   - **Dong Y** → Workflow tiep tuc
-   - **Tu Choi** → Workflow chuyen sang trang thai tu choi
+#### Qua Meeting Room (Virtual Office)
+
+1. Tin nhắn approval hiện trong Meeting Room với nút **Approve** / **Reject**
+2. Click **Approve** để chấp nhận
+3. Click **Reject** để từ chối
+
+#### Qua Header Bell Icon
+
+1. Click icon 🔔 trên header
+2. Xem danh sách approvals đang chờ
+3. Click vào để xem chi tiết
+4. Chọn **Approve** hoặc **Reject**
+
+#### Qua Project Detail
+
+1. Vào chi tiết dự án có approval pending
+2. Banner vàng hiện ở đầu trang
+3. Click **Approve** hoặc **Reject**
 
 ---
 
-## 7. Theo Doi Chi Phi
+## 7. Theo Dõi Chi Phí
 
-### Dashboard Chi Phi
+### Cost Analytics Dashboard
 
-Truy cap **Dashboard** → Tab **Chi Phi** de xem:
+Truy cập **Dashboard** → Xem tổng quan:
 
-| Thong So | Mo Ta |
+| Thống Số | Mô Tả |
 |----------|-------|
-| **Tong chi phi** | So tien da chi cho LLM |
-| **Chi phi theo agent** | Phi tung agent |
-| **Token da dung** | So token da su dung |
-| **RTK tiet kiem** | Token da tiet kiem duoc (neu dung 9Router) |
+| **Total Cost** | Tổng chi phí LLM |
+| **Total Tokens** | Tổng token đã sử dụng |
+| **RTK Saved** | Token tiết kiệm được |
+| **Models Used** | Số model đã dùng |
 
-### Canh Bao Ngan Sach
+### Biểu Đồ
 
-- Khi chi phi dat **90% ngan sach** → Thong bao canh bao
-- Khi chi phi **vuot ngan sach** → Tu dong tam dung du an
+- **Cost by Agent** - Pie chart chi phí theo agent
+- **Token Usage by Agent** - Bar chart token theo agent
+- **Model Usage Breakdown** - Bảng chi tiết theo model
+- **Cost Over Time** - Line chart chi phí theo thời gian
 
-### Xem Log Su Dung
+### Ngân Sách
 
-```bash
-# Xem log chi tiet
-curl http://localhost:3000/health
-
-# Hoa truc tiep tu database
-psql -d aicorp -c "SELECT * FROM \"ApiUsageLog\" ORDER BY \"createdAt\" DESC LIMIT 10;"
-```
+- Khi chi phí đạt **90% ngân sách** → Cảnh báo
+- Khi chi phí **vượt ngân sách** → Tự động tạm dừng dự án
 
 ---
 
-## 8. Doi Provider va Model
+## 8. Cấu Hình Hệ Thống
 
-### Hieu Ve Provider
+### Agent Models
 
-| Provider | Mo Ta | Chi Phi |
-|----------|-------|---------|
-| **OpenCode** | Free models qua 9Router gateway | Mien phi |
-| **9Router** | Gateway thong minh, tu dong route | Re hon |
+Đổi model của agent qua giao diện **Agent Models**:
 
-### Cau Hinh Mac Dinh
+1. Truy cập menu **Agent Models**
+2. Chọn agent cần đổi
+3. Chọn model mới từ dropdown
+4. Click **Save**
 
-Moi agent da duoc cau hinh san voi OpenCode free models:
+### Models Hiện Có
 
-| Agent | Provider | Model |
-|-------|----------|-------|
-| CEO | opencode | oc/deepseek-v4-flash-free |
-| PM | opencode | oc/big-pickle |
-| DEV | opencode | oc/mimo-v2.5-free |
-| QA | opencode | oc/north-mini-code-free |
-| MARKETING | opencode | oc/nemotron-3-ultra-free |
+| Agent | Model Mặc Định |
+|-------|----------------|
+| CEO | `cx/gpt-5.4-mini` |
+| PM | `groq/llama-3.3-70b-versatile` |
+| DEV | `cx/gpt-5.4-mini` |
+| QA | `groq/qwen/qwen3-32b` |
+| MARKETING | `openrouter/google/gemma-4-26b-a4b-it:free` |
 
-### Doi Model Cua Agent
+### Environment Variables
 
-#### Cach 1: Sua Truc Tiep Trong Database
-
-```bash
-# Dang nhap vao database
-psql -U postgres -d neondb
-
-# Xem cau hinh hien tai
-SELECT role, "modelRouteConfig" FROM "Agent";
-
-# Doi model cua CEO
-UPDATE "Agent"
-SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/deepseek-v4-flash-free"}'::jsonb
-WHERE role = 'CEO';
-
-# Doi model cua DEV
-UPDATE "Agent"
-SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/mimo-v2.5-free"}'::jsonb
-WHERE role = 'DEV';
-```
-
-#### Cach 2: Qua API
-
-```bash
-# Cap nhat cau hinh agent
-curl -X PATCH http://localhost:3000/api/agents/CEO \
-  -H "Authorization: Bearer <your-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "modelRouteConfig": {
-      "provider": "opencode",
-      "model": "oc/deepseek-v4-flash-free"
-    }
-  }'
-```
-
-### Cac Model Co San (OpenCode Free)
-
-| Model | Mo Ta | Phi |
-|-------|-------|-----|
-| `oc/deepseek-v4-flash-free` | Nhanh, tot cho planning | Mien phi |
-| `oc/big-pickle` | Can bang, tot cho PM | Mien phi |
-| `oc/mimo-v2.5-free` | Code tot, cho DEV | Mien phi |
-| `oc/north-mini-code-free` | Code review, cho QA | Mien phi |
-| `oc/nemotron-3-ultra-free` | Marketing, content | Mien phi |
-
-### Goi Y Cau Hinh
-
-**Mac dinh (OpenCode free - khuyen nghi):**
-```sql
--- Tat ca dung OpenCode free models
-UPDATE "Agent" SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/deepseek-v4-flash-free"}'::jsonb;
-```
-
-**Neu muon tot nhat cho tung agent:**
-```sql
--- CEO: DeepSeek (tot cho planning)
-UPDATE "Agent" SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/deepseek-v4-flash-free"}'::jsonb WHERE role = 'CEO';
-
--- PM: Big Pickle (can bang)
-UPDATE "Agent" SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/big-pickle"}'::jsonb WHERE role = 'PM';
-
--- DEV: Mimo (code tot)
-UPDATE "Agent" SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/mimo-v2.5-free"}'::jsonb WHERE role = 'DEV';
-
--- QA: North Mini Code (review)
-UPDATE "Agent" SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/north-mini-code-free"}'::jsonb WHERE role = 'QA';
-
--- MARKETING: Nemotron (content)
-UPDATE "Agent" SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/nemotron-3-ultra-free"}'::jsonb WHERE role = 'MARKETING';
-```
-
-### Fallback Provider
-
-Khi OpenCode khong kha dung (het ket noi, loi...), he thong se tu dong fallback sang model khac cung provider.
-
-De thay doi fallback:
-```sql
-UPDATE "Agent"
-SET "modelRouteConfig" = '{"provider": "opencode", "model": "oc/deepseek-v4-flash-free", "fallbackModel": "oc/big-pickle"}'::jsonb
-WHERE role = 'DEV';
-```
-
-### Kiem Tra Trang Thai He Thong
-
-```bash
-# Kiem tra 9Router hoat dong
-curl http://localhost:20128/health
-
-# Kiem tra trang thai server
-curl http://localhost:3000/api/health
-```
-
----
-
-## 9. Cau Hinh He Thong
-
-### File Environment
-
-| Bien | Mo Ta | Gia Tri Mac Dinh |
-|------|-------|-----------------|
+| Biến | Mô Tả | Mặc Định |
+|------|-------|----------|
 | `DATABASE_URL` | PostgreSQL URL | `postgresql://postgres:postgres@localhost:5432/neondb` |
-| `NINE_ROUTER_API_KEY` | API key 9Router | - |
-| `NINE_ROUTER_URL` | URL 9Router | `http://localhost:20128/v1` |
-| `REDIS_URL` | Redis URL (optional) | `redis://localhost:6379` |
-| `JWT_SECRET` | JWT signing key | mac dinh |
+| `JWT_SECRET` | JWT signing key | `ai-corp-jwt-secret-key-2026` |
 | `PORT` | Port backend | `3000` |
-
-### Doi Port
-
-```env
-# apps/api/.env
-PORT=4000
-```
-
-### Doi Database
-
-```env
-# apps/api/.env
-DATABASE_URL=postgresql://user:pass@remote-server:5432/neondb
-```
+| `REDIS_HOST` | Redis host | `localhost` |
+| `REDIS_PORT` | Redis port | `6379` |
 
 ### Reset Database
 
 ```bash
 cd apps/api
 pnpm db:push --force-reset
-pnpm db:push       # Tao lai schema
-pnpm db:seed       # Seed admin + agents
+pnpm db:push
+pnpm db:seed
 ```
 
 ---
 
-## 10. Xu Ly Van De
+## 9. Xử Lý Sự Cố
 
-### 9Router Khong Kha Dung
+### Agent Không Hoạt Động
 
-**Trieu chung:** L loi "Connection refused" khi goi LLM
+**Triệu chứng:** Workflow dừng, agent không trả lời
 
-**Giai phap:**
-1. Kiem tra 9Router dang chay:
-   ```bash
-   curl http://localhost:20128/health
-   ```
-2. Neu khong kha dung, he thong se tu dong fallback sang model khac
-3. Kiem tra API key trong `.env`
+**Giải pháp:**
+1. Kiểm tra log backend
+2. Kiểm tra 9Router có hoạt động không
+3. Kiểm tra API key trong `.env`
 
-### Agent Khong Hoat Dong
+### WebSocket Mất Kết Nối
 
-**Trieu chung:** Workflow dung, agent khong tra loi
+**Triệu chứng:** Không nhận cập nhật real-time
 
-**Giai phap:**
-1. Kiem tra log backend:
-   ```bash
-   cd apps/api && pnpm dev
-   ```
-2. Kiem tra API key con han
-3. Kiem tra model con kha dung
+**Giải pháp:**
+1. Reload trang
+2. Kiểm tra JWT token còn hạn
+3. Kiểm tra backend đang chạy
 
-### WebSocket Mat Ket Noi
+### Database Lỗi
 
-**Trieu chung:** Khong nhan duoc cap nhat real-time
+**Triệu chứng:** Lỗi khi truy vấn dữ liệu
 
-**Giai phap:**
-1. Kiem tra ket noi WebSocket:
-   ```bash
-   curl -i http://localhost:3000/socket.io/?EIO=4
-   ```
-2. Kiem tra JWT token con han
-3. Reload trang
+**Giải pháp:**
+1. Kiểm tra PostgreSQL đang chạy
+2. Kiểm tra kết nối: `psql -U postgres -d neondb -c "SELECT 1;"`
+3. Reset nếu cần
 
-### Database Loi
+### Docker Sandbox Lỗi
 
-**Trieu chung:** Loi khi truy van du lieu
+**Triệu chứng:** DEV agent không viết được file
 
-**Giai phap:**
-1. Kiem tra PostgreSQL dang chay:
-   ```bash
-   # Windows
-   net start postgresql-x64-16
-   
-   # macOS
-   brew services start postgresql@16
-   
-   # Linux
-   sudo systemctl start postgresql
-   ```
-2. Kiem tra ket noi:
-   ```bash
-   psql -U postgres -d neondb -c "SELECT 1;"
-   ```
-3. Reset database neu can:
-   ```bash
-   cd apps/api
-   pnpm db:push --force-reset
-   pnpm db:push
-   pnpm db:seed
-   ```
-
-### Xem Log Chi Tiet
-
-```bash
-# Log structured (JSON)
-cd apps/api
-pnpm dev  # Xem log tren terminal
-
-# Log trong database
-psql -U postgres -d neondb -c "SELECT * FROM \"ApiUsageLog\" ORDER BY \"createdAt\" DESC LIMIT 20;"
-```
+**Giải pháp:**
+1. Kiểm tra Docker Desktop đang chạy
+2. Kiểm tra image `node:18-alpine` đã pull
+3. Restart Docker daemon
 
 ---
 
 ## Checklist Nhanh
 
-- [ ] Da cai dat dependencies (`pnpm install`)
-- [ ] PostgreSQL dang chay (local hoac Neon)
-- [ ] Da cau hinh `.env` voi `DATABASE_URL` va `NINE_ROUTER_API_KEY`
-- [ ] Da dong bo schema (`pnpm db:push`)
-- [ ] Da seed database (`pnpm db:seed`)
-- [ ] Backend dang chay (`pnpm dev` trong `apps/api`)
-- [ ] Frontend dang chay (`pnpm dev` trong `apps/web`)
-- [ ] Co the dang nhap voi `admin@aicorp.com` / `admin123`
-- [ ] Co the tao du an moi
-- [ ] Agent dang hoat dong (xem Virtual Office)
+- [ ] Docker Desktop đang chạy
+- [ ] PostgreSQL đang chạy
+- [ ] Redis đang chạy (`docker ps | grep ai-corp-redis`)
+- [ ] Backend đang chạy (`localhost:3000`)
+- [ ] Frontend đang chạy (`localhost:5173`)
+- [ ] Có thể đăng nhập với `admin@aicorp.com` / `admin123`
+- [ ] Có thể tạo dự án mới
+- [ ] Agent hoạt động (xem Virtual Office)
 
 ---
 
-## Ho Tro
+## Hỗ Trợ
 
-- Doc [API.md](API.md) cho chi tiet API endpoints
-- Doc [DEPLOYMENT.md](DEPLOYMENT.md) cho cau hinh production
-- Mo issue tren GitHub neu gap van de
+- Xem [API.md](API.md) cho chi tiết API endpoints
+- Xem [README.md](README.md) cho tổng quan dự án
