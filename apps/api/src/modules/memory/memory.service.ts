@@ -429,4 +429,23 @@ export class MemoryService {
       averageImportance: memories.length > 0 ? memories.reduce((sum, m) => sum + m.importance, 0) / memories.length : 0,
     };
   }
+
+  /**
+   * Get the current model config for an agent from the database.
+   * Returns the DB config if set, otherwise returns the hardcoded fallback.
+   */
+  async getModelConfigForAgent(role: string, fallback: any): Promise<any> {
+    try {
+      const agent = await this.prisma.agent.findUnique({
+        where: { role: role.toUpperCase() },
+        select: { modelRouteConfig: true },
+      });
+      if (agent?.modelRouteConfig) {
+        return agent.modelRouteConfig as any;
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to read model config from DB for ${role}, using fallback`);
+    }
+    return fallback;
+  }
 }

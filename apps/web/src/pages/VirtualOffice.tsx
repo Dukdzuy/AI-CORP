@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Typography, Space, Card, Badge, Row, Col, Tag, Flex } from 'antd';
 import { RobotOutlined, TeamOutlined, MessageOutlined, ClearOutlined } from '@ant-design/icons';
-import { WebSocketEventType, AgentThinkingEvent, AgentActionEvent, AgentMessageEvent, AgentRole } from '@ai-corp/shared-types';
+import { WebSocketEventType, AgentThinkingEvent, AgentActionEvent, AgentMessageEvent, ApprovalRequiredEvent, AgentRole } from '@ai-corp/shared-types';
 import { useWebsocketStore } from '../stores/websocketStore';
 import { useMeetingStore } from '../stores/meetingStore';
+import { usePendingApprovals } from '../lib/api/hooks/approvals';
 import socketClient from '../lib/websocket/socket-client';
 import { AgentStatusCard, AgentStatus } from '../components/virtual-office/AgentStatusCard';
 import { MeetingRoom } from '../components/virtual-office/MeetingRoom';
@@ -19,6 +20,27 @@ export const VirtualOffice: React.FC = () => {
   const messages = useMeetingStore((s) => s.messages);
   const addMessage = useMeetingStore((s) => s.addMessage);
   const clearMessages = useMeetingStore((s) => s.clearMessages);
+  const { data: apiApprovals = [] } = usePendingApprovals();
+
+  // Add pending approvals from REST API as meeting room messages on mount
+  useEffect(() => {
+    if (apiApprovals.length > 0) {
+      for (const a of apiApprovals) {
+        addMessage({
+          id: `api-approval-${a.id}`,
+          fromRole: 'QA' as AgentRole,
+          toRole: 'all',
+          message: `⚠️ APPROVAL REQUIRED: ${a.approvalType} — QA passed, needs human sign-off.`,
+          type: 'approval',
+          timestamp: new Date(a.requestedAt),
+          approvalId: a.id,
+          projectId: a.workflowRun?.projectId || '',
+          approvalType: a.approvalType,
+          requestData: a.requestData as Record<string, unknown>,
+        });
+      }
+    }
+  }, [apiApprovals.length]);
 
   useEffect(() => {
     const unsubThinking = socketClient.on<AgentThinkingEvent>(
@@ -71,10 +93,29 @@ export const VirtualOffice: React.FC = () => {
       }
     );
 
+    const unsubApproval = socketClient.on<ApprovalRequiredEvent>(
+      WebSocketEventType.HUMAN_APPROVAL_REQUIRED,
+      (data) => {
+        addMessage({
+          id: `approval-${Date.now()}-${data.approvalId}`,
+          fromRole: 'QA' as AgentRole,
+          toRole: 'all',
+          message: `⚠️ APPROVAL REQUIRED: ${data.approvalType} — QA passed, needs human sign-off.`,
+          type: 'approval',
+          timestamp: new Date(data.requestedAt),
+          approvalId: data.approvalId,
+          projectId: data.projectId,
+          approvalType: data.approvalType,
+          requestData: data.requestData,
+        });
+      }
+    );
+
     return () => {
       unsubThinking();
       unsubAction();
       unsubMessage();
+      unsubApproval();
     };
   }, []);
 

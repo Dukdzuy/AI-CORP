@@ -114,14 +114,19 @@ export abstract class BaseAgent {
   }
 
   /**
-   * Invoke the LLM Gateway
+   * Invoke the LLM Gateway.
+   * Reads model config from DB (PATCH /api/models/:role) before each call,
+   * falling back to the hardcoded constructor value.
    */
   protected async callLLM(params: Omit<ChatParams, 'model'>, projectId?: string): Promise<ChatResult> {
-    const provider = this.llmFactory.getProvider(this.modelConfig);
+    // Fetch latest model config from DB (user may have changed it via UI)
+    const modelConfig = await this.memoryService.getModelConfigForAgent(this.role, this.modelConfig);
+
+    const provider = this.llmFactory.getProvider(modelConfig);
     const startTime = Date.now();
     
     try {
-      const fullParams: ChatParams = { ...params, model: this.modelConfig.model };
+      const fullParams: ChatParams = { ...params, model: modelConfig.model };
       
       // Inject system prompt if not present
       if (!fullParams.messages.some(m => m.role === 'system')) {
@@ -142,7 +147,7 @@ export abstract class BaseAgent {
         event: 'llm_call',
         agentRole: this.role,
         projectId,
-        requestedModel: this.modelConfig.model,
+        requestedModel: modelConfig.model,
         actualModelUsed: result.actualModelUsed,
         actualProvider: result.actualProvider,
         isFallbackTriggered: result.isFallbackTriggered,
@@ -157,7 +162,7 @@ export abstract class BaseAgent {
       await this.apiUsageService.logUsage({
         projectId,
         agentRole: this.role,
-        requestedModel: this.modelConfig.model,
+        requestedModel: modelConfig.model,
         actualModelUsed: result.actualModelUsed,
         actualProvider: result.actualProvider,
         isFallbackTriggered: result.isFallbackTriggered,
@@ -172,6 +177,19 @@ export abstract class BaseAgent {
       this.logger.error(`LLM call failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
+  }
+
+  /**
+   * Execute an arbitrary shell command in the sandbox (bypasses tool registry)
+   */
+  protected async executeSandboxCommand(command: string, limits?: ResourceLimits): Promise<ToolResult> {
+    const defaultLimits: ResourceLimits = limits || {
+      maxMemoryMB: 256,
+      maxCPUPercent: 50,
+      maxDiskMB: 100,
+      timeout: 30000
+    };
+    return this.sandboxExecutor.executeInSandbox('custom_command', command, defaultLimits);
   }
 
   /**

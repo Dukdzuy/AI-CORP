@@ -71,8 +71,9 @@ export class EmbeddingService {
    */
   private initializeOpenAI(): void {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    if (!apiKey) {
-      this.logger.warn('OPENAI_API_KEY not set. EmbeddingService disabled - memory search will return empty results.');
+    if (!apiKey || apiKey === 'placeholder' || apiKey === 'sk-placeholder' || apiKey.startsWith('your-') || apiKey.length < 10) {
+      this.logger.warn('OPENAI_API_KEY not set or is placeholder. EmbeddingService disabled - memory search will return empty results.');
+      this.openaiClient = null;
       return;
     }
     this.openaiClient = new OpenAI({ apiKey });

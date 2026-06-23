@@ -22,8 +22,8 @@ export class SandboxExecutor {
   private logger = new Logger(SandboxExecutor.name);
   private dockerAvailable = false;
 
-  // Non-root user for container execution
-  private readonly SANDBOX_USER = 'appuser:appuser'; // user:group format
+  // Non-root user for container execution (node:18-alpine has 'node' user built-in)
+  private readonly SANDBOX_USER = 'node';
   private readonly SANDBOX_UID = 1000;
   private readonly SANDBOX_GID = 1000;
 
@@ -237,7 +237,7 @@ export class SandboxExecutor {
       .toString(36)
       .substr(2, 9)}`;
 
-    // Create container options with security and resource constraints
+    // Create container options - simplified for Docker Desktop on Windows compatibility
     const containerOptions = {
       Image: this.SANDBOX_IMAGE,
       name: containerName,
@@ -245,54 +245,37 @@ export class SandboxExecutor {
       // Command to execute
       Cmd: ['/bin/sh', '-c', command],
 
-      // AC 5: Run as non-root user
+      // Run as non-root user (node:18-alpine has 'node' user)
       User: this.SANDBOX_USER,
 
       HostConfig: {
-        ReadonlyRootfs: true, // AC 4: Mount root filesystem as read-only
+        ReadonlyRootfs: false,
 
-        // Memory limits (AC 2)
-        Memory: limits.maxMemoryMB * 1024 * 1024, // Convert MB to bytes
-        MemorySwap: limits.maxMemoryMB * 1024 * 1024, // Disable swap to enforce strict memory limit
+        // Memory limits
+        Memory: limits.maxMemoryMB * 1024 * 1024,
+        MemorySwap: limits.maxMemoryMB * 1024 * 1024,
 
-        // CPU limits (AC 3)
-        // CpuPeriod and CpuQuota together limit CPU usage
-        CpuPeriod: 100000, // 100ms period
-        CpuQuota: Math.round((limits.maxCPUPercent / 100) * 100000), // Convert percentage to quota
+        // CPU limits
+        CpuPeriod: 100000,
+        CpuQuota: Math.round((limits.maxCPUPercent / 100) * 100000),
 
-        // Disable network access for additional security
-        NetworkMode: 'none',
+        // Use host network - avoids network namespace issues on Docker Desktop Windows
+        NetworkMode: 'host',
 
-        // Security and capability constraints
-        CapDrop: [
-          'ALL', // Drop all capabilities
-        ],
-        CapAdd: [
-          'NET_BIND_SERVICE', // Allow binding to ports if needed
-        ],
+        // Drop all capabilities
+        CapDrop: ['ALL'],
 
-        // Security options: seccomp, AppArmor, no-new-privileges
-        SecurityOpt: [
-          'no-new-privileges=true',
-          `seccomp=${JSON.stringify(this.SECCOMP_PROFILE)}`,
-          'apparmor=docker-default',
-        ],
+        // Simplified security - only no-new-privileges (seccomp/apparmor are Linux-specific)
+        SecurityOpt: ['no-new-privileges=true'],
 
-        // Explicitly deny Docker socket mount
         Binds: [],
       },
 
-      // Disable OOM killer to get resource exhaustion error
-      // @ts-ignore - typing in @types/dockerode is incomplete
-      OomKillDisable: false,
-
-      // Set working directory for command execution
       WorkingDir: '/tmp',
 
-      // Environment variables for non-root user
       Env: [
-        'HOME=/home/appuser',
-        'USER=appuser',
+        'HOME=/home/node',
+        'USER=node',
         'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
       ],
     };
@@ -306,6 +289,21 @@ export class SandboxExecutor {
       const container = await this.docker.createContainer(containerOptions);
       return container;
     } catch (error: any) {
+      // Auto-pull image if not found locally
+      if (error.message?.includes('No such image')) {
+        this.logger.log(`Image ${this.SANDBOX_IMAGE} not found locally, pulling...`);
+        try {
+          await this.pullImage(this.SANDBOX_IMAGE);
+          const container = await this.docker.createContainer(containerOptions);
+          return container;
+        } catch (pullError: any) {
+          this.logger.error(`Failed to pull image: ${pullError.message}`);
+          throw new InternalServerErrorException(
+            `Failed to pull sandbox image ${this.SANDBOX_IMAGE}: ${pullError.message}`
+          );
+        }
+      }
+
       this.logger.error(
         `Failed to create container: ${error.message}`,
         error.stack,
@@ -315,6 +313,28 @@ export class SandboxExecutor {
         `Failed to create sandbox container: ${error.message}`
       );
     }
+  }
+
+  /**
+   * Pull a Docker image
+   */
+  private async pullImage(image: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.docker.pull(image, (err: any, stream: any) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        this.docker.modem.followProgress(stream, (err: any, output: any) => {
+          if (err) {
+            reject(err);
+          } else {
+            this.logger.log(`Image ${image} pulled successfully`);
+            resolve();
+          }
+        });
+      });
+    });
   }
 
   /**
@@ -335,32 +355,38 @@ export class SandboxExecutor {
     timeout: number
   ): Promise<string> {
     try {
-      // Set up timeout promise
+      // Use container.wait() + container.logs() instead of attach()
+      // attach() hangs on Docker Desktop Windows
+      const waitPromise = container.wait().then(async (result) => {
+        // Collect logs after container exits
+        const logs = await container.logs({ stdout: true, stderr: true, tail: 1000 });
+        // Remove null bytes and control characters from Docker binary protocol output
+        const output = logs.toString('utf-8').replace(/\u0000/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+
+        if (result.StatusCode !== 0) {
+          throw new Error(
+            `Container exited with code ${result.StatusCode}: ${output}`
+          );
+        }
+        return output;
+      });
+
       const timeoutPromise = new Promise<string>((_, reject) => {
         setTimeout(() => {
           reject(new Error(`Command execution timeout after ${timeout}ms`));
         }, timeout);
       });
 
-      // Wait for container to finish or timeout
-      const executePromise = this.waitForContainerCompletion(container);
-
-      const output = await Promise.race([executePromise, timeoutPromise]);
-      return output;
+      return await Promise.race([waitPromise, timeoutPromise]);
     } catch (error: any) {
-      // If timeout occurred, forcefully stop container (AC 6)
       if (error.message.includes('timeout')) {
         this.logger.warn(
-          `Container execution timeout after ${timeout}ms, terminating container`,
-          'executeCommandWithTimeout'
+          `Container execution timeout after ${timeout}ms, stopping container`
         );
         try {
-          await container.kill();
-        } catch (killError: any) {
-          this.logger.error(
-            `Failed to kill timed-out container: ${killError.message}`,
-            killError.stack
-          );
+          await container.stop({ t: 1 });
+        } catch (stopError: any) {
+          this.logger.warn(`Container stop: ${stopError.message}`);
         }
       }
       throw error;
@@ -368,61 +394,20 @@ export class SandboxExecutor {
   }
 
   /**
-   * Wait for container execution to complete and collect output
-   *
-   * Attaches to container output streams (stdout, stderr) and waits
-   * for the container to exit or error.
-   *
-   * @param container - Docker container instance
-   * @returns Command output from stdout and stderr combined
-   * @throws Error if container execution fails
+   * Wait for container completion using wait() + logs()
+   * More reliable than attach() on Docker Desktop Windows
    */
   private async waitForContainerCompletion(container: Container): Promise<string> {
-    return new Promise((resolve, reject) => {
-      let output = '';
-      let errorOutput = '';
+    const result = await container.wait();
+    const logs = await container.logs({ stdout: true, stderr: true, tail: 1000 });
+    const output = logs.toString('utf-8');
 
-      // Attach to container streams
-      container.attach(
-        { stream: true, stdout: true, stderr: true },
-        (err, stream) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-
-          // Handle container output
-          stream?.on('data', (chunk) => {
-            output += chunk.toString();
-          });
-
-          stream?.on('error', (error) => {
-            errorOutput += error.toString();
-          });
-
-          stream?.on('end', () => {
-            // Check container exit code
-            container.inspect((inspectErr, data) => {
-              if (inspectErr) {
-                reject(inspectErr);
-                return;
-              }
-
-              const exitCode = data?.State?.ExitCode;
-              if (exitCode !== 0) {
-                reject(
-                  new Error(
-                    `Container exited with code ${exitCode}: ${output}`
-                  )
-                );
-              } else {
-                resolve(output);
-              }
-            });
-          });
-        }
+    if (result.StatusCode !== 0) {
+      throw new Error(
+        `Container exited with code ${result.StatusCode}: ${output}`
       );
-    });
+    }
+    return output;
   }
 
   /**

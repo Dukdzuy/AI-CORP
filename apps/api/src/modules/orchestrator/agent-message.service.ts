@@ -31,15 +31,19 @@ export class AgentMessageService {
       throw new Error(`Agent with role ${params.fromRole} not found in database.`);
     }
 
+    // Sanitize message and metadata to remove null bytes (PostgreSQL rejects \u0000)
+    const sanitizedMessage = this.sanitizeForPostgres(params.message);
+    const sanitizedMetadata = params.metadata ? this.sanitizeJsonForPostgres(params.metadata) : {};
+
     const record = await this.prisma.agentMessage.create({
       data: {
         projectId: params.projectId,
         fromAgentId: agent.id,
         fromRole: params.fromRole,
         toRole: params.toRole,
-        message: params.message,
+        message: sanitizedMessage,
         messageType: params.messageType || 'chat',
-        metadata: params.metadata || {},
+        metadata: sanitizedMetadata,
       },
     });
 
@@ -51,5 +55,24 @@ export class AgentMessageService {
     } as any);
 
     return record;
+  }
+
+  private sanitizeForPostgres(str: string): string {
+    if (!str) return '';
+    // Remove null bytes and other problematic Unicode characters
+    return str.replace(/\u0000/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  }
+
+  private sanitizeJsonForPostgres(obj: any): any {
+    if (typeof obj === 'string') return this.sanitizeForPostgres(obj);
+    if (Array.isArray(obj)) return obj.map(item => this.sanitizeJsonForPostgres(item));
+    if (obj && typeof obj === 'object') {
+      const result: Record<string, any> = {};
+      for (const [key, value] of Object.entries(obj)) {
+        result[key] = this.sanitizeJsonForPostgres(value);
+      }
+      return result;
+    }
+    return obj;
   }
 }

@@ -9,7 +9,8 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger } from '@nestjs/common';
+import { Logger, Inject, forwardRef, OnModuleInit, OnApplicationBootstrap } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import * as jwt from 'jsonwebtoken';
 
 @WebSocketGateway({
@@ -17,11 +18,24 @@ import * as jwt from 'jsonwebtoken';
     origin: '*',
   },
 })
-export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
+export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnApplicationBootstrap {
   @WebSocketServer()
   server!: Server;
 
   private readonly logger = new Logger(AppWebSocketGateway.name);
+  private approvalService: any = null;
+
+  constructor(private readonly moduleRef: ModuleRef) {}
+
+  onApplicationBootstrap() {
+    try {
+      const { ApprovalService } = require('../approvals/approval.service');
+      this.approvalService = this.moduleRef.get(ApprovalService, { strict: false });
+      this.logger.log('ApprovalService wired into WebSocket gateway');
+    } catch (e: any) {
+      this.logger.warn(`Could not wire ApprovalService: ${e.message}`);
+    }
+  }
 
   afterInit(server: Server) {
     this.logger.log('WebSocket Gateway Initialized');
@@ -73,6 +87,31 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
     return { status: 'success', event: 'subscribed', projectId: data.projectId };
   }
 
+  @SubscribeMessage('human:approval_response')
+  async handleApprovalResponse(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { approvalId: string; status: 'approved' | 'rejected'; comment?: string; respondedAt?: string }
+  ) {
+    this.logger.log(`Received approval response: ${data.approvalId} -> ${data.status}`);
+
+    if (!this.approvalService) {
+      this.logger.error('ApprovalService not initialized');
+      return { status: 'error', message: 'Approval service not available' };
+    }
+
+    try {
+      const result = await this.approvalService.handleApprovalResponse(
+        data.approvalId,
+        data.status,
+        data.comment
+      );
+      return { status: 'success', approval: result };
+    } catch (error: any) {
+      this.logger.error(`Approval response failed: ${error.message}`);
+      return { status: 'error', message: error.message };
+    }
+  }
+
   /**
    * Broadcast an event to all connected clients
    */
@@ -82,12 +121,12 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
 
   /**
    * Send an event to a specific project room
-   * Emits both the specific event type and project_event for backwards compatibility
+   * Emits both the specific event type AND project_event for general listeners
    */
   sendToProject(projectId: string, event: any) {
-    // Emit the specific event type directly (e.g., 'agent:thinking')
-    if (event.type && event.payload) {
-      this.server.to(projectId).emit(event.type, event.payload);
+    // Emit the specific event type directly (e.g., 'agent:thinking', 'human:approval_required')
+    if (event.type) {
+      this.server.to(projectId).emit(event.type, event.data ?? event);
     }
     // Also emit as project_event for general listeners
     this.server.to(projectId).emit('project_event', event);
@@ -95,8 +134,23 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
 
   /**
    * Send an event to a specific user
+   * Emits both the specific event type AND user_event for general listeners
    */
   sendToUser(userId: string, event: any) {
+    // Emit the specific event type directly (e.g., 'human:approval_required')
+    if (event.type) {
+      this.server.to(`user_${userId}`).emit(event.type, event.data ?? event);
+    }
+    // Also emit as user_event for general listeners
     this.server.to(`user_${userId}`).emit('user_event', event);
+  }
+
+  /**
+   * Send an event to both a project room and a specific user
+   * Used for approval events that need to reach both the project page and notification bell
+   */
+  sendToProjectAndUser(projectId: string, userId: string, event: any) {
+    this.sendToProject(projectId, event);
+    this.sendToUser(userId, event);
   }
 }

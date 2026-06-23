@@ -36,6 +36,14 @@ export class TasksService {
     private readonly websocketGateway: AppWebSocketGateway,
   ) {}
 
+  async listTasks(projectId?: string) {
+    const where = projectId ? { projectId } : {};
+    return this.prisma.task.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async createTask(projectId: string, data: CreateTaskDto) {
     const task = await this.prisma.task.create({
       data: {

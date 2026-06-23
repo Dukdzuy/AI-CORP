@@ -7,8 +7,12 @@ export interface MeetingMessage {
   fromRole: AgentRole;
   toRole: AgentRole | 'all';
   message: string;
-  type: 'chat' | 'thinking' | 'action' | 'notification';
+  type: 'chat' | 'thinking' | 'action' | 'notification' | 'approval';
   timestamp: Date;
+  approvalId?: string;
+  projectId?: string;
+  approvalType?: string;
+  requestData?: Record<string, unknown>;
 }
 
 interface MeetingState {

@@ -95,6 +95,24 @@ export const socketClient = {
       const handlers = eventHandlers.get('system_event');
       handlers?.forEach((handler) => handler(data));
     });
+
+    // Listen for project-level events (agent:thinking, agent:action, workflow:state_changed, etc.)
+    socket.on('project_event', (data: any) => {
+      wsStore.recordMessage();
+      if (data?.type) {
+        const handlers = eventHandlers.get(data.type);
+        handlers?.forEach((handler) => handler(data.data ?? data));
+      }
+    });
+
+    // Listen for user-specific events (human:approval_required, etc.)
+    socket.on('user_event', (data: any) => {
+      wsStore.recordMessage();
+      if (data?.type) {
+        const handlers = eventHandlers.get(data.type);
+        handlers?.forEach((handler) => handler(data.data ?? data));
+      }
+    });
   },
 
   disconnect: () => {

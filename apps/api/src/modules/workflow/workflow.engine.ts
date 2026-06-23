@@ -325,8 +325,9 @@ export class WorkflowEngine {
 
   /**
    * Resume a paused workflow execution
+   * @param skipProcessNode If true, don't auto-process the current node (used when approval transitions to next node)
    */
-  async resumeWorkflow(runId: string): Promise<void> {
+  async resumeWorkflow(runId: string, skipProcessNode = false): Promise<void> {
     const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
     if (!run) throw new Error(`Workflow run ${runId} not found`);
     
@@ -351,8 +352,10 @@ export class WorkflowEngine {
     };
     this.websocketGateway.sendToProject(run.projectId, { type: 'workflow:state_changed', data: event });
 
-    // Continue processing from current node
-    await this.processCurrentNode(runId);
+    // Continue processing from current node (unless caller will handle it)
+    if (!skipProcessNode) {
+      await this.processCurrentNode(runId);
+    }
   }
 
   /**
@@ -787,8 +790,8 @@ export class WorkflowEngine {
       },
     });
 
-    // Emit approval required event (Req 9, Req 10)
-    this.websocketGateway.sendToUser(project.createdById, {
+    // Emit approval required event (Req 9, Req 10) — send to both project and user
+    const approvalEvent = {
       type: 'human:approval_required',
       data: {
         approvalId: approval.id,
@@ -799,7 +802,8 @@ export class WorkflowEngine {
         requestedAt: new Date()
       },
       timestamp: new Date()
-    });
+    };
+    this.websocketGateway.sendToProjectAndUser(run.projectId, project.createdById, approvalEvent);
 
     this.logger.log(`Approval request ${approval.id} created and notification sent to user ${project.createdById}`);
 

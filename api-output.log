@@ -1,0 +1,162 @@
+﻿
+> @ai-corp/api@0.1.0 dev
+> nest start --watch
+
+[2J[3J[H[[90m16:04:02[0m] Starting compilation in watch mode...
+
+[[90m16:04:09[0m] Found 0 errors. Watching for file changes.
+
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +32ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPrismaModule dependencies initialized[39m[38;5;3m +4ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mToolsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mPassportModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mWebSocketModule dependencies initialized[39m[38;5;3m +2ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigHostModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mHealthModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mConfigModule dependencies initialized[39m[38;5;3m +0ms[39m
+[33m[Nest] 372  - [39m16:04:12 23/06/2026 [33m   WARN[39m [38;5;3m[EmbeddingService] [39m[33mOPENAI_API_KEY not set or is placeholder. EmbeddingService disabled - memory search will return empty results.[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mJwtModule dependencies initialized[39m[38;5;3m +2ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mMemoryModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAgentsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mLLMModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAuthModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mOrchestratorModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mRegistered workflow definition: default-project-workflow[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowDefinitionService] [39m[32mRegistered default workflow definitions[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mWorkflowModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mApprovalsModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:12 23/06/2026 [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mProjectsModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[SandboxExecutor] [39m[32mDocker daemon available for sandbox execution[39m
+[33m[Nest] 372  - [39m16:04:13 23/06/2026 [33m   WARN[39m [38;5;3m[WorkflowEngine] [39m[33mBullMQ unavailable, using degraded mode (direct execution): [39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mRecovering 0 running workflows[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[AppWebSocketGateway] [39m[32mWebSocket Gateway Initialized[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mAppWebSocketGateway subscribed to the "subscribe_project" message[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[WebSocketsController] [39m[32mAppWebSocketGateway subscribed to the "human:approval_response" message[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mModelsController {/api/models}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/models, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/models/available, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/models/:role, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mProjectsController {/api/projects}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects/:id, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects/:id, DELETE} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mTasksController {/api}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tasks, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects/:projectId/tasks, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/tasks/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mMilestonesController {/api}:[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects/:projectId/milestones, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/projects/:projectId/milestones, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/milestones/:id, PATCH} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mApprovalsController {/api/approvals}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/approvals, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/approvals/:id/approve, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/approvals/:id/reject, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAuthController {/api/auth}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/register, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/auth/login, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mHealthController {/api/health}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/api/health, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[NineRouterHealthService] [39m[32mInitializing NineRouterHealthService[39m
+[33m[Nest] 372  - [39m16:04:13 23/06/2026 [33m   WARN[39m [38;5;3m[NineRouterHealthService] [39m[33mNineRouter health check failed: [39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[PrismaService] [39m[32mDatabase connected[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[EnvValidator] [39m[32mEnvironment validated: 5 variables loaded[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[AppWebSocketGateway] [39m[32mApprovalService wired into WebSocket gateway[39m
+[32m[Nest] 372  - [39m16:04:13 23/06/2026 [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +1ms[39m
+API Server running on port 3000
+[33m[Nest] 372  - [39m16:04:43 23/06/2026 [33m   WARN[39m [38;5;3m[NineRouterHealthService] [39m[33mNineRouter health check failed: [39m
+npm : [31m[Nest] 372  - [39m16:04:45 23/06/2026 [31m  ERROR[39m [38;5;3m[ExceptionsHandler] [39m[31mCannot 
+transition approval from status 'approved'[39m
+At line:1 char:206
++ ...  $env:JWT_EXPIRES_IN='7d'; $env:PORT='3000'; npm run dev 2>&1 | Out-F ...
++                                                  ~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([31m[Nest] 372...'approved'[39m:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Error: Cannot transition approval from status 'approved'
+    at ApprovalService.handleApprovalResponse (E:\AI CORP\apps\api\src\modules\approvals\approval.service.ts:88:13)
+    at async E:\AI CORP\node_modules\.pnpm\@nestjs+core@10.4.22_@nestjs+common@10.4.22_class-transformer@0.5.1_class-va
+lidator@0.15.1_re_ifzwrdvvnwx5zjqgwmsbjah3ky\node_modules\@nestjs\core\router\router-execution-context.js:46:28
+    at async E:\AI CORP\node_modules\.pnpm\@nestjs+core@10.4.22_@nestjs+common@10.4.22_class-transformer@0.5.1_class-va
+lidator@0.15.1_re_ifzwrdvvnwx5zjqgwmsbjah3ky\node_modules\@nestjs\core\router\router-proxy.js:9:17
+[32m[Nest] 372  - [39m16:05:08 23/06/2026 [32m    LOG[39m [38;5;3m[ApprovalService] [39m[32mApproval 45262d57-b254-4fe0-ac76-121d435480a1 was approved. Resuming workflow run f4cc54cd-0389-4363-bff1-53aaaf709e0c.[39m
+[32m[Nest] 372  - [39m16:05:08 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mWorkflow run f4cc54cd-0389-4363-bff1-53aaaf709e0c resumed[39m
+[32m[Nest] 372  - [39m16:05:08 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mTransitioned run f4cc54cd-0389-4363-bff1-53aaaf709e0c to node end[39m
+[32m[Nest] 372  - [39m16:05:08 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mProcessing workflow node: run=f4cc54cd-0389-4363-bff1-53aaaf709e0c, node=end[39m
+[33m[Nest] 372  - [39m16:05:08 23/06/2026 [33m   WARN[39m [38;5;3m[WorkflowEngine] [39m[33mExecuting node end directly (no queue)[39m
+[32m[Nest] 372  - [39m16:05:08 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mExecuting node end of type agent_task[39m
+[32m[Nest] 372  - [39m16:05:08 23/06/2026 [32m    LOG[39m [38;5;3m[AgentOrchestratorService] [39m[32mInvoking agent [CEO] for project 8b508d52-1db3-42b2-89cc-a5cde14b9952[39m
+[95m[Nest] 372  - [39m16:05:08 23/06/2026 [95m  DEBUG[39m [38;5;3m[CeoAgent] [39m[95mCEO thinking...[39m
+[31m[Nest] 372  - [39m16:05:08 23/06/2026 [31m  ERROR[39m [38;5;3m[EmbeddingService] [39m[31mFailed to generate 
+embedding: OpenAI client not initialized[39m
+[32m[Nest] 372  - [39m16:05:08 23/06/2026 [32m    LOG[39m [38;5;3m[MemoryService] [39m[32m{"event":"memory_search","agentRole":"CEO","namespace":"strategy","query":"a mockup static e-commerce web frontend using Type","resultCount":0,"threshold":0.7}[39m
+[95m[Nest] 372  - [39m16:05:08 23/06/2026 [95m  DEBUG[39m [38;5;3m[CeoAgent] [39m[95mCEO acting...[39m
+[33m[Nest] 372  - [39m16:05:08 23/06/2026 [33m   WARN[39m [38;5;3m[LLMProviderFactory] [39m[33mCircuit breaker is OPEN. Routing from opencode to fallback: opencode[39m
+[95m[Nest] 372  - [39m16:05:08 23/06/2026 [95m  DEBUG[39m [38;5;3m[NineRouterProvider] [39m[95mInitializing NineRouterProvider with baseURL: http://localhost:20128/v1[39m
+[95m[Nest] 372  - [39m16:05:08 23/06/2026 [95m  DEBUG[39m [38;5;3m[NineRouterProvider] [39m[95mSending chat request to 9Router: model=cx/gpt-5.4-mini, messageCount=2[39m
+[31m[Nest] 372  - [39m16:05:10 23/06/2026 [31m  ERROR[39m [38;5;3m[NineRouterProvider] [39m[31mFailed to call 
+9Router after 1 attempts: Connection error.[39m
+Error: Connection error.
+    at OpenAI.makeRequest (E:\AI 
+CORP\node_modules\.pnpm\openai@4.104.0_ws@8.21.0\node_modules\openai\src\core.ts:507:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NineRouterProvider.chat (E:\AI CORP\apps\api\src\modules\llm\nine-router-provider.ts:75:26)
+    at async CeoAgent.callLLM (E:\AI CORP\apps\api\src\modules\agents\base.agent.ts:142:22)
+    at async CeoAgent.act (E:\AI CORP\apps\api\src\modules\agents\ceo.agent.ts:39:20)
+    at async CeoAgent.execute (E:\AI CORP\apps\api\src\modules\agents\base.agent.ts:43:20)
+    at async AgentOrchestratorService.invokeAgent (E:\AI 
+CORP\apps\api\src\modules\orchestrator\agent-orchestrator.service.ts:35:20)
+    at async WorkflowEngine.executeAgentTask (E:\AI CORP\apps\api\src\modules\workflow\workflow.engine.ts:647:22)
+    at async WorkflowEngine.executeNode (E:\AI CORP\apps\api\src\modules\workflow\workflow.engine.ts:514:20)
+    at async WorkflowEngine.executeNodeJob (E:\AI CORP\apps\api\src\modules\workflow\workflow.engine.ts:429:22)
+[31m[Nest] 372  - [39m16:05:10 23/06/2026 [31m  ERROR[39m [38;5;3m[CeoAgent] [39m[31mLLM call failed: 
+Connection error.[39m
+[31m[Nest] 372  - [39m16:05:10 23/06/2026 [31m  ERROR[39m [38;5;3m[WorkflowEngine] [39m[31mAgent task execution 
+failed for node end: Connection error.[39m
+[32m[Nest] 372  - [39m16:05:10 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32m{"event":"workflow_step","workflowRunId":"f4cc54cd-0389-4363-bff1-53aaaf709e0c","projectId":"8b508d52-1db3-42b2-89cc-a5cde14b9952","nodeId":"end","nodeType":"agent_task","agentRole":"CEO","status":"failed","durationMs":1345,"error":"Connection error."}[39m
+[31m[Nest] 372  - [39m16:05:10 23/06/2026 [31m  ERROR[39m [38;5;3m[WorkflowEngine] [39m[31mNode end execution 
+failed (attempt 1/2): Connection error.[39m
+[32m[Nest] 372  - [39m16:05:10 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mRetrying node end after 1000ms (exponential backoff)[39m
+[32m[Nest] 372  - [39m16:05:11 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mExecuting node end of type agent_task[39m
+[32m[Nest] 372  - [39m16:05:11 23/06/2026 [32m    LOG[39m [38;5;3m[AgentOrchestratorService] [39m[32mInvoking agent [CEO] for project 8b508d52-1db3-42b2-89cc-a5cde14b9952[39m
+[95m[Nest] 372  - [39m16:05:11 23/06/2026 [95m  DEBUG[39m [38;5;3m[CeoAgent] [39m[95mCEO thinking...[39m
+[31m[Nest] 372  - [39m16:05:11 23/06/2026 [31m  ERROR[39m [38;5;3m[EmbeddingService] [39m[31mFailed to generate 
+embedding: OpenAI client not initialized[39m
+[32m[Nest] 372  - [39m16:05:11 23/06/2026 [32m    LOG[39m [38;5;3m[MemoryService] [39m[32m{"event":"memory_search","agentRole":"CEO","namespace":"strategy","query":"a mockup static e-commerce web frontend using Type","resultCount":0,"threshold":0.7}[39m
+[95m[Nest] 372  - [39m16:05:11 23/06/2026 [95m  DEBUG[39m [38;5;3m[CeoAgent] [39m[95mCEO acting...[39m
+[33m[Nest] 372  - [39m16:05:11 23/06/2026 [33m   WARN[39m [38;5;3m[LLMProviderFactory] [39m[33mCircuit breaker is OPEN. Routing from opencode to fallback: opencode[39m
+[95m[Nest] 372  - [39m16:05:11 23/06/2026 [95m  DEBUG[39m [38;5;3m[NineRouterProvider] [39m[95mSending chat request to 9Router: model=cx/gpt-5.4-mini, messageCount=2[39m
+[31m[Nest] 372  - [39m16:05:12 23/06/2026 [31m  ERROR[39m [38;5;3m[NineRouterProvider] [39m[31mFailed to call 
+9Router after 1 attempts: Connection error.[39m
+Error: Connection error.
+    at OpenAI.makeRequest (E:\AI 
+CORP\node_modules\.pnpm\openai@4.104.0_ws@8.21.0\node_modules\openai\src\core.ts:507:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async NineRouterProvider.chat (E:\AI CORP\apps\api\src\modules\llm\nine-router-provider.ts:75:26)
+    at async CeoAgent.callLLM (E:\AI CORP\apps\api\src\modules\agents\base.agent.ts:142:22)
+    at async CeoAgent.act (E:\AI CORP\apps\api\src\modules\agents\ceo.agent.ts:39:20)
+    at async CeoAgent.execute (E:\AI CORP\apps\api\src\modules\agents\base.agent.ts:43:20)
+    at async AgentOrchestratorService.invokeAgent (E:\AI 
+CORP\apps\api\src\modules\orchestrator\agent-orchestrator.service.ts:35:20)
+    at async WorkflowEngine.executeAgentTask (E:\AI CORP\apps\api\src\modules\workflow\workflow.engine.ts:647:22)
+    at async WorkflowEngine.executeNode (E:\AI CORP\apps\api\src\modules\workflow\workflow.engine.ts:514:20)
+    at async WorkflowEngine.executeNodeJob (E:\AI CORP\apps\api\src\modules\workflow\workflow.engine.ts:429:22)
+[31m[Nest] 372  - [39m16:05:12 23/06/2026 [31m  ERROR[39m [38;5;3m[CeoAgent] [39m[31mLLM call failed: 
+Connection error.[39m
+[31m[Nest] 372  - [39m16:05:12 23/06/2026 [31m  ERROR[39m [38;5;3m[WorkflowEngine] [39m[31mAgent task execution 
+failed for node end: Connection error.[39m
+[32m[Nest] 372  - [39m16:05:12 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32m{"event":"workflow_step","workflowRunId":"f4cc54cd-0389-4363-bff1-53aaaf709e0c","projectId":"8b508d52-1db3-42b2-89cc-a5cde14b9952","nodeId":"end","nodeType":"agent_task","agentRole":"CEO","status":"failed","durationMs":1457,"error":"Connection error."}[39m
+[31m[Nest] 372  - [39m16:05:12 23/06/2026 [31m  ERROR[39m [38;5;3m[WorkflowEngine] [39m[31mNode end execution 
+failed (attempt 2/2): Connection error.[39m
+[31m[Nest] 372  - [39m16:05:12 23/06/2026 [31m  ERROR[39m [38;5;3m[WorkflowEngine] [39m[31mNode end failed 
+after 2 attempts[39m
+[31m[Nest] 372  - [39m16:05:12 23/06/2026 [31m  ERROR[39m [38;5;3m[WorkflowEngine] [39m[31mDirect execution 
+failed for node end: Connection error.[39m
+[32m[Nest] 372  - [39m16:05:12 23/06/2026 [32m    LOG[39m [38;5;3m[WorkflowEngine] [39m[32mWorkflow run f4cc54cd-0389-4363-bff1-53aaaf709e0c completed.[39m
+[33m[Nest] 372  - [39m16:05:13 23/06/2026 [33m   WARN[39m [38;5;3m[NineRouterHealthService] [39m[33mNineRouter health check failed: [39m
+[33m[Nest] 372  - [39m16:05:43 23/06/2026 [33m   WARN[39m [38;5;3m[NineRouterHealthService] [39m[33mNineRouter health check failed: [39m
+[32m[Nest] 372  - [39m16:06:13 23/06/2026 [32m    LOG[39m [38;5;3m[NineRouterHealthService] [39m[32mNineRouter is back online. Closing circuit breaker.[39m

@@ -59,6 +59,23 @@ export class ApprovalService {
     return approval;
   }
 
+  async listPendingApprovals(userId: string, projectId?: string) {
+    const where: any = {
+      status: 'pending',
+      userId,
+    };
+
+    if (projectId) {
+      where.workflowRun = { projectId };
+    }
+
+    return this.prisma.approval.findMany({
+      where,
+      include: { workflowRun: { select: { id: true, projectId: true, currentNodeId: true } } },
+      orderBy: { requestedAt: 'desc' },
+    });
+  }
+
   /**
    * Handles human response to an approval request.
    * Requirement 17.7: pending -> approved/rejected only
@@ -82,12 +99,15 @@ export class ApprovalService {
 
     this.logger.log(`Approval ${approvalId} was ${status}. Resuming workflow run ${updatedApproval.workflowRunId}.`);
 
-    // First transition to next node based on approval decision
+    // First resume workflow execution (sets status back to 'running', skip auto-process)
+    await this.workflowEngine.resumeWorkflow(updatedApproval.workflowRunId, true);
+
+    // Then transition to next node based on approval decision
     const edgeCondition = status === 'approved' ? 'onApprove' : 'onReject';
     await this.workflowEngine.transitionToNextNode(updatedApproval.workflowRunId, edgeCondition);
-    
-    // Then resume workflow execution
-    await this.workflowEngine.resumeWorkflow(updatedApproval.workflowRunId);
+
+    // Now process the next node
+    await this.workflowEngine.processCurrentNode(updatedApproval.workflowRunId);
 
     return updatedApproval;
   }

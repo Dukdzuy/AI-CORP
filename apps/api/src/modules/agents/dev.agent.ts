@@ -18,7 +18,12 @@ export class DevAgent extends BaseAgent {
     apiUsageService: ApiUsageService,
     websocketGateway: AppWebSocketGateway
   ) {
-    const systemPrompt = `You are the Lead Developer. Your objective is to implement tasks by writing code and executing tests.`;
+    const systemPrompt = `You are the Lead Developer. Your objective is to implement tasks by writing code and executing tests.
+You MUST write actual implementation code. Do not describe what you would do - write the real code.
+Always output code inside a CODE block with the file path on the first line:
+<CODE filepath="relative/path/to/file">
+actual code here
+</CODE>`;
     const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', fallbackProvider: 'opencode' };
     super(AgentRole.DEV, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
   }
@@ -38,24 +43,105 @@ export class DevAgent extends BaseAgent {
       ? `\n\nRelevant coding conventions:\n${memories.map((m: any) => m.content).join('\n')}`
       : '';
 
-    const prompt = `Implement the following task:${memoryContext}\n\nTask: ${context.task}. Reply with the code logic you would write.`;
+    const prompt = `Implement the following task by writing actual code.${memoryContext}
+
+Task: ${context.task}
+
+You MUST output code. Use this exact format:
+<CODE filepath="src/index.js">
+// your implementation code here
+</CODE>
+
+Write complete, working code. Do not use placeholders or TODOs.`;
 
     const result = await this.callLLM({
       messages: [{ role: 'user', content: prompt }],
-      maxTokens: 1500
+      maxTokens: 2000
     }, context.projectId);
 
-    let toolOutput = '';
-    try {
-        const sandboxResult = await this.executeTool('write_file', `echo "Executing DEV logic"`);
-        toolOutput = sandboxResult.output;
-    } catch(err: any) {
-        toolOutput = `Sandbox skipped or failed: ${err.message}`;
+    const llmOutput = result.content || '';
+
+    // Parse <CODE filepath="..."> blocks from LLM output
+    const codeBlocks = this.parseCodeBlocks(llmOutput);
+
+    let writtenFiles: string[] = [];
+    let codeContent = '';
+
+    if (codeBlocks.length > 0) {
+      for (const block of codeBlocks) {
+        try {
+          const escapedContent = this.escapeForShell(block.content);
+          const command = `mkdir -p $(dirname "${block.filepath}") && cat > "${block.filepath}" << 'HEREDOC_EOF'\n${block.content}\nHEREDOC_EOF`;
+          await this.executeSandboxCommand(command, {
+            maxMemoryMB: 256,
+            maxCPUPercent: 30,
+            maxDiskMB: 100,
+            timeout: 10000
+          });
+          writtenFiles.push(block.filepath);
+          codeContent += `// File: ${block.filepath}\n${block.content}\n\n`;
+          this.logger.log(`DEV wrote file: ${block.filepath}`);
+        } catch (err: any) {
+          this.logger.warn(`Failed to write file ${block.filepath}: ${err.message}`);
+          // Fallback: try simpler write
+          try {
+            const escaped = block.content.replace(/'/g, "'\\''");
+            await this.executeSandboxCommand(`echo '${escaped}' > "${block.filepath}"`);
+            writtenFiles.push(block.filepath);
+            codeContent += `// File: ${block.filepath}\n${block.content}\n\n`;
+          } catch (e2: any) {
+            this.logger.error(`Fallback write also failed for ${block.filepath}: ${e2.message}`);
+          }
+        }
+      }
     }
 
-    await this.saveMemory('coding_conventions', `Implemented task: ${context.task}`, 5, context.projectId);
+    // If no code blocks found, use raw LLM output as code content
+    if (!codeContent) {
+      codeContent = llmOutput;
+    }
 
-    this.emitAction(context.projectId, context.taskId || 'none', 'implement', 'write_file', { task: context.task });
-    return { action: 'implement', output: result.content, toolOutput };
+    // Verify written files exist
+    if (writtenFiles.length > 0) {
+      try {
+        const verifyCmd = writtenFiles.map(f => `test -f "${f}" && echo "OK:${f}" || echo "MISSING:${f}"`).join('; ');
+        const verifyResult = await this.executeSandboxCommand(verifyCmd);
+        this.logger.log(`File verification: ${verifyResult.output}`);
+      } catch (e) {
+        this.logger.warn(`File verification failed: ${(e as Error).message}`);
+      }
+    }
+
+    await this.saveMemory('coding_conventions', `Implemented task: ${context.task}. Files written: ${writtenFiles.join(', ') || 'none'}`, 5, context.projectId);
+
+    this.emitAction(context.projectId, context.taskId || 'none', 'implement', writtenFiles.length > 0 ? 'write_file' : 'llm', { task: context.task, files: writtenFiles });
+
+    return {
+      action: 'implement',
+      output: codeContent,
+      toolOutput: writtenFiles.length > 0 ? `Wrote ${writtenFiles.length} file(s): ${writtenFiles.join(', ')}` : 'No files written (code in response only)',
+      filesWritten: writtenFiles,
+      code: codeContent
+    };
+  }
+
+  /**
+   * Parse <CODE filepath="...">...</CODE> blocks from LLM output
+   */
+  private parseCodeBlocks(output: string): Array<{ filepath: string; content: string }> {
+    const blocks: Array<{ filepath: string; content: string }> = [];
+    const regex = /<CODE\s+filepath=["']([^"']+)["']>\s*\n([\s\S]*?)\n\s*<\/CODE>/gi;
+    let match;
+    while ((match = regex.exec(output)) !== null) {
+      blocks.push({ filepath: match[1], content: match[2] });
+    }
+    return blocks;
+  }
+
+  /**
+   * Escape special characters for shell heredoc content
+   */
+  private escapeForShell(content: string): string {
+    return content.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   }
 }
