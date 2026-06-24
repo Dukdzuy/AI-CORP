@@ -1,6 +1,6 @@
 # AI Corp Platform
 
-A web-based platform that simulates a virtual tech company where all employees are AI Agents powered by Large Language Models (LLMs). The platform automates the complete software development lifecycle: requirements → planning → task breakdown → code implementation → QA review → release → marketing.
+Nền tảng mô phỏng công ty công nghệ ảo với hệ thống AI Agents, tự động hóa toàn bộ quy trình phát triển phần mềm: yêu cầu → lập kế hoạch → phân công task → triển khai code → đánh giá QA → phát hành → tiếp thị.
 
 ## Architecture
 
@@ -40,12 +40,12 @@ A web-based platform that simulates a virtual tech company where all employees a
 |-------|-----------|
 | Frontend | React 18, Vite, TypeScript, Ant Design, Zustand, React Query |
 | Backend | NestJS 10, Prisma ORM, TypeScript |
-| Database | PostgreSQL 18 (local) |
+| Database | PostgreSQL 18 + pgvector |
 | Queue | Redis 7 + BullMQ |
 | Realtime | Socket.IO (WebSocket) |
 | LLM | OpenCode free models via 9Router gateway |
 | Sandbox | Docker containers (node:18-alpine) |
-| Monorepo | pnpm workspaces |
+| Monorepo | pnpm workspaces + Turborepo |
 
 ## Quick Start
 
@@ -126,36 +126,63 @@ See [API.md](API.md) for complete REST and WebSocket API reference.
 ```
 ai-corp/
 ├── apps/
-│   ├── web/                          # React frontend
+│   ├── api/                              # NestJS backend
 │   │   └── src/
-│   │       ├── components/           # UI components
-│   │       │   ├── kanban/          # KanbanBoard, TaskCard
-│   │       │   ├── virtual-office/  # AgentStatusCard, MeetingRoom
-│   │       │   ├── approvals/       # ApprovalModal, Notification
-│   │       │   └── cost/            # CostDashboard, Charts
-│   │       ├── pages/               # Route pages
-│   │       ├── stores/              # Zustand state
-│   │       └── lib/api/             # HTTP client, hooks, WS
+│   │       ├── main.ts                   # Application entry
+│   │       ├── app.module.ts             # Root module
+│   │       └── modules/
+│   │           ├── agents/               # AI Agents (CEO, PM, DEV, QA, Marketing)
+│   │           ├── approvals/            # Human-in-the-loop approval system
+│   │           ├── auth/                 # JWT authentication & guards
+│   │           ├── cost/                 # Cost analytics API
+│   │           ├── health/               # Health check endpoints
+│   │           ├── llm/                  # 9Router LLM gateway integration
+│   │           ├── memory/               # Vector search & embeddings
+│   │           ├── orchestrator/         # Agent orchestration
+│   │           ├── projects/             # CRUD, tasks, milestones
+│   │           ├── security/             # Input sanitization
+│   │           ├── tools/                # Sandbox executor & tool registry
+│   │           ├── websocket/            # Socket.IO gateway
+│   │           └── workflow/             # DAG engine & BullMQ worker
 │   │
-│   └── api/                          # NestJS backend
+│   └── web/                              # React frontend
 │       └── src/
-│           └── modules/
-│               ├── agents/          # CEO, PM, Dev, QA, Marketing
-│               ├── orchestrator/    # Agent orchestration
-│               ├── workflow/        # DAG engine, BullMQ worker
-│               ├── llm/             # 9Router provider, cost tracking
-│               ├── memory/          # Vector search, embeddings
-│               ├── tools/           # Sandbox executor, tool registry
-│               ├── projects/        # CRUD, tasks, milestones
-│               ├── auth/            # JWT, guards
-│               ├── websocket/       # Socket.IO gateway
-│               ├── approvals/       # Human-in-the-loop
-│               ├── cost/            # Cost analytics API
-│               ├── security/        # Input sanitization
-│               └── health/          # Health checks
+│           ├── components/
+│           │   ├── approvals/            # ApprovalModal, Notification
+│           │   ├── auth/                 # Login, Register forms
+│           │   ├── cost/                 # CostDashboard, Charts
+│           │   ├── kanban/               # KanbanBoard, TaskCard
+│           │   ├── layout/               # Header, Sidebar, Layout
+│           │   └── virtual-office/       # AgentStatusCard, MeetingRoom
+│           ├── lib/
+│           │   ├── api/                  # HTTP client & React Query hooks
+│           │   └── websocket/            # Socket.IO client
+│           ├── pages/
+│           │   ├── AdminDashboard.tsx     # Admin panel
+│           │   ├── AgentDetail.tsx        # Agent detail view
+│           │   ├── AgentSettings.tsx      # Model configuration UI
+│           │   ├── AuthPage.tsx           # Login / Register
+│           │   ├── Dashboard.tsx          # Main dashboard
+│           │   ├── ProjectDetail.tsx      # Project detail with tabs
+│           │   └── VirtualOffice.tsx      # Virtual office view
+│           └── stores/
+│               ├── authStore.ts           # Authentication state
+│               ├── meetingStore.ts        # Meeting room messages
+│               ├── projectStore.ts        # Project state
+│               ├── taskStore.ts           # Task state
+│               └── websocketStore.ts      # WebSocket connection
 │
-└── packages/
-    └── shared-types/                # TypeScript interfaces
+├── packages/
+│   └── shared-types/                     # TypeScript interfaces
+│
+├── scripts/
+│   ├── init-postgres.sql                 # Database init script
+│   ├── nine-router-mock.json             # Mock LLM responses
+│   └── setup.sh                          # Setup script
+│
+├── package.json                          # Root package (Turborepo)
+├── pnpm-workspace.yaml                   # pnpm workspace config
+└── turbo.json                            # Turborepo config
 ```
 
 ## Default Workflow
