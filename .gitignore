@@ -37,3 +37,12 @@ coverage/
 # Temporary
 *.tmp
 .cache
+
+# Kiro AI workspace
+.kiro/
+
+# Internal markdown docs (keep README.md, API.md, USER_GUIDE.md)
+*.md
+!README.md
+!API.md
+!USER_GUIDE.md
