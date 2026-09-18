@@ -60,6 +60,17 @@ export interface ThinkingEvent {
 }
 
 /**
+ * Event emitted when agent completes thinking
+ */
+export interface ThinkingCompletedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  thought: AgentThought;
+  timestamp: Date;
+}
+
+/**
  * Event emitted when agent completes an action
  */
 export interface ActionEvent {
@@ -89,6 +100,55 @@ export interface ActionEvent {
 }
 
 /**
+ * Event emitted when agent starts an action
+ */
+export interface ActionStartedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  actionType: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  timestamp: Date;
+}
+
+/**
+ * Event emitted when agent requests approval
+ */
+export interface ApprovalRequestedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  approvalType?: string;
+  data?: unknown;
+  timestamp: Date;
+}
+
+/**
+ * Event emitted when agent receives approval response
+ */
+export interface ApprovalReceivedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  approved: boolean;
+  reason?: string;
+  timestamp: Date;
+}
+
+/**
+ * Event emitted when agent encounters an error
+ */
+export interface ErrorEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId?: string;
+  error: Error | string;
+  timestamp: Date;
+  context?: Record<string, unknown>;
+}
+
+/**
  * Agent Observer Interface
  * 
  * Observers implement this interface to receive notifications from agents.
@@ -99,6 +159,8 @@ export interface ActionEvent {
  * - Metrics: Track agent performance
  * - Memory: Store observations for learning
  * - Logging: Audit trail
+ * 
+ * Note: All methods are optional to allow partial implementation
  */
 export interface IAgentObserver {
   /**
@@ -106,19 +168,55 @@ export interface IAgentObserver {
    * 
    * @param event - State change event details
    */
-  onStateChanged(event: StateChangedEvent): void;
+  onStateChanged?(event: StateChangedEvent): void;
 
   /**
    * Called when agent starts thinking
    * 
    * @param event - Thinking event details
    */
-  onThinkingStarted(event: ThinkingEvent): void;
+  onThinkingStarted?(event: ThinkingEvent): void;
+
+  /**
+   * Called when agent completes thinking
+   * 
+   * @param event - Thinking completion event details
+   */
+  onThinkingCompleted?(event: ThinkingCompletedEvent): void;
+
+  /**
+   * Called when agent starts an action
+   * 
+   * @param event - Action event details
+   */
+  onActionStarted?(event: ActionStartedEvent): void;
 
   /**
    * Called when agent completes an action
    * 
    * @param event - Action event details
    */
-  onActionCompleted(event: ActionEvent): void;
+  onActionCompleted?(event: ActionEvent): void;
+
+  /**
+   * Called when agent requests approval
+   * 
+   * @param event - Approval request event details
+   */
+  onApprovalRequested?(event: ApprovalRequestedEvent): void;
+
+  /**
+   * Called when agent receives approval response
+   * 
+   * @param event - Approval response event details
+   */
+  onApprovalReceived?(event: ApprovalReceivedEvent): void;
+
+  /**
+   * Called when agent encounters an error
+   * 
+   * @param event - Error event details
+   */
+  onError?(event: ErrorEvent): void;
 }
+

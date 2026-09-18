@@ -228,3 +228,75 @@ export interface StateTransition {
   /** Optional reason for transition */
   reason?: string;
 }
+
+/**
+ * Agent event types
+ * Type aliases for event types used in Observer Pattern
+ */
+
+// Re-export event types from IAgentObserver interface
+export type { 
+  StateChangedEvent as AgentStateChangedEvent,
+  ThinkingEvent as AgentThinkingStartedEvent,
+  ActionEvent as AgentActionCompletedEvent,
+} from '../agent/interfaces/IAgentObserver.interface';
+
+/**
+ * Event emitted when agent completes thinking
+ */
+export interface AgentThinkingCompletedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  thought: AgentThought;
+  timestamp: Date;
+}
+
+/**
+ * Event emitted when agent starts an action
+ */
+export interface AgentActionStartedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  actionType: string;
+  toolName: string;
+  parameters: Record<string, unknown>;
+  timestamp: Date;
+}
+
+/**
+ * Event emitted when agent requests approval
+ */
+export interface AgentApprovalRequestedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  approvalType: string;
+  data: unknown;
+  timestamp: Date;
+}
+
+/**
+ * Event emitted when agent receives approval response
+ */
+export interface AgentApprovalReceivedEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId: string;
+  approved: boolean;
+  reason?: string;
+  timestamp: Date;
+}
+
+/**
+ * Event emitted when agent encounters an error
+ */
+export interface AgentErrorEvent {
+  agentId: string;
+  agentRole: AgentRole;
+  taskId?: string;
+  error: Error | string;
+  timestamp: Date;
+  context?: Record<string, unknown>;
+}
