@@ -1,0 +1,12 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Sample Test Suite Snapshot Testing should match snapshot 1`] = `
+{
+  "id": "123",
+  "metadata": {
+    "createdAt": "2026-09-18",
+    "version": "1.0.0",
+  },
+  "name": "Test Object",
+}
+`;
