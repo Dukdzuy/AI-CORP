@@ -12,7 +12,7 @@ import { AgentRole, AgentContext, ChatResult, ToolResult } from '@ai-corp/shared
 /**
  * Create a mock AgentContext for testing
  */
-export function createMockAgentContext(overrides?: Partial<AgentContext>): AgentContext {
+export function createMockAgentContext(overrides?: Partial<any>): any {
   return {
     task: 'Test task',
     taskId: 'task-123',
