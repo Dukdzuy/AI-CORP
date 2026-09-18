@@ -15,6 +15,7 @@
 
 // Agent Domain
 export * from './agent/AgentState';
+export * from './agent/AgentStateMachine';
 export * from './agent/interfaces';
 
 // Tool Domain
