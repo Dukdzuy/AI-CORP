@@ -12,9 +12,15 @@ import { validateParameters } from '../security/parameter-validator';
 import { IThinkingStrategy } from '../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { IActionStrategy } from '../../domain/agent/interfaces/IActionStrategy.interface';
 import { AgentContext } from '../../domain/common/types';
+import { AgentStateMachine } from '../../domain/agent/AgentStateMachine';
+import { AgentEventEmitter } from '../../domain/agent/AgentEventEmitter';
+import { AgentState } from '../../domain/agent/AgentState';
+import { StateChangedEvent } from '../../domain/agent/interfaces/IAgentObserver.interface';
 
 export abstract class BaseAgent {
   protected readonly logger = new Logger(this.constructor.name);
+  protected readonly stateMachine: AgentStateMachine;
+  protected readonly eventEmitter: AgentEventEmitter;
 
   constructor(
     protected readonly role: AgentRole,
@@ -27,8 +33,14 @@ export abstract class BaseAgent {
     protected readonly apiUsageService: ApiUsageService,
     protected readonly websocketGateway: AppWebSocketGateway,
     protected readonly thinkingStrategy?: IThinkingStrategy,
-    protected readonly actionStrategy?: IActionStrategy
-  ) {}
+    protected readonly actionStrategy?: IActionStrategy,
+    stateMachine?: AgentStateMachine,
+    eventEmitter?: AgentEventEmitter
+  ) {
+    // Initialize state machine and event emitter (create new instances if not provided)
+    this.stateMachine = stateMachine || new AgentStateMachine(AgentState.IDLE);
+    this.eventEmitter = eventEmitter || new AgentEventEmitter();
+  }
 
   /**
    * Agents must implement their specific thinking process (backward compatibility)
@@ -43,24 +55,94 @@ export abstract class BaseAgent {
   /**
    * Execute the thought and action cycle.
    * Uses Strategy Pattern if strategies are injected, falls back to abstract methods otherwise.
+   * Integrates AgentStateMachine for state transitions following the State Pattern.
+   * 
+   * State Flow:
+   * - IDLE → THINKING (before thinkingStrategy.think())
+   * - THINKING → ACTING (after think(), before actionStrategy.act())
+   * - ACTING → COMPLETED (after successful act())
+   * - Any state → ERROR (on exception)
+   * - ERROR → IDLE (reset after logging error)
    */
   async execute(context: any): Promise<any> {
-    // Use Strategy Pattern if strategies are injected
-    if (this.thinkingStrategy && this.actionStrategy) {
-      const agentContext = context as AgentContext;
-      const thought = await this.thinkingStrategy.think(agentContext);
+    const projectId = context.projectId || context.projectContext?.id || 'unknown';
+    const agentId = this.role; // Using role as agentId for now
+
+    try {
+      // State transition: IDLE → THINKING
+      this.stateMachine.transitionTo(AgentState.THINKING, 'Starting thought process');
+      this.emitStateChanged(agentId, AgentState.IDLE, AgentState.THINKING, projectId);
       
-      // Emit thinking event
-      this.emitThinking(agentContext.projectId || 'unknown', thought.reasoning);
+      // Use Strategy Pattern if strategies are injected
+      if (this.thinkingStrategy && this.actionStrategy) {
+        const agentContext = context as AgentContext;
+        
+        // Execute thinking phase
+        const thought = await this.thinkingStrategy.think(agentContext);
+        this.emitThinking(agentContext.projectId || 'unknown', thought.reasoning);
+        
+        // State transition: THINKING → ACTING
+        this.stateMachine.transitionTo(AgentState.ACTING, 'Executing action based on thought');
+        this.emitStateChanged(agentId, AgentState.THINKING, AgentState.ACTING, projectId);
+        
+        // Execute action phase
+        const action = await this.actionStrategy.act(agentContext, thought);
+        
+        // State transition: ACTING → COMPLETED
+        this.stateMachine.transitionTo(AgentState.COMPLETED, 'Task completed successfully');
+        this.emitStateChanged(agentId, AgentState.ACTING, AgentState.COMPLETED, projectId);
+        
+        // Reset to IDLE for reuse
+        this.stateMachine.transitionTo(AgentState.IDLE, 'Agent ready for next task');
+        this.emitStateChanged(agentId, AgentState.COMPLETED, AgentState.IDLE, projectId);
+        
+        return { thought, action };
+      }
       
-      const action = await this.actionStrategy.act(agentContext, thought);
+      // Fall back to existing behavior for backward compatibility
+      const thought = await this.think(context);
+      
+      // State transition: THINKING → ACTING
+      this.stateMachine.transitionTo(AgentState.ACTING, 'Executing action');
+      this.emitStateChanged(agentId, AgentState.THINKING, AgentState.ACTING, projectId);
+      
+      const action = await this.act(context);
+      
+      // State transition: ACTING → COMPLETED
+      this.stateMachine.transitionTo(AgentState.COMPLETED, 'Task completed successfully');
+      this.emitStateChanged(agentId, AgentState.ACTING, AgentState.COMPLETED, projectId);
+      
+      // Reset to IDLE for reuse
+      this.stateMachine.transitionTo(AgentState.IDLE, 'Agent ready for next task');
+      this.emitStateChanged(agentId, AgentState.COMPLETED, AgentState.IDLE, projectId);
+      
       return { thought, action };
+    } catch (error) {
+      // State transition: Any state → ERROR
+      const currentState = this.stateMachine.getCurrentState();
+      this.stateMachine.transitionTo(AgentState.ERROR, `Error during execution: ${error instanceof Error ? error.message : String(error)}`);
+      this.emitStateChanged(agentId, currentState, AgentState.ERROR, projectId);
+      
+      // Emit error event via AgentEventEmitter
+      this.eventEmitter.emitError({
+        agentId,
+        agentRole: this.role,
+        taskId: context.taskId,
+        error: error instanceof Error ? error : new Error(String(error)),
+        timestamp: new Date(),
+        context: { projectId, currentState: currentState.toString() }
+      });
+      
+      // Log error
+      this.logger.error(`Agent ${this.role} execution error: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
+      
+      // Reset to IDLE so agent can be reused
+      this.stateMachine.transitionTo(AgentState.IDLE, 'Agent reset after error');
+      this.emitStateChanged(agentId, AgentState.ERROR, AgentState.IDLE, projectId);
+      
+      // Re-throw the error so callers know it failed
+      throw error;
     }
-    
-    // Fall back to existing behavior for backward compatibility
-    const thought = await this.think(context);
-    const action = await this.act(context);
-    return { thought, action };
   }
 
   /**
@@ -76,6 +158,50 @@ export abstract class BaseAgent {
     this.websocketGateway.sendToProject(projectId, { type: 'agent:thinking', payload: event });
     // Also broadcast to all clients for VirtualOffice
     this.websocketGateway.broadcastEvent({ type: 'agent:thinking', payload: event });
+  }
+
+  /**
+   * Emit a state change event via AgentEventEmitter and WebSocket
+   * 
+   * @param agentId - Agent identifier
+   * @param previousState - State before transition
+   * @param currentState - State after transition
+   * @param projectId - Project context
+   * @param reason - Optional reason for transition
+   */
+  protected emitStateChanged(
+    agentId: string,
+    previousState: AgentState,
+    currentState: AgentState,
+    projectId: string,
+    reason?: string
+  ) {
+    const event: StateChangedEvent = {
+      agentId,
+      agentRole: this.role,
+      previousState,
+      currentState,
+      timestamp: new Date(),
+      reason
+    };
+
+    // Emit via AgentEventEmitter (for observers)
+    this.eventEmitter.emitStateChanged(event);
+
+    // Emit via WebSocket for real-time UI updates
+    this.websocketGateway.sendToProject(projectId, {
+      type: 'agent:state_changed',
+      payload: event
+    });
+
+    // Also broadcast to all clients for VirtualOffice
+    this.websocketGateway.broadcastEvent({
+      type: 'agent:state_changed',
+      payload: event
+    });
+
+    // Log state transition for debugging
+    this.logger.debug(`Agent ${this.role} state: ${previousState} → ${currentState}${reason ? ` (${reason})` : ''}`);
   }
 
   /**
