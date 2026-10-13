@@ -1,0 +1,334 @@
+@startuml Factory Pattern - AI-CORP
+!theme plain
+title Design Patterns - Factory Method & Abstract Factory
+scale 1.0
+
+' ========================================
+' FACTORY METHOD PATTERN
+' ========================================
+
+package "Factory Method Pattern" <<Factory Method>> {
+  
+  note as N1
+    **Factory Method Pattern**
+    
+    **Intent**: Define an interface for creating objects,
+    but let subclasses decide which class to instantiate.
+    
+    **Benefits**:
+    - Eliminates need to bind application-specific classes
+    - Provides hooks for subclasses
+    - Connects parallel class hierarchies
+    
+    **Structure**:
+    - Creator: AgentFactory (abstract)
+    - ConcreteCreator: Specific agent factories
+    - Product: IAgent interface
+    - ConcreteProduct: CEOAgent, DevAgent, etc.
+  end note
+  
+  abstract class AgentFactory <<Factory Method>> {
+    # memoryService: MemoryService
+    # llmFactory: LLMProviderFactory
+    # toolRegistry: ToolRegistry
+    # sandboxExecutor: SandboxExecutor
+    # apiUsageService: ApiUsageService
+    # websocketGateway: AppWebSocketGateway
+    --
+    **Factory Method (abstract)**
+    + {abstract} createAgent(role: AgentRole): IAgent
+    + {abstract} getSystemPrompt(role: AgentRole): string
+    + {abstract} getModelConfig(role: AgentRole): ModelRouteConfig
+    --
+    **Template Method**
+    + createAgentWithConfig(role: AgentRole, config: AgentConfig): IAgent
+    --
+    **Utility Methods**
+    # loadAgentConfig(role: AgentRole): AgentConfig
+    # validateConfig(config: AgentConfig): boolean
+  }
+  
+  class ConcreteAgentFactory {
+    **Factory Method Implementation**
+    + createAgent(role: AgentRole): IAgent
+    + getSystemPrompt(role: AgentRole): string
+    + getModelConfig(role: AgentRole): ModelRouteConfig
+    --
+    **Role-specific Creation**
+    - createCEOAgent(): CEOAgent
+    - createPMAgent(): PMAgent
+    - createDevAgent(): DevAgent
+    - createQAAgent(): QAAgent
+    - createMarketingAgent(): MarketingAgent
+    - createBAAgent(): BAAgent
+    - createArchitectAgent(): ArchitectAgent
+    - createDevOpsAgent(): DevOpsAgent
+  }
+  
+  interface IAgent <<Product>> {
+    + getId(): string
+    + getRole(): AgentRole
+    + execute(context: AgentContext): Promise<AgentResult>
+  }
+  
+  abstract class BaseAgent <<ConcreteProduct>> {
+    + execute(context: AgentContext): Promise<AgentResult>
+    # {abstract} think(context: AgentContext): Promise<AgentThought>
+    # {abstract} act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class CEOAgent <<ConcreteProduct>> {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class DevAgent <<ConcreteProduct>> {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class QAAgent <<ConcreteProduct>> {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  ' Relationships
+  AgentFactory <|-- ConcreteAgentFactory : extends
+  AgentFactory ..> IAgent : creates
+  IAgent <|.. BaseAgent : implements
+  BaseAgent <|-- CEOAgent : extends
+  BaseAgent <|-- DevAgent : extends
+  BaseAgent <|-- QAAgent : extends
+  ConcreteAgentFactory ..> CEOAgent : instantiates
+  ConcreteAgentFactory ..> DevAgent : instantiates
+  ConcreteAgentFactory ..> QAAgent : instantiates
+}
+
+' ========================================
+' ABSTRACT FACTORY PATTERN
+' ========================================
+
+package "Abstract Factory Pattern" <<Abstract Factory>> {
+  
+  note as N2
+    **Abstract Factory Pattern**
+    
+    **Intent**: Provide an interface for creating families
+    of related or dependent objects without specifying
+    their concrete classes.
+    
+    **Benefits**:
+    - Isolates concrete classes
+    - Makes exchanging product families easy
+    - Promotes consistency among products
+    
+    **Structure**:
+    - AbstractFactory: ILLMProviderFactory
+    - ConcreteFactory: NineRouterFactory, AnthropicFactory
+    - AbstractProduct: ILLMProvider
+    - ConcreteProduct: NineRouterProvider, AnthropicProvider
+  end note
+  
+  interface ILLMProviderFactory <<AbstractFactory>> {
+    + createProvider(config: ModelRouteConfig): ILLMProvider
+    + supportsModel(model: string): boolean
+    + getFallbackProvider(): ILLMProvider
+  }
+  
+  class LLMProviderFactory <<ConcreteFactory>> {
+    - providers: Map<string, ILLMProvider>
+    - fallbackProviders: Map<string, ILLMProvider>
+    --
+    + createProvider(config: ModelRouteConfig): ILLMProvider
+    + supportsModel(model: string): boolean
+    + getFallbackProvider(): ILLMProvider
+    + getProvider(config: ModelRouteConfig): ILLMProvider
+    --
+    **Registration**
+    + registerProvider(name: string, provider: ILLMProvider): void
+    + registerFallback(name: string, provider: ILLMProvider): void
+    --
+    **Circuit Breaker Integration**
+    - checkCircuitBreaker(providerName: string): boolean
+    - triggerFallback(config: ModelRouteConfig): ILLMProvider
+  }
+  
+  interface ILLMProvider <<AbstractProduct>> {
+    + chat(params: ChatParams): Promise<ChatResult>
+    + getProviderName(): string
+    + supportsModel(model: string): boolean
+    + healthCheck(): Promise<boolean>
+  }
+  
+  class NineRouterProvider <<ConcreteProduct>> {
+    - apiKey: string
+    - baseUrl: string
+    - circuitBreaker: CircuitBreaker
+    --
+    + chat(params: ChatParams): Promise<ChatResult>
+    + getProviderName(): string
+    + supportsModel(model: string): boolean
+    + healthCheck(): Promise<boolean>
+    --
+    **9Router Specific**
+    - handleRTKCompression(params: ChatParams): ChatParams
+    - calculateTokenSaved(original: number, compressed: number): number
+  }
+  
+  class AnthropicProvider <<ConcreteProduct>> {
+    - apiKey: string
+    - baseUrl: string
+    --
+    + chat(params: ChatParams): Promise<ChatResult>
+    + getProviderName(): string
+    + supportsModel(model: string): boolean
+    + healthCheck(): Promise<boolean>
+    --
+    **Anthropic Specific**
+    - formatMessages(messages: Message[]): object
+    - parseResponse(response: object): ChatResult
+  }
+  
+  class OpenAIProvider <<ConcreteProduct>> {
+    - apiKey: string
+    - baseUrl: string
+    --
+    + chat(params: ChatParams): Promise<ChatResult>
+    + getProviderName(): string
+    + supportsModel(model: string): boolean
+    + healthCheck(): Promise<boolean>
+    --
+    **OpenAI Specific**
+    - handleFunctionCalling(params: ChatParams): ChatParams
+    - parseToolCalls(response: object): ToolCall[]
+  }
+  
+  ' Relationships
+  ILLMProviderFactory <|.. LLMProviderFactory : implements
+  LLMProviderFactory ..> ILLMProvider : creates
+  ILLMProvider <|.. NineRouterProvider : implements
+  ILLMProvider <|.. AnthropicProvider : implements
+  ILLMProvider <|.. OpenAIProvider : implements
+}
+
+' ========================================
+' FACTORY USAGE EXAMPLE
+' ========================================
+
+package "Client Code" <<client>> {
+  
+  class AgentService {
+    - agentFactory: AgentFactory
+    - llmFactory: LLMProviderFactory
+    --
+    + createAndExecuteAgent(role: AgentRole, context: AgentContext): Promise<AgentResult>
+    + getAgent(role: AgentRole): IAgent
+  }
+  
+  ' Usage relationships
+  AgentService --> AgentFactory : uses
+  AgentService --> IAgent : receives
+  AgentService --> LLMProviderFactory : uses
+  AgentService --> ILLMProvider : receives
+}
+
+note bottom of AgentService
+  **Client Code Example**:
+  
+  ```typescript
+  // Factory Method usage
+  const agentFactory = new ConcreteAgentFactory(dependencies);
+  const devAgent: IAgent = agentFactory.createAgent(AgentRole.DEV);
+  const result = await devAgent.execute(context);
+  
+  // Abstract Factory usage
+  const llmFactory = new LLMProviderFactory();
+  const provider: ILLMProvider = llmFactory.getProvider({
+    provider: 'ninerouter',
+    model: 'claude-3-sonnet'
+  });
+  const chatResult = await provider.chat(chatParams);
+  
+  // Fallback handling
+  if (provider.healthCheck() === false) {
+    const fallback = llmFactory.getFallbackProvider();
+    const chatResult = await fallback.chat(chatParams);
+  }
+  ```
+  
+  **Benefits in AI-CORP**:
+  - Easy to add new agent types
+  - Easy to swap LLM providers
+  - Centralized configuration
+  - Fallback provider management
+  - Circuit breaker integration
+end note
+
+' ========================================
+' PARALLEL CLASS HIERARCHIES
+' ========================================
+
+note right of ConcreteAgentFactory
+  **Parallel Hierarchies**:
+  
+  Creator Hierarchy:
+  - AgentFactory (abstract)
+  - ConcreteAgentFactory
+  
+  Product Hierarchy:
+  - IAgent (interface)
+  - BaseAgent (abstract)
+  - CEOAgent, DevAgent, etc. (concrete)
+  
+  Factory Method connects these hierarchies:
+  - Factory creates products
+  - Products implement common interface
+  - Easy to extend both hierarchies
+end note
+
+note right of LLMProviderFactory
+  **Family of Related Products**:
+  
+  LLM Provider Family:
+  - NineRouterProvider (primary with RTK)
+  - AnthropicProvider (fallback)
+  - OpenAIProvider (fallback)
+  
+  All providers:
+  - Implement ILLMProvider interface
+  - Support chat() method
+  - Return ChatResult
+  - Can be swapped at runtime
+  
+  Factory ensures:
+  - Consistent interface
+  - Proper configuration
+  - Fallback handling
+  - Circuit breaker integration
+end note
+
+' ========================================
+' BENEFITS SUMMARY
+' ========================================
+
+note top of AgentFactory
+  **Factory Method Benefits in AI-CORP**:
+  
+  1. **Decoupling**: Client code doesn't know concrete agent classes
+  2. **Extensibility**: Add new agents without modifying existing code
+  3. **Configuration**: Centralized agent configuration
+  4. **Testing**: Easy to mock/stub factories for testing
+  5. **Consistency**: All agents created with proper dependencies
+end note
+
+note top of ILLMProviderFactory
+  **Abstract Factory Benefits in AI-CORP**:
+  
+  1. **Provider Independence**: Switch providers without code changes
+  2. **Fallback Management**: Automatic fallback on provider failure
+  3. **Circuit Breaker**: Integrated health checking and failover
+  4. **Consistency**: All providers implement same interface
+  5. **Cost Optimization**: Route to cheapest provider with same capabilities
+end note
+
+@enduml

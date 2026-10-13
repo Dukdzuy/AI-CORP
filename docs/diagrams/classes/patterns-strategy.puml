@@ -1,0 +1,439 @@
+@startuml Strategy Pattern - AI-CORP
+!theme plain
+title Design Pattern - Strategy Pattern (Thinking & Action Strategies)
+scale 1.0
+
+' ========================================
+' STRATEGY PATTERN OVERVIEW
+' ========================================
+
+note as N1
+  **Strategy Pattern (Gang of Four)**
+  
+  **Intent**: Define a family of algorithms, encapsulate each one,
+  and make them interchangeable. Strategy lets the algorithm vary
+  independently from clients that use it.
+  
+  **Benefits**:
+  - Eliminates conditional statements
+  - Runtime algorithm selection
+  - Encapsulates algorithm variations
+  - Easy to add new strategies
+  
+  **Structure**:
+  - Context: BaseAgent
+  - Strategy: IThinkingStrategy, IActionStrategy
+  - ConcreteStrategy: CEOThinkingStrategy, DevActionStrategy, etc.
+  
+  **Applied in AI-CORP**:
+  - Thinking strategies: How agents analyze and plan
+  - Action strategies: How agents execute planned actions
+end note
+
+' ========================================
+' THINKING STRATEGY
+' ========================================
+
+package "Thinking Strategy" <<Strategy Pattern>> {
+  
+  interface IThinkingStrategy <<Strategy>> {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+  abstract class BaseThinkingStrategy {
+    **Template Method**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    **Abstract Methods**
+    # {abstract} generateThought(context: AgentContext): Promise<AgentThought>
+    --
+    **Helper Methods**
+    # validateContext(context: AgentContext): void
+    # createAction(toolName: string, params: object, rationale: string): AgentAction
+    # getMemoriesByNamespace(context: AgentContext, namespace: string): string[]
+  }
+  
+  class CEOThinkingStrategy <<ConcreteStrategy>> {
+    **Strategic, High-level Thinking**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - generateStrategicReasoning(task: string, projectContext: object, memories: any[]): string
+    - planStrategicActions(task: string, context: AgentContext): AgentAction[]
+    - assessConfidence(context: AgentContext): number
+    - identifyRisks(task: string): string[]
+    --
+    **Focus**: Strategy, delegation, risk management
+  }
+  
+  class PMThinkingStrategy <<ConcreteStrategy>> {
+    **Task Decomposition & Planning**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - decomposeTask(task: string): string[]
+    - generatePlanningReasoning(task: string, subtasks: string[], context: AgentContext): string
+    - planSubtaskActions(subtasks: string[], context: AgentContext): AgentAction[]
+    - determineTargetAgent(subtask: string): AgentRole
+    - determinePriority(task: string): Priority
+    - identifyDependencies(subtasks: string[]): string[]
+    --
+    **Focus**: Planning, coordination, dependencies
+  }
+  
+  class DEVThinkingStrategy <<ConcreteStrategy>> {
+    **Technical Implementation Planning**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - generateTechnicalReasoning(task: string, memories: any[]): string
+    - planImplementationActions(task: string, tools: any[], context: AgentContext): AgentAction[]
+    - inferFilePath(task: string): string
+    - assessTechnicalConfidence(context: AgentContext): number
+    - getQualityChecklist(): string[]
+    --
+    **Focus**: Code quality, best practices, implementation
+  }
+  
+  class QAThinkingStrategy <<ConcreteStrategy>> {
+    **Test Planning & Quality Assurance**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - generateTestScenarios(task: string): string[]
+    - generateTestingReasoning(task: string, scenarios: string[]): string
+    - planTestingActions(scenarios: string[], context: AgentContext): AgentAction[]
+    - identifyCoverageAreas(task: string): string[]
+    --
+    **Focus**: Testing, edge cases, quality verification
+  }
+  
+  class MarketingThinkingStrategy <<ConcreteStrategy>> {
+    **Campaign Planning & Market Analysis**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - generateMarketingReasoning(task: string, projectContext: object): string
+    - planMarketingActions(task: string, context: AgentContext): AgentAction[]
+    - identifyTargetAudience(task: string, projectContext: object): string
+    - defineMetrics(task: string): string[]
+    - selectChannels(task: string): string[]
+    --
+    **Focus**: Audience, campaigns, metrics, channels
+  }
+  
+  class BAThinkingStrategy <<ConcreteStrategy>> {
+    **Requirements Analysis & Documentation**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - gatherRequirements(task: string): Requirement[]
+    - generateAnalysisReasoning(requirements: Requirement[]): string
+    - planDocumentationActions(requirements: Requirement[], context: AgentContext): AgentAction[]
+    - identifyStakeholders(task: string): string[]
+    - defineAcceptanceCriteria(requirements: Requirement[]): Criterion[]
+    --
+    **Focus**: Requirements, specifications, acceptance criteria
+  }
+  
+  class ArchitectThinkingStrategy <<ConcreteStrategy>> {
+    **Architecture Design & Pattern Selection**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - analyzeQualityAttributes(task: string): Attribute[]
+    - generateArchitectureReasoning(attributes: Attribute[]): string
+    - selectArchitectureStyle(attributes: Attribute[]): string
+    - selectDesignPatterns(requirements: object): Pattern[]
+    - planArchitectureActions(design: object, context: AgentContext): AgentAction[]
+    --
+    **Focus**: Quality attributes, patterns, architecture style
+  }
+  
+  class DevOpsThinkingStrategy <<ConcreteStrategy>> {
+    **Deployment Planning & Infrastructure**
+    + think(context: AgentContext): Promise<AgentThought>
+    --
+    # generateThought(context: AgentContext): Promise<AgentThought>
+    - analyzeDeploymentRequirements(task: string): object
+    - generateInfrastructureReasoning(requirements: object): string
+    - planDeploymentActions(environment: string, context: AgentContext): AgentAction[]
+    - selectDeploymentStrategy(requirements: object): string
+    - defineRollbackPlan(deployment: object): object
+    --
+    **Focus**: Deployment, infrastructure, rollback, monitoring
+  }
+  
+  ' Strategy relationships
+  IThinkingStrategy <|.. BaseThinkingStrategy : implements
+  BaseThinkingStrategy <|-- CEOThinkingStrategy : extends
+  BaseThinkingStrategy <|-- PMThinkingStrategy : extends
+  BaseThinkingStrategy <|-- DEVThinkingStrategy : extends
+  BaseThinkingStrategy <|-- QAThinkingStrategy : extends
+  BaseThinkingStrategy <|-- MarketingThinkingStrategy : extends
+  BaseThinkingStrategy <|-- BAThinkingStrategy : extends
+  BaseThinkingStrategy <|-- ArchitectThinkingStrategy : extends
+  BaseThinkingStrategy <|-- DevOpsThinkingStrategy : extends
+}
+
+' ========================================
+' ACTION STRATEGY
+' ========================================
+
+package "Action Strategy" <<Strategy Pattern>> {
+  
+  interface IActionStrategy <<Strategy>> {
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+  }
+  
+  abstract class BaseActionStrategy {
+    **Template Method**
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+    --
+    **Abstract Methods**
+    # {abstract} executeActions(context: AgentContext, actions: AgentAction[]): Promise<AgentActionResult>
+    --
+    **Helper Methods**
+    # validateThought(thought: AgentThought): void
+    # executeSingleAction(action: AgentAction): Promise<any>
+    # handleActionError(action: AgentAction, error: Error): void
+    # combineResults(results: any[]): AgentActionResult
+  }
+  
+  class CEOActionStrategy <<ConcreteStrategy>> {
+    **Delegation & Oversight Actions**
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+    --
+    # executeActions(context: AgentContext, actions: AgentAction[]): Promise<AgentActionResult>
+    - delegateToAgent(targetAgent: AgentRole, task: string): Promise<any>
+    - createStrategicMilestone(projectId: string, data: object): Promise<any>
+    - monitorProgress(projectId: string): Promise<any>
+    --
+    **Focus**: High-level delegation, milestone creation
+  }
+  
+  class DevActionStrategy <<ConcreteStrategy>> {
+    **Code Implementation Actions**
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+    --
+    # executeActions(context: AgentContext, actions: AgentAction[]): Promise<AgentActionResult>
+    - readFile(path: string): Promise<string>
+    - writeFile(path: string, content: string): Promise<void>
+    - runTests(testPath: string): Promise<TestResult>
+    - formatCode(code: string): string
+    - lintCode(code: string): LintResult
+    --
+    **Focus**: File I/O, code generation, testing
+  }
+  
+  class QAActionStrategy <<ConcreteStrategy>> {
+    **Testing & Verification Actions**
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+    --
+    # executeActions(context: AgentContext, actions: AgentAction[]): Promise<AgentActionResult>
+    - writeTestCase(testFile: string, scenarios: string[]): Promise<void>
+    - runTestSuite(testPath: string): Promise<TestResult>
+    - generateCoverageReport(testResult: TestResult): Promise<CoverageReport>
+    - createBugReport(issue: object): Promise<string>
+    --
+    **Focus**: Test execution, coverage, bug reporting
+  }
+  
+  class MarketingActionStrategy <<ConcreteStrategy>> {
+    **Campaign Execution Actions**
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+    --
+    # executeActions(context: AgentContext, actions: AgentAction[]): Promise<AgentActionResult>
+    - analyzeAudience(projectId: string): Promise<AudienceData>
+    - createCampaignContent(theme: string): Promise<Content>
+    - setupAnalytics(projectId: string, metrics: string[]): Promise<void>
+    - launchCampaign(campaign: object): Promise<CampaignResult>
+    --
+    **Focus**: Content creation, analytics, campaign launch
+  }
+  
+  class DevOpsActionStrategy <<ConcreteStrategy>> {
+    **Deployment & Infrastructure Actions**
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+    --
+    # executeActions(context: AgentContext, actions: AgentAction[]): Promise<AgentActionResult>
+    - createDeploymentJob(projectId: string, environment: string): Promise<DeploymentJob>
+    - executeDeployment(job: DeploymentJob): Promise<DeploymentResult>
+    - runHealthCheck(environment: string): Promise<HealthStatus>
+    - setupMonitoring(environment: string): Promise<void>
+    - rollbackDeployment(jobId: string): Promise<void>
+    --
+    **Focus**: Deployment, health checks, rollback, monitoring
+  }
+  
+  ' Strategy relationships
+  IActionStrategy <|.. BaseActionStrategy : implements
+  BaseActionStrategy <|-- CEOActionStrategy : extends
+  BaseActionStrategy <|-- DevActionStrategy : extends
+  BaseActionStrategy <|-- QAActionStrategy : extends
+  BaseActionStrategy <|-- MarketingActionStrategy : extends
+  BaseActionStrategy <|-- DevOpsActionStrategy : extends
+}
+
+' ========================================
+' CONTEXT (AGENT)
+' ========================================
+
+package "Context" <<Context>> {
+  
+  abstract class BaseAgent <<Context>> {
+    - thinkingStrategy: IThinkingStrategy
+    - actionStrategy: IActionStrategy
+    --
+    **Strategy Usage**
+    + execute(context: AgentContext): Promise<AgentResult>
+    # think(context: AgentContext): Promise<AgentThought>
+    # act(context: AgentContext): Promise<AgentActionResult>
+    --
+    **Strategy Management**
+    + setThinkingStrategy(strategy: IThinkingStrategy): void
+    + setActionStrategy(strategy: IActionStrategy): void
+  }
+  
+  class CEOAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class DevAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class QAAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  ' Context relationships
+  BaseAgent o-- IThinkingStrategy : uses
+  BaseAgent o-- IActionStrategy : uses
+  BaseAgent <|-- CEOAgent : extends
+  BaseAgent <|-- DevAgent : extends
+  BaseAgent <|-- QAAgent : extends
+  
+  CEOAgent ..> CEOThinkingStrategy : delegates to
+  CEOAgent ..> CEOActionStrategy : delegates to
+  DevAgent ..> DEVThinkingStrategy : delegates to
+  DevAgent ..> DevActionStrategy : delegates to
+  QAAgent ..> QAThinkingStrategy : delegates to
+  QAAgent ..> QAActionStrategy : delegates to
+}
+
+' ========================================
+' USAGE EXAMPLE
+' ========================================
+
+note bottom of BaseAgent
+  **Strategy Pattern Usage Example**:
+  
+  ```typescript
+  // Strategy injection (Dependency Injection)
+  const devAgent = new DevAgent(
+    new DEVThinkingStrategy(memoryService, llmProvider),
+    new DevActionStrategy(toolExecutor)
+  );
+  
+  // Execute uses strategies internally
+  const result = await devAgent.execute(context);
+  
+  // Strategies are called:
+  // 1. thinkingStrategy.think(context) → AgentThought
+  // 2. actionStrategy.act(context, thought) → AgentActionResult
+  
+  // Runtime strategy swapping (if needed)
+  devAgent.setThinkingStrategy(new AdvancedDevThinkingStrategy());
+  
+  // Benefits:
+  // - Agent behavior changes without modifying agent class
+  // - Easy to test strategies in isolation
+  // - Easy to add new thinking/action variations
+  // - Follows Open/Closed Principle
+  ```
+end note
+
+' ========================================
+' BENEFITS & DESIGN PRINCIPLES
+' ========================================
+
+note top of IThinkingStrategy
+  **Strategy Pattern Benefits**:
+  
+  1. **Runtime Flexibility**: Change behavior at runtime
+  2. **Eliminates Conditionals**: No switch/if-else for behavior selection
+  3. **Encapsulation**: Each strategy is self-contained
+  4. **Open/Closed**: Add strategies without modifying context
+  5. **Single Responsibility**: Each strategy has one job
+  6. **Testability**: Test strategies independently
+  
+  **SOLID Principles Applied**:
+  - SRP: Each strategy does one thing
+  - OCP: New strategies without modifying agents
+  - LSP: All strategies substitutable
+  - ISP: Focused interface (one method)
+  - DIP: Agent depends on abstraction
+end note
+
+note top of IActionStrategy
+  **Action Strategy Variations**:
+  
+  Each agent role needs different action execution:
+  - CEO: Delegation, strategic oversight
+  - PM: Task creation, coordination
+  - DEV: Code writing, testing
+  - QA: Test execution, reporting
+  - Marketing: Content, campaigns, analytics
+  - BA: Requirements documentation
+  - Architect: Architecture documentation, diagrams
+  - DevOps: Deployment, monitoring, rollback
+  
+  Strategy pattern allows each role to have
+  custom action execution without tight coupling.
+end note
+
+note bottom of CEOThinkingStrategy
+  **CEO Strategy Characteristics**:
+  
+  **Thinking Focus**:
+  - High-level strategic reasoning
+  - Risk identification and mitigation
+  - Resource allocation decisions
+  - Delegation to appropriate agents
+  
+  **Action Focus**:
+  - Create strategic milestones
+  - Delegate tasks to other agents
+  - Monitor overall project progress
+  - Make high-level decisions
+  
+  **Example Output**:
+  - Thought: "Strategic analysis reveals need for phased approach..."
+  - Actions: [DelegateToAgent(PM), CreateMilestone("Phase 1")]
+end note
+
+note bottom of DEVThinkingStrategy
+  **DEV Strategy Characteristics**:
+  
+  **Thinking Focus**:
+  - Technical implementation analysis
+  - Code quality considerations
+  - Best practices application
+  - Tool and library selection
+  
+  **Action Focus**:
+  - Read existing code
+  - Write new code/modify files
+  - Run tests
+  - Check code quality (lint, format)
+  
+  **Example Output**:
+  - Thought: "Technical analysis: Need authentication endpoint..."
+  - Actions: [WriteFile("auth.ts", code), RunTests()]
+end note
+
+@enduml

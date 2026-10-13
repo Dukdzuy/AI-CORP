@@ -1,0 +1,716 @@
+@startuml Domain Model Overview - AI-CORP
+!theme plain
+title AI-CORP Domain Model - Comprehensive Class Diagram
+scale 1.2
+
+' ========================================
+' LEGEND
+' ========================================
+legend top left
+  |= Symbol |= Meaning |
+  | <<aggregate-root>> | DDD Aggregate Root |
+  | <<entity>> | DDD Entity |
+  | <<value-object>> | DDD Value Object |
+  | <<interface>> | Interface |
+  | <<domain>> | Domain Layer |
+endlegend
+
+' ========================================
+' PACKAGES
+' ========================================
+
+package "Agent Domain" <<domain>> {
+  
+  interface IAgent <<interface>> {
+    + getId(): string
+    + getRole(): AgentRole
+    + getState(): AgentState
+    + execute(context: AgentContext): Promise<AgentResult>
+    + addEventListener(observer: IAgentObserver): void
+    + removeEventListener(observer: IAgentObserver): void
+  }
+  
+  interface IAgentObserver <<interface>> {
+    + onStateChanged?(event: StateChangedEvent): void
+    + onThinkingStarted?(event: ThinkingEvent): void
+    + onThinkingCompleted?(event: ThinkingCompletedEvent): void
+    + onActionStarted?(event: ActionStartedEvent): void
+    + onActionCompleted?(event: ActionEvent): void
+    + onApprovalRequested?(event: ApprovalRequestedEvent): void
+    + onApprovalReceived?(event: ApprovalReceivedEvent): void
+    + onError?(event: ErrorEvent): void
+  }
+  
+  interface IThinkingStrategy <<interface>> {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+  interface IActionStrategy <<interface>> {
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+  }
+  
+  class Agent <<aggregate-root>> {
+    - id: string
+    - role: AgentRole
+    - name: string
+    - systemPrompt: string
+    - modelRouteConfig: ModelRouteConfig
+    - isActive: boolean
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    - stateMachine: AgentStateMachine
+    - eventEmitter: AgentEventEmitter
+    --
+    + getId(): string
+    + getRole(): AgentRole
+    + getState(): AgentState
+    + execute(context: AgentContext): Promise<AgentResult>
+    + addEventListener(observer: IAgentObserver): void
+    + removeEventListener(observer: IAgentObserver): void
+    + transitionState(newState: AgentState): void
+  }
+  
+  abstract class BaseAgent {
+    # role: AgentRole
+    # systemPrompt: string
+    # modelConfig: ModelRouteConfig
+    # memoryService: MemoryService
+    # llmFactory: LLMProviderFactory
+    # toolRegistry: ToolRegistry
+    # sandboxExecutor: SandboxExecutor
+    --
+    + {abstract} think(context: AgentContext): Promise<AgentThought>
+    + {abstract} act(context: AgentContext): Promise<AgentActionResult>
+    + execute(context: AgentContext): Promise<AgentResult>
+    # callLLM(params: ChatParams): Promise<ChatResult>
+    # executeTool(toolName: string, command: string, params: object): Promise<ToolResult>
+    # loadMemory(namespace: string, query: string): Promise<MemorySearchResult[]>
+    # saveMemory(namespace: string, content: string): Promise<string>
+    # emitThinking(projectId: string, thought: string): void
+    # emitAction(projectId: string, taskId: string, actionType: string, toolName: string): void
+  }
+  
+  class CEOAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class PMAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class DevAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class QAAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class MarketingAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class BAAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class ArchitectAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class DevOpsAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+  }
+  
+  class AgentStateMachine {
+    - currentState: AgentState
+    - history: StateTransition[]
+    - transitions: Map<AgentState, AgentState[]>
+    --
+    + getCurrentState(): AgentState
+    + getPreviousState(): AgentState | null
+    + canTransitionTo(targetState: AgentState): boolean
+    + transitionTo(targetState: AgentState, reason?: string): void
+    + getValidTransitions(): AgentState[]
+    + getHistory(): StateTransition[]
+    + reset(): void
+  }
+  
+  class AgentEventEmitter {
+    - observers: Set<IAgentObserver>
+    --
+    + addObserver(observer: IAgentObserver): this
+    + removeObserver(observer: IAgentObserver): this
+    + emitStateChanged(event: StateChangedEvent): void
+    + emitThinkingStarted(event: ThinkingEvent): void
+    + emitThinkingCompleted(event: ThinkingCompletedEvent): void
+    + emitActionStarted(event: ActionStartedEvent): void
+    + emitActionCompleted(event: ActionEvent): void
+    + emitApprovalRequested(event: ApprovalRequestedEvent): void
+    + emitError(event: ErrorEvent): void
+  }
+  
+  class AgentMemory <<entity>> {
+    - id: string
+    - agentId: string
+    - agentRole: AgentRole
+    - namespace: string
+    - content: string
+    - embedding: float[]
+    - importance: number
+    - metadata: JSON
+    - createdAt: DateTime
+    --
+    + generateEmbedding(): Promise<float[]>
+    + calculateRelevance(query: string): number
+  }
+  
+  class AgentMessage <<entity>> {
+    - id: string
+    - projectId: string
+    - fromAgentId: string
+    - fromRole: AgentRole
+    - toRole: AgentRole | null
+    - message: string
+    - messageType: MessageType
+    - metadata: JSON
+    - createdAt: DateTime
+    --
+    + isBroadcast(): boolean
+    + isDirectMessage(): boolean
+  }
+  
+  enum AgentState <<value-object>> {
+    IDLE
+    THINKING
+    ACTING
+    WAITING_APPROVAL
+    ERROR
+    COMPLETED
+  }
+  
+  enum AgentRole <<value-object>> {
+    CEO
+    PM
+    DEV
+    QA
+    MARKETING
+    BA
+    ARCHITECT
+    DEVOPS
+  }
+  
+  class ModelRouteConfig <<value-object>> {
+    + provider: string
+    + model: string
+    + fallbackProvider: string | null
+    + tags: string[]
+    --
+    + equals(other: ModelRouteConfig): boolean
+    + validate(): boolean
+  }
+  
+  class CEOThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+  class PMThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+  class DEVThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+  class QAThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+  class MarketingThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+}
+
+package "Project Domain" <<domain>> {
+  
+  class Project <<aggregate-root>> {
+    - id: string
+    - name: string
+    - description: string
+    - goal: string
+    - status: ProjectStatus
+    - budget: Money | null
+    - costAccrued: Money
+    - createdById: string
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    + addMilestone(milestone: Milestone): void
+    + removeMilestone(milestoneId: string): void
+    + addTask(task: Task): void
+    + updateStatus(status: ProjectStatus): void
+    + calculateProgress(): number
+    + validateBudget(): boolean
+  }
+  
+  class Milestone <<entity>> {
+    - id: string
+    - projectId: string
+    - name: string
+    - description: string
+    - status: MilestoneStatus
+    - dueDate: DateTime | null
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    + addTask(task: Task): void
+    + updateStatus(status: MilestoneStatus): void
+    + calculateProgress(): number
+    + isOverdue(): boolean
+  }
+  
+  class Task <<entity>> {
+    - id: string
+    - projectId: string
+    - milestoneId: string | null
+    - title: string
+    - description: string
+    - status: TaskStatus
+    - priority: Priority
+    - assignedAgent: AgentRole | null
+    - estimatedCost: Money | null
+    - actualCost: Money
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    + assignToAgent(role: AgentRole): void
+    + updateStatus(newStatus: TaskStatus): void
+    + transitionStatus(newStatus: TaskStatus): void
+    + recordCost(cost: Money): void
+  }
+  
+  enum ProjectStatus <<value-object>> {
+    active
+    paused
+    completed
+    cancelled
+  }
+  
+  enum TaskStatus <<value-object>> {
+    todo
+    in_progress
+    review
+    done
+  }
+  
+  enum Priority <<value-object>> {
+    low
+    medium
+    high
+    critical
+  }
+  
+  class Money <<value-object>> {
+    + amount: Decimal
+    + currency: string
+    --
+    + add(other: Money): Money
+    + subtract(other: Money): Money
+    + multiply(factor: number): Money
+    + equals(other: Money): boolean
+    + format(): string
+  }
+}
+
+package "Workflow Domain" <<domain>> {
+  
+  class WorkflowRun <<aggregate-root>> {
+    - id: string
+    - projectId: string
+    - workflowDefId: string
+    - status: WorkflowStatus
+    - currentNodeId: string | null
+    - context: JSON
+    - startedAt: DateTime
+    - completedAt: DateTime | null
+    --
+    + start(): void
+    + pause(): void
+    + resume(): void
+    + cancel(): void
+    + complete(): void
+    + fail(error: Error): void
+    + executeStep(nodeId: string): Promise<void>
+    + requestApproval(data: ApprovalData): Promise<Approval>
+  }
+  
+  class WorkflowStep <<entity>> {
+    - id: string
+    - workflowRunId: string
+    - taskId: string | null
+    - nodeId: string
+    - agentRole: AgentRole | null
+    - status: StepStatus
+    - input: JSON
+    - output: JSON
+    - error: string | null
+    - retryCount: number
+    - startedAt: DateTime | null
+    - completedAt: DateTime | null
+    - durationMs: number | null
+    --
+    + start(): void
+    + complete(output: JSON): void
+    + fail(error: Error): void
+    + retry(): void
+  }
+  
+  class Approval <<entity>> {
+    - id: string
+    - workflowRunId: string
+    - userId: string
+    - approvalType: string
+    - status: ApprovalStatus
+    - requestData: JSON
+    - comment: string | null
+    - requestedAt: DateTime
+    - respondedAt: DateTime | null
+    --
+    + approve(userId: string, comment?: string): void
+    + reject(userId: string, reason: string): void
+    + isExpired(): boolean
+  }
+  
+  enum WorkflowStatus <<value-object>> {
+    running
+    paused
+    completed
+    failed
+    cancelled
+  }
+  
+  enum ApprovalStatus <<value-object>> {
+    pending
+    approved
+    rejected
+  }
+}
+
+package "Tool Domain" <<domain>> {
+  
+  interface ITool <<interface>> {
+    + getName(): string
+    + getDescription(): string
+    + getParameters(): Record<string, unknown>
+    + validate(params: ToolParams): ValidationResult
+    + execute(params: ToolParams): Promise<ToolResult>
+  }
+  
+  interface IToolExecutor <<interface>> {
+    + execute(tool: ITool, params: ToolParams): Promise<ToolResult>
+  }
+  
+  class ToolRegistry {
+    - tools: Map<string, ITool>
+    - rolePermissions: Map<AgentRole, Set<string>>
+    --
+    + registerTool(tool: ITool): void
+    + getTool(name: string): ITool | null
+    + isToolAuthorizedForRole(toolName: string, role: AgentRole): boolean
+    + getToolsForRole(role: AgentRole): ITool[]
+  }
+  
+  class SandboxExecutor {
+    - dockerService: DockerService
+    --
+    + executeInSandbox(toolName: string, command: string, limits: ResourceLimits): Promise<ToolResult>
+  }
+  
+  class WriteFileTool {
+    + getName(): string
+    + getDescription(): string
+    + getParameters(): Record<string, unknown>
+    + validate(params: ToolParams): ValidationResult
+    + execute(params: ToolParams): Promise<ToolResult>
+  }
+  
+  class ReadFileTool {
+    + getName(): string
+    + getDescription(): string
+    + getParameters(): Record<string, unknown>
+    + validate(params: ToolParams): ValidationResult
+    + execute(params: ToolParams): Promise<ToolResult>
+  }
+  
+  class RunTestsTool {
+    + getName(): string
+    + getDescription(): string
+    + getParameters(): Record<string, unknown>
+    + validate(params: ToolParams): ValidationResult
+    + execute(params: ToolParams): Promise<ToolResult>
+  }
+}
+
+package "User Domain" <<domain>> {
+  
+  class User <<aggregate-root>> {
+    - id: string
+    - email: string
+    - name: string
+    - role: string
+    - passwordHash: string
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    + authenticate(password: string): boolean
+    + updatePassword(newPassword: string): void
+    + hasPermission(permission: string): boolean
+  }
+}
+
+package "API Usage Domain" <<domain>> {
+  
+  class ApiUsageLog <<entity>> {
+    - id: string
+    - projectId: string | null
+    - agentRole: AgentRole
+    - requestedModel: string
+    - actualModelUsed: string
+    - actualProvider: string
+    - isFallbackTriggered: boolean
+    - promptTokens: number
+    - completionTokens: number
+    - totalTokens: number
+    - rtkTokenSaved: number | null
+    - estimatedCost: Money
+    - actualCost: Money
+    - responseTimeMs: number
+    - createdAt: DateTime
+    --
+    + calculateCost(): Money
+    + calculateSavings(): Money
+  }
+  
+  class LLMGatewayStatus <<entity>> {
+    - id: string
+    - gatewayName: string
+    - status: GatewayStatus
+    - lastHealthCheck: DateTime
+    - consecutiveFailures: number
+    - metadata: JSON
+    - updatedAt: DateTime
+    --
+    + recordSuccess(): void
+    + recordFailure(): void
+    + shouldTriggerCircuitBreaker(): boolean
+    + updateHealthStatus(status: GatewayStatus): void
+  }
+  
+  enum GatewayStatus <<value-object>> {
+    online
+    offline
+    degraded
+  }
+}
+
+package "New Enterprise Features" <<domain>> {
+  
+  class BARequirementSpec <<aggregate-root>> {
+    - id: string
+    - projectId: string
+    - title: string
+    - functionalRequirements: Requirement[]
+    - nonFunctionalRequirements: Requirement[]
+    - useCases: UseCase[]
+    - acceptanceCriteria: Criterion[]
+    - createdById: string
+    - status: DocumentStatus
+    - version: string
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    + addRequirement(req: Requirement): void
+    + addUseCase(useCase: UseCase): void
+    + updateStatus(status: DocumentStatus): void
+    + validate(): boolean
+  }
+  
+  class ArchitectureDocument <<aggregate-root>> {
+    - id: string
+    - projectId: string
+    - title: string
+    - architectureStyle: string
+    - componentDiagrams: Diagram[]
+    - designPatterns: Pattern[]
+    - technologyStack: Technology[]
+    - qualityAttributes: Attribute[]
+    - createdById: string
+    - status: DocumentStatus
+    - version: string
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    + addComponent(component: Component): void
+    + addPattern(pattern: Pattern): void
+    + updateStatus(status: DocumentStatus): void
+    + validate(): boolean
+  }
+  
+  class DeploymentJob <<aggregate-root>> {
+    - id: string
+    - projectId: string
+    - environment: string
+    - deploymentType: string
+    - status: JobStatus
+    - triggeredBy: string
+    - artifacts: Artifact[]
+    - logs: string
+    - startedAt: DateTime
+    - completedAt: DateTime | null
+    - rollbackJobId: string | null
+    --
+    + start(): void
+    + complete(): void
+    + fail(error: Error): void
+    + rollback(): Promise<DeploymentJob>
+  }
+  
+  enum DocumentStatus <<value-object>> {
+    draft
+    review
+    approved
+    obsolete
+  }
+  
+  enum JobStatus <<value-object>> {
+    pending
+    running
+    success
+    failed
+  }
+}
+
+' ========================================
+' RELATIONSHIPS
+' ========================================
+
+' Agent relationships
+IAgent <|.. Agent : implements
+IAgent <|.. BaseAgent : implements
+BaseAgent <|-- CEOAgent : extends
+BaseAgent <|-- PMAgent : extends
+BaseAgent <|-- DevAgent : extends
+BaseAgent <|-- QAAgent : extends
+BaseAgent <|-- MarketingAgent : extends
+BaseAgent <|-- BAAgent : extends
+BaseAgent <|-- ArchitectAgent : extends
+BaseAgent <|-- DevOpsAgent : extends
+
+Agent *-- AgentStateMachine : contains
+Agent *-- AgentEventEmitter : contains
+Agent --> AgentRole : has
+Agent --> AgentState : has
+Agent --> ModelRouteConfig : configured with
+
+Agent "1" *-- "0..*" AgentMemory : contains
+Agent "1" *-- "0..*" AgentMessage : sends
+
+AgentEventEmitter o-- "0..*" IAgentObserver : notifies
+
+IThinkingStrategy <|.. CEOThinkingStrategy : implements
+IThinkingStrategy <|.. PMThinkingStrategy : implements
+IThinkingStrategy <|.. DEVThinkingStrategy : implements
+IThinkingStrategy <|.. QAThinkingStrategy : implements
+IThinkingStrategy <|.. MarketingThinkingStrategy : implements
+
+BaseAgent ..> IThinkingStrategy : uses
+BaseAgent ..> IActionStrategy : uses
+
+' Project relationships
+Project "1" *-- "0..*" Milestone : contains
+Project "1" *-- "0..*" Task : contains
+Milestone "1" o-- "0..*" Task : groups
+Project --> ProjectStatus : has
+Task --> TaskStatus : has
+Task --> Priority : has
+Task --> AgentRole : assigned to
+Project --> Money : has budget
+Task --> Money : has cost
+
+User "1" --> "0..*" Project : creates
+
+' Workflow relationships
+WorkflowRun "1" *-- "1..*" WorkflowStep : contains
+WorkflowRun "1" *-- "0..*" Approval : requests
+WorkflowRun --> WorkflowStatus : has
+WorkflowStep --> StepStatus : has
+Approval --> ApprovalStatus : has
+WorkflowRun --> Project : executes for
+WorkflowStep --> Task : executes
+Approval --> User : requests from
+
+' Tool relationships
+ITool <|.. WriteFileTool : implements
+ITool <|.. ReadFileTool : implements
+ITool <|.. RunTestsTool : implements
+IToolExecutor <|.. SandboxExecutor : implements
+ToolRegistry o-- "0..*" ITool : registers
+BaseAgent ..> ToolRegistry : uses
+BaseAgent ..> SandboxExecutor : uses
+
+' API Usage relationships
+ApiUsageLog --> Project : tracks for
+ApiUsageLog --> AgentRole : tracks
+ApiUsageLog --> Money : records cost
+
+' New enterprise feature relationships
+BARequirementSpec --> Project : documents
+ArchitectureDocument --> Project : designs
+DeploymentJob --> Project : deploys
+BAAgent ..> BARequirementSpec : creates
+ArchitectAgent ..> ArchitectureDocument : creates
+DevOpsAgent ..> DeploymentJob : triggers
+
+note top of Agent
+  **Aggregate Root**: Agent
+  
+  **Invariants**:
+  - Role is unique across all agents
+  - Can only be in one state at a time
+  - State transitions must be valid
+  
+  **Patterns**: Strategy, State, Observer
+end note
+
+note top of Project
+  **Aggregate Root**: Project
+  
+  **Invariants**:
+  - Budget must be positive when set
+  - Cost accrued <= budget
+  - Cannot delete with active workflows
+  
+  **Consistency Boundary**: Project + Milestones + Tasks
+end note
+
+note top of WorkflowRun
+  **Aggregate Root**: WorkflowRun
+  
+  **Invariants**:
+  - Status transitions must be valid
+  - Cannot modify completed/failed workflows
+  - Approval must resolve before proceeding
+  
+  **Consistency Boundary**: WorkflowRun + Steps + Approvals
+end note
+
+@enduml

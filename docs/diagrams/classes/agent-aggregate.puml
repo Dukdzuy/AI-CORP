@@ -1,0 +1,537 @@
+@startuml Agent Aggregate - Detailed Class Diagram
+!theme plain
+title Agent Aggregate - State Machine, Strategy & Observer Patterns
+scale 1.0
+
+' ========================================
+' AGENT AGGREGATE
+' ========================================
+
+package "Agent Aggregate" <<aggregate>> {
+  
+  interface IAgent <<interface>> {
+    + getId(): string
+    + getRole(): AgentRole
+    + getState(): AgentState
+    + execute(context: AgentContext): Promise<AgentResult>
+    + addEventListener(observer: IAgentObserver): void
+    + removeEventListener(observer: IAgentObserver): void
+  }
+  
+  class Agent <<aggregate-root>> {
+    - id: string
+    - role: AgentRole
+    - name: string
+    - systemPrompt: string
+    - modelRouteConfig: ModelRouteConfig
+    - isActive: boolean
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    - stateMachine: AgentStateMachine
+    - eventEmitter: AgentEventEmitter
+    --
+    **Identity**
+    + getId(): string
+    + getRole(): AgentRole
+    + getName(): string
+    --
+    **State Management**
+    + getState(): AgentState
+    + transitionState(newState: AgentState, reason?: string): void
+    + canTransitionTo(state: AgentState): boolean
+    + getStateHistory(): StateTransition[]
+    --
+    **Execution**
+    + execute(context: AgentContext): Promise<AgentResult>
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(thought: AgentThought): Promise<AgentActionResult>
+    --
+    **Observer Management**
+    + addEventListener(observer: IAgentObserver): void
+    + removeEventListener(observer: IAgentObserver): void
+    + notifyObservers(event: AgentEvent): void
+    --
+    **Configuration**
+    + updateSystemPrompt(prompt: string): void
+    + updateModelConfig(config: ModelRouteConfig): void
+    + activate(): void
+    + deactivate(): void
+    --
+    **Validation**
+    + validate(): boolean
+    + isActive(): boolean
+    --
+    **Domain Events Emitted**
+    ~ emitStateChanged(): void
+    ~ emitThinkingStarted(): void
+    ~ emitThinkingCompleted(): void
+    ~ emitActionStarted(): void
+    ~ emitActionCompleted(): void
+  }
+  
+  abstract class BaseAgent {
+    # role: AgentRole
+    # systemPrompt: string
+    # modelConfig: ModelRouteConfig
+    # memoryService: MemoryService
+    # llmFactory: LLMProviderFactory
+    # toolRegistry: ToolRegistry
+    # sandboxExecutor: SandboxExecutor
+    # apiUsageService: ApiUsageService
+    # websocketGateway: AppWebSocketGateway
+    # logger: Logger
+    --
+    **Template Method Pattern**
+    + execute(context: AgentContext): Promise<AgentResult>
+    # {abstract} think(context: AgentContext): Promise<AgentThought>
+    # {abstract} act(context: AgentContext): Promise<AgentActionResult>
+    --
+    **LLM Integration**
+    # callLLM(params: ChatParams, projectId?: string): Promise<ChatResult>
+    --
+    **Tool Execution**
+    # executeTool(toolName: string, command: string, params: object, limits?: ResourceLimits): Promise<ToolResult>
+    # executeSandboxCommand(command: string, limits?: ResourceLimits): Promise<ToolResult>
+    --
+    **Memory Management**
+    # loadMemory(namespace: string, query: string, limit?: number): Promise<MemorySearchResult[]>
+    # saveMemory(namespace: string, content: string, importance?: number, projectId?: string): Promise<string>
+    --
+    **Event Emission**
+    # emitThinking(projectId: string, thought: string): void
+    # emitAction(projectId: string, taskId: string, actionType: string, toolName: string, params?: any): void
+    # emitMessage(projectId: string, message: string, toAgent?: AgentRole): void
+  }
+  
+  class CEOAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - generateStrategicPlan(context: AgentContext): string
+    - delegateToAgents(task: string): AgentAction[]
+  }
+  
+  class PMAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - decomposeTask(task: string): string[]
+    - createTaskBreakdown(subtasks: string[]): AgentAction[]
+  }
+  
+  class DevAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - analyzeCodeRequirements(task: string): object
+    - implementCode(spec: object): AgentAction[]
+  }
+  
+  class QAAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - generateTestScenarios(task: string): string[]
+    - executeTests(scenarios: string[]): AgentAction[]
+  }
+  
+  class MarketingAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - analyzeTargetAudience(task: string): object
+    - createCampaignPlan(analysis: object): AgentAction[]
+  }
+  
+  class BAAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - gatherRequirements(task: string): Requirement[]
+    - documentSpecifications(requirements: Requirement[]): AgentAction[]
+  }
+  
+  class ArchitectAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - designArchitecture(requirements: Requirement[]): ArchitectureDesign
+    - selectDesignPatterns(design: ArchitectureDesign): Pattern[]
+  }
+  
+  class DevOpsAgent {
+    + think(context: AgentContext): Promise<AgentThought>
+    + act(context: AgentContext): Promise<AgentActionResult>
+    - planDeployment(environment: string): DeploymentPlan
+    - executeDeployment(plan: DeploymentPlan): AgentAction[]
+  }
+  
+  class AgentStateMachine {
+    - currentState: AgentState
+    - history: StateTransition[]
+    - transitions: Map<AgentState, AgentState[]>
+    --
+    **State Queries**
+    + getCurrentState(): AgentState
+    + getPreviousState(): AgentState | null
+    + getValidTransitions(): AgentState[]
+    + getHistory(): StateTransition[]
+    + getTransitionCount(): number
+    --
+    **State Transitions**
+    + canTransitionTo(targetState: AgentState): boolean
+    + transitionTo(targetState: AgentState, reason?: string): void
+    --
+    **Utilities**
+    + getSummary(): object
+    + clearHistory(): void
+    + reset(): void
+  }
+  
+  class AgentEventEmitter {
+    - observers: Set<IAgentObserver>
+    --
+    **Observer Management**
+    + addObserver(observer: IAgentObserver): this
+    + removeObserver(observer: IAgentObserver): this
+    + removeAllObservers(): void
+    + getObserverCount(): number
+    + hasObserver(observer: IAgentObserver): boolean
+    --
+    **Event Emission**
+    + emitStateChanged(event: StateChangedEvent): void
+    + emitThinkingStarted(event: ThinkingEvent): void
+    + emitThinkingCompleted(event: ThinkingCompletedEvent): void
+    + emitActionStarted(event: ActionStartedEvent): void
+    + emitActionCompleted(event: ActionEvent): void
+    + emitApprovalRequested(event: ApprovalRequestedEvent): void
+    + emitApprovalReceived(event: ApprovalReceivedEvent): void
+    + emitError(event: ErrorEvent): void
+  }
+  
+  enum AgentState <<value-object>> {
+    IDLE
+    THINKING
+    ACTING
+    WAITING_APPROVAL
+    ERROR
+    COMPLETED
+    --
+    + isTerminal(): boolean
+    + canTransitionTo(target: AgentState): boolean
+  }
+  
+  enum AgentRole <<value-object>> {
+    CEO
+    PM
+    DEV
+    QA
+    MARKETING
+    BA
+    ARCHITECT
+    DEVOPS
+    --
+    + getDisplayName(): string
+    + getDescription(): string
+  }
+  
+  class ModelRouteConfig <<value-object>> {
+    + provider: string
+    + model: string
+    + fallbackProvider: string | null
+    + tags: string[]
+    --
+    + equals(other: ModelRouteConfig): boolean
+    + validate(): boolean
+    + toJSON(): object
+  }
+  
+  class AgentMemory <<entity>> {
+    - id: string
+    - agentId: string
+    - agentRole: AgentRole
+    - namespace: string
+    - content: string
+    - embedding: float[] | null
+    - importance: number
+    - metadata: JSON
+    - createdAt: DateTime
+    --
+    **Embedding**
+    + generateEmbedding(): Promise<float[]>
+    + hasEmbedding(): boolean
+    --
+    **Relevance**
+    + calculateRelevance(query: string): number
+    + calculateSimilarity(other: AgentMemory): number
+    --
+    **Validation**
+    + validate(): boolean
+    + validateImportance(): boolean
+  }
+  
+  class AgentMessage <<entity>> {
+    - id: string
+    - projectId: string
+    - fromAgentId: string
+    - fromRole: AgentRole
+    - toRole: AgentRole | null
+    - message: string
+    - messageType: MessageType
+    - metadata: JSON
+    - createdAt: DateTime
+    --
+    **Queries**
+    + isBroadcast(): boolean
+    + isDirectMessage(): boolean
+    + isFromAgent(role: AgentRole): boolean
+    + isToAgent(role: AgentRole): boolean
+    --
+    **Validation**
+    + validate(): boolean
+  }
+}
+
+' ========================================
+' STRATEGY PATTERN
+' ========================================
+
+package "Strategy Pattern" <<pattern>> {
+  
+  interface IThinkingStrategy <<interface>> {
+    + think(context: AgentContext): Promise<AgentThought>
+  }
+  
+  interface IActionStrategy <<interface>> {
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult>
+  }
+  
+  abstract class BaseThinkingStrategy {
+    # {abstract} generateThought(context: AgentContext): Promise<AgentThought>
+    + think(context: AgentContext): Promise<AgentThought>
+    # validateContext(context: AgentContext): void
+    # createAction(toolName: string, params: object, rationale: string): AgentAction
+    # getMemoriesByNamespace(context: AgentContext, namespace: string): string[]
+  }
+  
+  class CEOThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+    - generateStrategicReasoning(task: string, projectContext: object, memories: any[]): string
+    - planStrategicActions(task: string, context: AgentContext): AgentAction[]
+    - assessConfidence(context: AgentContext): number
+    - identifyRisks(task: string): string[]
+  }
+  
+  class PMThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+    - decomposeTask(task: string): string[]
+    - generatePlanningReasoning(task: string, subtasks: string[], context: AgentContext): string
+    - planSubtaskActions(subtasks: string[], context: AgentContext): AgentAction[]
+    - determineTargetAgent(subtask: string): AgentRole
+    - determinePriority(task: string): Priority
+    - identifyDependencies(subtasks: string[]): string[]
+  }
+  
+  class DEVThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+    - generateTechnicalReasoning(task: string, memories: any[]): string
+    - planImplementationActions(task: string, tools: any[], context: AgentContext): AgentAction[]
+    - inferFilePath(task: string): string
+    - assessTechnicalConfidence(context: AgentContext): number
+    - getQualityChecklist(): string[]
+  }
+  
+  class QAThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+    - generateTestScenarios(task: string): string[]
+    - generateTestingReasoning(task: string, scenarios: string[]): string
+    - planTestingActions(scenarios: string[], context: AgentContext): AgentAction[]
+    - identifyCoverageAreas(task: string): string[]
+  }
+  
+  class MarketingThinkingStrategy {
+    + think(context: AgentContext): Promise<AgentThought>
+    - generateMarketingReasoning(task: string, projectContext: object): string
+    - planMarketingActions(task: string, context: AgentContext): AgentAction[]
+    - identifyTargetAudience(task: string, projectContext: object): string
+    - defineMetrics(task: string): string[]
+    - selectChannels(task: string): string[]
+  }
+}
+
+' ========================================
+' OBSERVER PATTERN
+' ========================================
+
+package "Observer Pattern" <<pattern>> {
+  
+  interface IAgentObserver <<interface>> {
+    + onStateChanged?(event: StateChangedEvent): void
+    + onThinkingStarted?(event: ThinkingEvent): void
+    + onThinkingCompleted?(event: ThinkingCompletedEvent): void
+    + onActionStarted?(event: ActionStartedEvent): void
+    + onActionCompleted?(event: ActionEvent): void
+    + onApprovalRequested?(event: ApprovalRequestedEvent): void
+    + onApprovalReceived?(event: ApprovalReceivedEvent): void
+    + onError?(event: ErrorEvent): void
+  }
+  
+  class WebSocketGateway {
+    + onStateChanged(event: StateChangedEvent): void
+    + onThinkingStarted(event: ThinkingEvent): void
+    + onActionCompleted(event: ActionEvent): void
+    - broadcast(message: object): void
+    - sendToProject(projectId: string, message: object): void
+  }
+  
+  class WorkflowEngine {
+    + onActionCompleted(event: ActionEvent): void
+    + onError(event: ErrorEvent): void
+    - executeNextStep(taskId: string): void
+    - failWorkflow(taskId: string, error: Error): void
+  }
+  
+  class AuditLogger {
+    + onStateChanged(event: StateChangedEvent): void
+    + onActionCompleted(event: ActionEvent): void
+    + onError(event: ErrorEvent): void
+    - logEvent(event: AgentEvent): void
+  }
+  
+  class MetricsCollector {
+    + onActionCompleted(event: ActionEvent): void
+    - recordMetric(metric: Metric): void
+  }
+}
+
+' ========================================
+' RELATIONSHIPS
+' ========================================
+
+' Interface implementation
+IAgent <|.. Agent : implements
+IAgent <|.. BaseAgent : implements
+
+' Inheritance hierarchy
+BaseAgent <|-- CEOAgent : extends
+BaseAgent <|-- PMAgent : extends
+BaseAgent <|-- DevAgent : extends
+BaseAgent <|-- QAAgent : extends
+BaseAgent <|-- MarketingAgent : extends
+BaseAgent <|-- BAAgent : extends
+BaseAgent <|-- ArchitectAgent : extends
+BaseAgent <|-- DevOpsAgent : extends
+
+' Agent composition
+Agent *-- AgentStateMachine : contains
+Agent *-- AgentEventEmitter : contains
+Agent "1" *-- "0..*" AgentMemory : contains
+Agent "1" *-- "0..*" AgentMessage : sends
+
+' Value object associations
+Agent --> AgentRole : has
+Agent --> AgentState : has
+Agent --> ModelRouteConfig : configured with
+AgentMemory --> AgentRole : belongs to
+
+' Strategy pattern
+IThinkingStrategy <|.. BaseThinkingStrategy : implements
+BaseThinkingStrategy <|-- CEOThinkingStrategy : extends
+BaseThinkingStrategy <|-- PMThinkingStrategy : extends
+BaseThinkingStrategy <|-- DEVThinkingStrategy : extends
+BaseThinkingStrategy <|-- QAThinkingStrategy : extends
+BaseThinkingStrategy <|-- MarketingThinkingStrategy : extends
+
+BaseAgent ..> IThinkingStrategy : uses
+BaseAgent ..> IActionStrategy : uses
+
+' Observer pattern
+AgentEventEmitter o-- "0..*" IAgentObserver : notifies
+IAgentObserver <|.. WebSocketGateway : implements
+IAgentObserver <|.. WorkflowEngine : implements
+IAgentObserver <|.. AuditLogger : implements
+IAgentObserver <|.. MetricsCollector : implements
+
+' ========================================
+' BUSINESS RULES
+' ========================================
+
+note bottom of Agent
+  **Aggregate Root Invariants**:
+  
+  1. Agent role must be unique (Req 17.1)
+  2. Agent can only be in one state at a time
+  3. State transitions must follow state machine rules
+  4. Only active agents can execute tasks (Rule 5)
+  5. Agent must have valid system prompt and model config
+  6. Model config must specify valid provider and model
+  
+  **Consistency Boundary**:
+  - All memories belong to exactly one agent
+  - All messages sent by one agent
+  - State transitions recorded in history
+end note
+
+note bottom of AgentStateMachine
+  **Valid State Transitions**:
+  
+  IDLE → THINKING
+  THINKING → ACTING | ERROR
+  ACTING → COMPLETED | WAITING_APPROVAL | ERROR
+  WAITING_APPROVAL → ACTING | COMPLETED | ERROR
+  ERROR → IDLE (recovery)
+  COMPLETED → IDLE (reuse)
+  
+  **Invariants**:
+  - Cannot transition to same state
+  - All transitions validated before execution
+  - History records all transitions with timestamps
+end note
+
+note bottom of AgentMemory
+  **Entity Invariants** (Req 17.3):
+  
+  1. Memory must belong to valid agent
+  2. Importance must be between 1 and 10 inclusive
+  3. Namespace must be non-empty
+  4. Content must be non-empty
+  5. Embedding is optional (generated on demand)
+  6. Importance determines retrieval priority
+  
+  **Vector Search**:
+  - Embedding stored as JSON array of floats
+  - Semantic search uses cosine similarity
+  - HNSW index for performance (pgvector)
+end note
+
+note top of BaseAgent
+  **Template Method Pattern**:
+  
+  execute() defines skeleton:
+  1. Transition to THINKING state
+  2. Call think() (abstract, role-specific)
+  3. Transition to ACTING state
+  4. Call act() (abstract, role-specific)
+  5. Transition to COMPLETED or ERROR
+  
+  Subclasses implement think() and act()
+  with role-specific behavior.
+end note
+
+note right of IThinkingStrategy
+  **Strategy Pattern Benefits**:
+  
+  - Runtime behavior swapping
+  - Multiple strategies per role possible
+  - Easy to test in isolation
+  - Follows Open/Closed Principle
+  - New strategies without modifying agents
+end note
+
+note right of IAgentObserver
+  **Observer Pattern Benefits**:
+  
+  - Decoupled event handling
+  - Multiple observers can subscribe
+  - Observers don't affect agent behavior
+  - Easy to add new observers
+  - Error in one observer doesn't affect others
+  
+  **All methods optional** (ISP):
+  Observers implement only needed methods.
+end note
+
+@enduml

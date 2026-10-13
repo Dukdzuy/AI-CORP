@@ -1,0 +1,490 @@
+@startuml Observer Pattern - AI-CORP
+!theme plain
+title Design Pattern - Observer Pattern (Agent Event System)
+scale 1.0
+
+' ========================================
+' OBSERVER PATTERN OVERVIEW
+' ========================================
+
+note as N1
+  **Observer Pattern (Gang of Four)**
+  
+  **Intent**: Define a one-to-many dependency between objects
+  so that when one object changes state, all its dependents
+  are notified and updated automatically.
+  
+  **Benefits**:
+  - Decouples subject from observers
+  - Supports broadcast communication
+  - Dynamic relationships (add/remove observers at runtime)
+  - Loose coupling between sender and receivers
+  
+  **Structure**:
+  - Subject: AgentEventEmitter
+  - Observer: IAgentObserver interface
+  - ConcreteObservers: WebSocketGateway, WorkflowEngine, etc.
+  
+  **Applied in AI-CORP**:
+  - Agents emit lifecycle events
+  - Multiple subsystems listen to events
+  - Decoupled notification system
+end note
+
+' ========================================
+' SUBJECT (AGENT EVENT EMITTER)
+' ========================================
+
+package "Subject" <<Subject>> {
+  
+  class AgentEventEmitter <<Subject>> {
+    - observers: Set<IAgentObserver>
+    --
+    **Observer Management**
+    + addObserver(observer: IAgentObserver): this
+    + removeObserver(observer: IAgentObserver): this
+    + removeAllObservers(): void
+    + getObserverCount(): number
+    + hasObserver(observer: IAgentObserver): boolean
+    --
+    **Event Emission (Notify)**
+    + emitStateChanged(event: StateChangedEvent): void
+    + emitThinkingStarted(event: ThinkingEvent): void
+    + emitThinkingCompleted(event: ThinkingCompletedEvent): void
+    + emitActionStarted(event: ActionStartedEvent): void
+    + emitActionCompleted(event: ActionEvent): void
+    + emitApprovalRequested(event: ApprovalRequestedEvent): void
+    + emitApprovalReceived(event: ApprovalReceivedEvent): void
+    + emitError(event: ErrorEvent): void
+    --
+    **Error Handling**
+    - handleObserverError(observer: IAgentObserver, error: Error): void
+  }
+  
+  class Agent {
+    - id: string
+    - role: AgentRole
+    - eventEmitter: AgentEventEmitter
+    --
+    **Subject Interface**
+    + addEventListener(observer: IAgentObserver): void
+    + removeEventListener(observer: IAgentObserver): void
+    --
+    **State Changes Trigger Events**
+    + transitionState(newState: AgentState): void
+    + execute(context: AgentContext): Promise<AgentResult>
+    --
+    **Internal Event Emission**
+    - notifyStateChanged(previous: AgentState, current: AgentState): void
+    - notifyThinkingStarted(taskId: string): void
+    - notifyActionCompleted(action: AgentAction): void
+  }
+  
+  Agent *-- AgentEventEmitter : contains
+}
+
+' ========================================
+' OBSERVER INTERFACE
+' ========================================
+
+package "Observer Interface" <<Observer>> {
+  
+  interface IAgentObserver <<Observer>> {
+    **State Events**
+    + onStateChanged?(event: StateChangedEvent): void
+    --
+    **Thinking Events**
+    + onThinkingStarted?(event: ThinkingEvent): void
+    + onThinkingCompleted?(event: ThinkingCompletedEvent): void
+    --
+    **Action Events**
+    + onActionStarted?(event: ActionStartedEvent): void
+    + onActionCompleted?(event: ActionEvent): void
+    --
+    **Approval Events**
+    + onApprovalRequested?(event: ApprovalRequestedEvent): void
+    + onApprovalReceived?(event: ApprovalReceivedEvent): void
+    --
+    **Error Events**
+    + onError?(event: ErrorEvent): void
+  }
+  
+  note right of IAgentObserver
+    **Interface Segregation Principle**:
+    
+    All methods are optional (TypeScript ?).
+    Observers implement only the methods they need.
+    
+    This allows partial implementation:
+    - WebSocketGateway: All events (broadcasting)
+    - WorkflowEngine: Action + error events only
+    - AuditLogger: State + action + error events
+    - MetricsCollector: Action events only
+    
+    Benefits:
+    - No forced implementation of unused methods
+    - Clear intent (observer only handles what it cares about)
+    - Easy to add new observers
+  end note
+}
+
+' ========================================
+' CONCRETE OBSERVERS
+' ========================================
+
+package "Concrete Observers" <<ConcreteObserver>> {
+  
+  class WebSocketGateway <<ConcreteObserver>> {
+    - server: Server
+    - connectedClients: Map<string, Socket>
+    --
+    **Observer Implementation (All Events)**
+    + onStateChanged(event: StateChangedEvent): void
+    + onThinkingStarted(event: ThinkingEvent): void
+    + onThinkingCompleted(event: ThinkingCompletedEvent): void
+    + onActionStarted(event: ActionStartedEvent): void
+    + onActionCompleted(event: ActionEvent): void
+    + onApprovalRequested(event: ApprovalRequestedEvent): void
+    + onApprovalReceived(event: ApprovalReceivedEvent): void
+    + onError(event: ErrorEvent): void
+    --
+    **WebSocket Broadcasting**
+    - broadcast(message: object): void
+    - sendToProject(projectId: string, message: object): void
+    - sendToUser(userId: string, message: object): void
+    --
+    **Purpose**: Real-time updates to frontend
+  }
+  
+  class WorkflowEngine <<ConcreteObserver>> {
+    - workflowRepository: IWorkflowRepository
+    - agentFactory: AgentFactory
+    --
+    **Observer Implementation (Selective)**
+    + onActionCompleted(event: ActionEvent): void
+    + onError(event: ErrorEvent): void
+    --
+    **Workflow Orchestration**
+    - executeNextStep(taskId: string): void
+    - failWorkflow(taskId: string, error: Error): void
+    - pauseWorkflow(workflowId: string): void
+    --
+    **Purpose**: Coordinate workflow execution
+    
+    **Listens For**:
+    - Action completed → Execute next step
+    - Error → Fail workflow or retry
+  }
+  
+  class AuditLogger <<ConcreteObserver>> {
+    - loggingService: LoggingService
+    - auditRepository: IAuditRepository
+    --
+    **Observer Implementation (Audit Trail)**
+    + onStateChanged(event: StateChangedEvent): void
+    + onActionCompleted(event: ActionEvent): void
+    + onApprovalRequested(event: ApprovalRequestedEvent): void
+    + onApprovalReceived(event: ApprovalReceivedEvent): void
+    + onError(event: ErrorEvent): void
+    --
+    **Audit Logging**
+    - logEvent(event: AgentEvent): void
+    - persistAuditTrail(event: AgentEvent): Promise<void>
+    - generateAuditReport(): AuditReport
+    --
+    **Purpose**: Compliance and audit trail
+    
+    **Listens For**:
+    - State changes → Track agent lifecycle
+    - Actions → Track what agents did
+    - Approvals → Track approval decisions
+    - Errors → Track failures for investigation
+  }
+  
+  class MetricsCollector <<ConcreteObserver>> {
+    - metricsService: MetricsService
+    - prometheusRegistry: Registry
+    --
+    **Observer Implementation (Metrics Only)**
+    + onActionCompleted(event: ActionEvent): void
+    + onError(event: ErrorEvent): void
+    --
+    **Metrics Collection**
+    - recordActionMetric(event: ActionEvent): void
+    - recordErrorMetric(event: ErrorEvent): void
+    - incrementCounter(metric: string): void
+    - recordHistogram(metric: string, value: number): void
+    --
+    **Metrics Tracked**:
+    - Agent action count by role
+    - Agent action duration by tool
+    - Agent error rate
+    - Agent success rate
+    --
+    **Purpose**: Performance monitoring and analytics
+  }
+  
+  class MemoryObserver <<ConcreteObserver>> {
+    - memoryService: MemoryService
+    - embeddingService: EmbeddingService
+    --
+    **Observer Implementation (Learning)**
+    + onActionCompleted(event: ActionEvent): void
+    + onThinkingCompleted(event: ThinkingCompletedEvent): void
+    --
+    **Memory Persistence**
+    - saveThoughtAsMemory(event: ThinkingCompletedEvent): Promise<void>
+    - saveActionResultAsMemory(event: ActionEvent): Promise<void>
+    - calculateImportance(event: AgentEvent): number
+    --
+    **Purpose**: Agent learning and memory formation
+    
+    **Listens For**:
+    - Thinking completed → Save reasoning as memory
+    - Action completed → Save successful patterns as memory
+  }
+  
+  class NotificationService <<ConcreteObserver>> {
+    - emailService: EmailService
+    - slackService: SlackService
+    --
+    **Observer Implementation (Notifications)**
+    + onApprovalRequested(event: ApprovalRequestedEvent): void
+    + onError(event: ErrorEvent): void
+    --
+    **Notification Sending**
+    - sendEmailNotification(userId: string, message: string): Promise<void>
+    - sendSlackNotification(channel: string, message: string): Promise<void>
+    --
+    **Purpose**: External notifications
+    
+    **Listens For**:
+    - Approval requested → Notify user via email/Slack
+    - Error → Notify team on critical errors
+  }
+}
+
+' ========================================
+' RELATIONSHIPS
+' ========================================
+
+' Observer pattern relationships
+AgentEventEmitter o-- "0..*" IAgentObserver : notifies
+IAgentObserver <|.. WebSocketGateway : implements
+IAgentObserver <|.. WorkflowEngine : implements
+IAgentObserver <|.. AuditLogger : implements
+IAgentObserver <|.. MetricsCollector : implements
+IAgentObserver <|.. MemoryObserver : implements
+IAgentObserver <|.. NotificationService : implements
+
+' Agent uses event emitter
+Agent ..> IAgentObserver : notifies via emitter
+
+' ========================================
+' EVENT TYPES
+' ========================================
+
+package "Event Types" <<domain-event>> {
+  
+  class StateChangedEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + previousState: AgentState
+    + currentState: AgentState
+    + timestamp: Date
+    + reason?: string
+  }
+  
+  class ThinkingEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + taskId: string
+    + message: string
+    + timestamp: Date
+  }
+  
+  class ThinkingCompletedEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + taskId: string
+    + thought: AgentThought
+    + confidence: number
+    + timestamp: Date
+  }
+  
+  class ActionEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + taskId: string
+    + actionType: string
+    + toolName: string
+    + parameters: Record<string, unknown>
+    + result?: AgentActionResult
+    + timestamp: Date
+  }
+  
+  class ActionStartedEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + taskId: string
+    + actionType: string
+    + toolName: string
+    + parameters: Record<string, unknown>
+    + timestamp: Date
+  }
+  
+  class ApprovalRequestedEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + taskId: string
+    + approvalType: string
+    + data: unknown
+    + timestamp: Date
+  }
+  
+  class ApprovalReceivedEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + taskId: string
+    + approved: boolean
+    + reason?: string
+    + timestamp: Date
+  }
+  
+  class ErrorEvent <<event>> {
+    + agentId: string
+    + agentRole: AgentRole
+    + taskId?: string
+    + error: Error | string
+    + timestamp: Date
+    + context?: Record<string, unknown>
+  }
+}
+
+' ========================================
+' USAGE EXAMPLE
+' ========================================
+
+note bottom of Agent
+  **Observer Pattern Usage Example**:
+  
+  ```typescript
+  // Setup: Register observers on agent initialization
+  const agent = agentFactory.createAgent(AgentRole.DEV);
+  
+  agent.addEventListener(websocketGateway);
+  agent.addEventListener(workflowEngine);
+  agent.addEventListener(auditLogger);
+  agent.addEventListener(metricsCollector);
+  agent.addEventListener(memoryObserver);
+  
+  // Agent execution triggers events automatically
+  const result = await agent.execute(context);
+  
+  // Internal flow:
+  // 1. agent.transitionState(THINKING)
+  //    → emitter.emitStateChanged(event)
+  //    → websocketGateway.onStateChanged(event)
+  //    → auditLogger.onStateChanged(event)
+  //
+  // 2. agent.think()
+  //    → emitter.emitThinkingStarted(event)
+  //    → websocketGateway.onThinkingStarted(event)
+  //
+  // 3. agent.act()
+  //    → emitter.emitActionCompleted(event)
+  //    → websocketGateway.onActionCompleted(event)
+  //    → workflowEngine.onActionCompleted(event)  // Triggers next step
+  //    → auditLogger.onActionCompleted(event)
+  //    → metricsCollector.onActionCompleted(event)
+  //    → memoryObserver.onActionCompleted(event)
+  //
+  // 4. If error occurs:
+  //    → emitter.emitError(event)
+  //    → All observers with onError() receive notification
+  ```
+  
+  **Benefits**:
+  - Agent doesn't know about WebSocket, Workflow, Audit, etc.
+  - Easy to add new observers without modifying agent
+  - Observers can be added/removed at runtime
+  - Each observer handles events independently
+  - Error in one observer doesn't affect others
+end note
+
+' ========================================
+' BENEFITS
+' ========================================
+
+note top of AgentEventEmitter
+  **Observer Pattern Benefits in AI-CORP**:
+  
+  1. **Loose Coupling**: Agent doesn't know concrete observers
+  2. **Open/Closed**: Add observers without modifying agent
+  3. **Multiple Subscribers**: Many observers for same event
+  4. **Runtime Configuration**: Add/remove observers dynamically
+  5. **Broadcast Communication**: One event, many receivers
+  6. **Error Isolation**: Observer error doesn't affect agent or other observers
+  7. **Separation of Concerns**: Each observer has single responsibility
+  
+  **Real-world Use Cases**:
+  - WebSocket: Real-time UI updates
+  - Workflow: Orchestration trigger
+  - Audit: Compliance logging
+  - Metrics: Performance monitoring
+  - Memory: Agent learning
+  - Notifications: User alerts
+end note
+
+note bottom of IAgentObserver
+  **Design Principles Applied**:
+  
+  **Single Responsibility Principle (SRP)**:
+  - Each observer has one reason to change
+  - WebSocketGateway: UI updates
+  - WorkflowEngine: Orchestration
+  - AuditLogger: Compliance
+  
+  **Open/Closed Principle (OCP)**:
+  - Open for extension (new observers)
+  - Closed for modification (agent unchanged)
+  
+  **Interface Segregation Principle (ISP)**:
+  - All methods optional
+  - Observers implement only what they need
+  
+  **Dependency Inversion Principle (DIP)**:
+  - Agent depends on IAgentObserver abstraction
+  - Not on concrete WebSocketGateway, etc.
+end note
+
+' ========================================
+' PUSH VS PULL MODEL
+' ========================================
+
+note right of AgentEventEmitter
+  **Push Model (Used in AI-CORP)**:
+  
+  Subject (AgentEventEmitter) pushes full event data to observers.
+  
+  **Advantages**:
+  - Observers have all needed data
+  - No extra queries back to subject
+  - Simpler observer implementation
+  - Better performance (no back-and-forth)
+  
+  **Event Data Includes**:
+  - agentId, agentRole (identity)
+  - taskId, projectId (context)
+  - Relevant data (action result, error, etc.)
+  - timestamp (when)
+  
+  **Alternative: Pull Model**:
+  Subject notifies with minimal data, observers query back.
+  Not used in AI-CORP because:
+  - Extra queries slow down system
+  - More coupling (observers need subject reference)
+  - More complex implementation
+end note
+
+@enduml

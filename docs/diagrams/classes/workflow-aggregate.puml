@@ -1,0 +1,481 @@
+@startuml Workflow Aggregate - Detailed Class Diagram
+!theme plain
+title Workflow Aggregate - Orchestration & Approval
+scale 1.0
+
+' ========================================
+' WORKFLOW AGGREGATE
+' ========================================
+
+package "Workflow Aggregate" <<aggregate>> {
+  
+  class WorkflowRun <<aggregate-root>> {
+    - id: string
+    - projectId: string
+    - workflowDefId: string
+    - status: WorkflowStatus
+    - currentNodeId: string | null
+    - context: JSON
+    - startedAt: DateTime
+    - completedAt: DateTime | null
+    --
+    **Lifecycle Methods**
+    + create(projectId: string, workflowDefId: string): WorkflowRun
+    + start(): void
+    + pause(): void
+    + resume(): void
+    + cancel(): void
+    + complete(): void
+    + fail(error: Error): void
+    --
+    **Step Management**
+    + addStep(step: WorkflowStep): void
+    + getSteps(): WorkflowStep[]
+    + getCurrentStep(): WorkflowStep | null
+    + executeStep(nodeId: string): Promise<void>
+    + moveToNextStep(): void
+    --
+    **Approval Management**
+    + requestApproval(data: ApprovalData): Promise<Approval>
+    + getPendingApprovals(): Approval[]
+    + handleApprovalResponse(approvalId: string, approved: boolean): void
+    --
+    **Context Management**
+    + setVariable(key: string, value: any): void
+    + getVariable(key: string): any
+    + updateContext(data: object): void
+    + getContext(): JSON
+    --
+    **Status Queries**
+    + isRunning(): boolean
+    + isPaused(): boolean
+    + isCompleted(): boolean
+    + isFailed(): boolean
+    + canResume(): boolean
+    + canExecuteNextStep(): boolean
+    --
+    **Progress Tracking**
+    + calculateProgress(): number
+    + getExecutionDuration(): number
+    + getStepCount(): number
+    + getCompletedStepCount(): number
+    --
+    **Validation**
+    + validate(): boolean
+    + canTransitionTo(status: WorkflowStatus): boolean
+    --
+    **Domain Events Emitted**
+    ~ emitWorkflowStarted(): void
+    ~ emitWorkflowStepCompleted(step: WorkflowStep): void
+    ~ emitWorkflowCompleted(): void
+    ~ emitWorkflowFailed(error: Error): void
+  }
+  
+  class WorkflowStep <<entity>> {
+    - id: string
+    - workflowRunId: string
+    - taskId: string | null
+    - nodeId: string
+    - agentRole: AgentRole | null
+    - status: StepStatus
+    - input: JSON | null
+    - output: JSON | null
+    - error: string | null
+    - retryCount: number
+    - startedAt: DateTime | null
+    - completedAt: DateTime | null
+    - durationMs: number | null
+    --
+    **Lifecycle Methods**
+    + create(data: StepData): WorkflowStep
+    + start(): void
+    + complete(output: JSON): void
+    + fail(error: Error): void
+    + skip(reason: string): void
+    --
+    **Retry Management**
+    + retry(): void
+    + canRetry(): boolean
+    + getMaxRetries(): number
+    + incrementRetryCount(): void
+    --
+    **Input/Output**
+    + setInput(input: JSON): void
+    + getInput(): JSON | null
+    + setOutput(output: JSON): void
+    + getOutput(): JSON | null
+    --
+    **Status Queries**
+    + isPending(): boolean
+    + isRunning(): boolean
+    + isCompleted(): boolean
+    + isFailed(): boolean
+    + isSkipped(): boolean
+    --
+    **Duration Tracking**
+    + calculateDuration(): number
+    + getDurationMs(): number | null
+    --
+    **Validation**
+    + validate(): boolean
+    + validateTimestamps(): boolean
+    --
+    **Domain Events Emitted**
+    ~ emitStepStarted(): void
+    ~ emitStepCompleted(): void
+    ~ emitStepFailed(): void
+  }
+  
+  class Approval <<entity>> {
+    - id: string
+    - workflowRunId: string
+    - userId: string
+    - approvalType: string
+    - status: ApprovalStatus
+    - requestData: JSON
+    - comment: string | null
+    - requestedAt: DateTime
+    - respondedAt: DateTime | null
+    --
+    **Lifecycle Methods**
+    + create(data: ApprovalData): Approval
+    + approve(userId: string, comment?: string): void
+    + reject(userId: string, reason: string): void
+    --
+    **Status Queries**
+    + isPending(): boolean
+    + isApproved(): boolean
+    + isRejected(): boolean
+    + isResolved(): boolean
+    --
+    **User Validation**
+    + canBeApprovedBy(userId: string): boolean
+    + validateUser(userId: string): boolean
+    --
+    **Expiration**
+    + isExpired(): boolean
+    + setExpiration(duration: number): void
+    + getTimeUntilExpiration(): number
+    --
+    **Response Time**
+    + getResponseTime(): number | null
+    + calculateResponseDuration(): number
+    --
+    **Validation**
+    + validate(): boolean
+    + canTransitionTo(status: ApprovalStatus): boolean
+    --
+    **Domain Events Emitted**
+    ~ emitApprovalRequested(): void
+    ~ emitApprovalGranted(): void
+    ~ emitApprovalRejected(): void
+  }
+  
+  enum WorkflowStatus <<value-object>> {
+    running
+    paused
+    completed
+    failed
+    cancelled
+    --
+    + isTerminal(): boolean
+    + canTransitionTo(target: WorkflowStatus): boolean
+    + getValidTransitions(): WorkflowStatus[]
+  }
+  
+  enum StepStatus <<value-object>> {
+    pending
+    running
+    completed
+    failed
+    skipped
+    --
+    + isTerminal(): boolean
+    + canRetry(): boolean
+  }
+  
+  enum ApprovalStatus <<value-object>> {
+    pending
+    approved
+    rejected
+    --
+    **One-way Transition Rule (Req 17.7)**
+    + canTransitionTo(target: ApprovalStatus): boolean
+  }
+}
+
+' ========================================
+' WORKFLOW ENGINE SERVICE
+' ========================================
+
+package "Workflow Services" <<service>> {
+  
+  class WorkflowEngine {
+    - workflowRepository: IWorkflowRepository
+    - agentFactory: AgentFactory
+    - eventBus: EventBus
+    --
+    **Execution**
+    + executeWorkflow(workflowRunId: string): Promise<void>
+    + executeStep(stepId: string): Promise<void>
+    + handleStepCompletion(stepId: string, output: JSON): void
+    + handleStepFailure(stepId: string, error: Error): void
+    --
+    **Orchestration**
+    + determineNextStep(workflowRun: WorkflowRun): WorkflowStep | null
+    + canExecuteStep(step: WorkflowStep): boolean
+    + scheduleStep(step: WorkflowStep): void
+    --
+    **Approval Handling**
+    + waitForApproval(approvalId: string): Promise<boolean>
+    + processApprovalResponse(approvalId: string, approved: boolean): void
+    --
+    **Error Handling**
+    + handleWorkflowError(workflowRunId: string, error: Error): void
+    + retryFailedStep(stepId: string): Promise<void>
+  }
+  
+  class WorkflowStateMachine {
+    - currentStatus: WorkflowStatus
+    - transitions: Map<WorkflowStatus, WorkflowStatus[]>
+    --
+    + getCurrentStatus(): WorkflowStatus
+    + canTransitionTo(target: WorkflowStatus): boolean
+    + transitionTo(target: WorkflowStatus): void
+    + getValidTransitions(): WorkflowStatus[]
+  }
+}
+
+' ========================================
+' RELATIONSHIPS
+' ========================================
+
+' Aggregate composition
+WorkflowRun "1" *-- "1..*" WorkflowStep : contains
+WorkflowRun "1" *-- "0..*" Approval : requests
+
+' Value object associations
+WorkflowRun --> WorkflowStatus : has
+WorkflowStep --> StepStatus : has
+Approval --> ApprovalStatus : has
+
+' External references
+WorkflowRun --> Project : executes for
+WorkflowStep --> Task : executes
+WorkflowStep --> Agent : assigned to
+Approval --> User : requests from
+
+' Service dependencies
+WorkflowEngine --> WorkflowRun : orchestrates
+WorkflowEngine ..> WorkflowStateMachine : uses
+WorkflowEngine --> AgentFactory : creates agents
+WorkflowEngine --> EventBus : publishes events
+
+' Domain Events
+WorkflowRun ..> WorkflowStartedEvent : emits
+WorkflowRun ..> WorkflowStepCompletedEvent : emits
+WorkflowRun ..> WorkflowCompletedEvent : emits
+WorkflowRun ..> WorkflowFailedEvent : emits
+WorkflowStep ..> StepStartedEvent : emits
+WorkflowStep ..> StepCompletedEvent : emits
+WorkflowStep ..> StepFailedEvent : emits
+Approval ..> ApprovalRequestedEvent : emits
+Approval ..> ApprovalGrantedEvent : emits
+Approval ..> ApprovalRejectedEvent : emits
+
+' ========================================
+' BUSINESS RULES
+' ========================================
+
+note bottom of WorkflowRun
+  **Aggregate Root Invariants**:
+  
+  1. Workflow must be associated with valid project
+  2. Status transitions must be valid:
+     - running → paused | completed | failed | cancelled
+     - paused → running | cancelled
+     - Terminal states (completed, failed, cancelled) are final
+  3. Cannot resume workflow that isn't paused
+  4. Cannot modify completed or failed workflows (Req 16)
+  5. CompletedAt must be after startedAt when both set
+  6. All steps must complete for workflow completion
+  7. Failed step can trigger workflow failure
+  8. Approval blocks must be resolved before continuation
+  
+  **Consistency Boundary**:
+  - All steps belong to exactly one workflow run
+  - All approvals belong to exactly one workflow run
+  - Steps execute in order defined by workflow definition
+  - Context is shared across all steps in workflow
+end note
+
+note bottom of WorkflowStep
+  **Entity Invariants**:
+  
+  1. Step must belong to valid workflow run
+  2. CompletedAt must be after startedAt when both set (Req 17.6)
+  3. Duration must match timestamps when all are set
+  4. Cannot retry after max retry limit (default: 3)
+  5. Retry count must be non-negative
+  6. Input must be valid JSON when provided
+  7. Output required for completed status
+  8. Error message required for failed status
+  9. Status transitions:
+     - pending → running → completed | failed
+     - pending → skipped (conditional)
+     - failed → pending (retry)
+end note
+
+note bottom of Approval
+  **Entity Invariants** (Req 17.7):
+  
+  1. Status can ONLY transition:
+     - pending → approved
+     - pending → rejected
+  2. Cannot change status after approval/rejection
+  3. RespondedAt must be after requestedAt
+  4. Only assigned user can approve/reject
+  5. Comment required for rejection
+  6. Request data must be valid JSON
+  7. Approval type must be recognized by system
+  
+  **One-way Transition Rule**:
+  This ensures decision finality and audit trail integrity.
+  Once approved or rejected, status is immutable.
+end note
+
+note bottom of WorkflowStatus
+  **Valid Workflow Status Transitions**:
+  
+  running → paused
+  running → completed
+  running → failed
+  running → cancelled
+  paused → running
+  paused → cancelled
+  
+  **Terminal States** (no outgoing transitions):
+  - completed
+  - failed
+  - cancelled
+end note
+
+note bottom of ApprovalStatus
+  **One-Way Approval Transition (Req 17.7)**:
+  
+  pending → approved (one way)
+  pending → rejected (one way)
+  
+  **No Reverse Transitions**:
+  Once approved or rejected, cannot change.
+  This ensures:
+  - Audit trail integrity
+  - Decision finality
+  - Compliance with approval process
+end note
+
+' ========================================
+' DOMAIN EVENTS
+' ========================================
+
+class WorkflowStartedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'WorkflowStarted'
+  + workflowRunId: string
+  + projectId: string
+  + workflowDefId: string
+  + timestamp: DateTime
+}
+
+class WorkflowStepCompletedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'WorkflowStepCompleted'
+  + workflowRunId: string
+  + stepId: string
+  + nodeId: string
+  + agentRole: AgentRole | null
+  + output: JSON
+  + durationMs: number
+  + timestamp: DateTime
+}
+
+class WorkflowCompletedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'WorkflowCompleted'
+  + workflowRunId: string
+  + projectId: string
+  + totalDurationMs: number
+  + totalSteps: number
+  + timestamp: DateTime
+}
+
+class WorkflowFailedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'WorkflowFailed'
+  + workflowRunId: string
+  + projectId: string
+  + failedStepId: string
+  + error: string
+  + timestamp: DateTime
+}
+
+class ApprovalRequestedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'ApprovalRequested'
+  + approvalId: string
+  + workflowRunId: string
+  + userId: string
+  + approvalType: string
+  + requestData: JSON
+  + timestamp: DateTime
+}
+
+class ApprovalGrantedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'ApprovalGranted'
+  + approvalId: string
+  + workflowRunId: string
+  + approvedBy: string
+  + comment: string | null
+  + timestamp: DateTime
+}
+
+class ApprovalRejectedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'ApprovalRejected'
+  + approvalId: string
+  + workflowRunId: string
+  + rejectedBy: string
+  + reason: string
+  + timestamp: DateTime
+}
+
+' ========================================
+' WORKFLOW EXECUTION FLOW
+' ========================================
+
+note right of WorkflowEngine
+  **Workflow Execution Flow**:
+  
+  1. Create WorkflowRun
+  2. Load workflow definition
+  3. Create initial WorkflowSteps from nodes
+  4. Start execution:
+     a. Get next pending step
+     b. Check if step is approval node
+        - If yes: Create Approval, wait for response
+        - If no: Execute step with assigned agent
+     c. Handle step result (success/failure)
+     d. Update workflow context with outputs
+     e. Move to next step or complete workflow
+  5. Emit domain events at each stage
+  6. Handle errors with retry logic
+  
+  **Error Handling**:
+  - Step failure → retry (up to max retries)
+  - Max retries exceeded → workflow failure
+  - Critical error → immediate workflow failure
+  - Approval rejection → workflow failure or branch
+end note
+
+@enduml

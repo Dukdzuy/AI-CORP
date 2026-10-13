@@ -1,0 +1,483 @@
+@startuml Repository Pattern - AI-CORP
+!theme plain
+title Design Pattern - Repository Pattern (Domain-Driven Design)
+scale 1.0
+
+' ========================================
+' REPOSITORY PATTERN OVERVIEW
+' ========================================
+
+note as N1
+  **Repository Pattern (Domain-Driven Design)**
+  
+  **Intent**: Mediate between the domain and data mapping layers
+  using a collection-like interface for accessing domain objects.
+  
+  **Benefits**:
+  - Decouples domain layer from persistence layer
+  - Provides collection-like interface (illusion of in-memory collection)
+  - Centralizes data access logic
+  - Easy to swap persistence technologies
+  - Facilitates testing with mock repositories
+  
+  **Structure in AI-CORP**:
+  - Domain Layer: Defines repository interfaces
+  - Infrastructure Layer: Implements repositories with Prisma
+  - Dependency Direction: Infrastructure depends on domain (DIP)
+end note
+
+' ========================================
+' DOMAIN LAYER (INTERFACES)
+' ========================================
+
+package "Domain Layer" <<domain>> {
+  
+  interface IRepository<T> <<Repository Interface>> {
+    + findById(id: string): Promise<T | null>
+    + findAll(): Promise<T[]>
+    + save(entity: T): Promise<T>
+    + update(entity: T): Promise<T>
+    + delete(id: string): Promise<void>
+  }
+  
+  interface IAgentRepository {
+    **Base CRUD**
+    + findById(id: string): Promise<Agent | null>
+    + findAll(): Promise<Agent[]>
+    + save(agent: Agent): Promise<Agent>
+    + update(agent: Agent): Promise<Agent>
+    + delete(id: string): Promise<void>
+    --
+    **Agent-Specific Queries**
+    + findByRole(role: AgentRole): Promise<Agent | null>
+    + findActive(): Promise<Agent[]>
+    + findByRoles(roles: AgentRole[]): Promise<Agent[]>
+    --
+    **Memory Operations**
+    + saveMemory(memory: AgentMemory): Promise<void>
+    + findMemories(agentId: string, namespace?: string): Promise<AgentMemory[]>
+    + searchMemoriesByEmbedding(agentId: string, query: string, limit: number): Promise<AgentMemory[]>
+    + deleteMemory(memoryId: string): Promise<void>
+    --
+    **Message Operations**
+    + saveMessage(message: AgentMessage): Promise<void>
+    + findMessages(projectId: string, limit?: number): Promise<AgentMessage[]>
+    + findMessagesByAgent(agentId: string): Promise<AgentMessage[]>
+  }
+  
+  interface IProjectRepository {
+    **Base CRUD**
+    + findById(id: string): Promise<Project | null>
+    + findAll(): Promise<Project[]>
+    + save(project: Project): Promise<Project>
+    + update(project: Project): Promise<Project>
+    + delete(id: string): Promise<void>
+    --
+    **Project-Specific Queries**
+    + findByUser(userId: string): Promise<Project[]>
+    + findByStatus(status: ProjectStatus): Promise<Project[]>
+    + findActive(): Promise<Project[]>
+    --
+    **Aggregate Navigation**
+    + findMilestones(projectId: string): Promise<Milestone[]>
+    + findTasks(projectId: string): Promise<Task[]>
+    + findTasksByStatus(projectId: string, status: TaskStatus): Promise<Task[]>
+    --
+    **Cost Tracking**
+    + calculateTotalCost(projectId: string): Promise<Money>
+    + getRemainingBudget(projectId: string): Promise<Money>
+  }
+  
+  interface IWorkflowRepository {
+    **Base CRUD**
+    + findById(id: string): Promise<WorkflowRun | null>
+    + findAll(): Promise<WorkflowRun[]>
+    + save(workflow: WorkflowRun): Promise<WorkflowRun>
+    + update(workflow: WorkflowRun): Promise<WorkflowRun>
+    + delete(id: string): Promise<void>
+    --
+    **Workflow-Specific Queries**
+    + findByProject(projectId: string): Promise<WorkflowRun[]>
+    + findByStatus(status: WorkflowStatus): Promise<WorkflowRun[]>
+    + findActive(): Promise<WorkflowRun[]>
+    --
+    **Step Operations**
+    + findSteps(workflowRunId: string): Promise<WorkflowStep[]>
+    + findStepById(stepId: string): Promise<WorkflowStep | null>
+    + updateStep(step: WorkflowStep): Promise<WorkflowStep>
+    --
+    **Approval Operations**
+    + findApprovals(workflowRunId: string): Promise<Approval[]>
+    + findPendingApprovals(workflowRunId: string): Promise<Approval[]>
+    + updateApproval(approval: Approval): Promise<Approval>
+  }
+  
+  interface ITaskRepository {
+    **Base CRUD**
+    + findById(id: string): Promise<Task | null>
+    + findAll(): Promise<Task[]>
+    + save(task: Task): Promise<Task>
+    + update(task: Task): Promise<Task>
+    + delete(id: string): Promise<void>
+    --
+    **Task-Specific Queries**
+    + findByProject(projectId: string): Promise<Task[]>
+    + findByMilestone(milestoneId: string): Promise<Task[]>
+    + findByStatus(projectId: string, status: TaskStatus): Promise<Task[]>
+    + findByAgent(agentRole: AgentRole): Promise<Task[]>
+    + findByPriority(projectId: string, priority: Priority): Promise<Task[]>
+    --
+    **Status Management**
+    + updateStatus(taskId: string, status: TaskStatus): Promise<void>
+    + assignAgent(taskId: string, agentRole: AgentRole): Promise<void>
+  }
+  
+  interface IApprovalRepository {
+    **Base CRUD**
+    + findById(id: string): Promise<Approval | null>
+    + findAll(): Promise<Approval[]>
+    + save(approval: Approval): Promise<Approval>
+    + update(approval: Approval): Promise<Approval>
+    + delete(id: string): Promise<void>
+    --
+    **Approval-Specific Queries**
+    + findByWorkflow(workflowRunId: string): Promise<Approval[]>
+    + findByUser(userId: string): Promise<Approval[]>
+    + findPending(userId: string): Promise<Approval[]>
+    + findByStatus(status: ApprovalStatus): Promise<Approval[]>
+    --
+    **Approval Actions**
+    + approve(approvalId: string, userId: string, comment?: string): Promise<void>
+    + reject(approvalId: string, userId: string, reason: string): Promise<void>
+  }
+  
+  ' Generic repository relationship
+  IAgentRepository --|> IRepository : extends
+  IProjectRepository --|> IRepository : extends
+  IWorkflowRepository --|> IRepository : extends
+  ITaskRepository --|> IRepository : extends
+  IApprovalRepository --|> IRepository : extends
+}
+
+' ========================================
+' INFRASTRUCTURE LAYER (IMPLEMENTATIONS)
+' ========================================
+
+package "Infrastructure Layer" <<infrastructure>> {
+  
+  class PrismaService {
+    - prisma: PrismaClient
+    --
+    + getClient(): PrismaClient
+    + connect(): Promise<void>
+    + disconnect(): Promise<void>
+    + transaction<T>(fn: () => Promise<T>): Promise<T>
+  }
+  
+  class AgentRepository {
+    - prisma: PrismaService
+    --
+    **Base CRUD Implementation**
+    + findById(id: string): Promise<Agent | null>
+    + findAll(): Promise<Agent[]>
+    + save(agent: Agent): Promise<Agent>
+    + update(agent: Agent): Promise<Agent>
+    + delete(id: string): Promise<void>
+    --
+    **Agent-Specific Implementation**
+    + findByRole(role: AgentRole): Promise<Agent | null>
+    + findActive(): Promise<Agent[]>
+    --
+    **Memory Implementation**
+    + saveMemory(memory: AgentMemory): Promise<void>
+    + findMemories(agentId: string, namespace?: string): Promise<AgentMemory[]>
+    + searchMemoriesByEmbedding(agentId: string, query: string, limit: number): Promise<AgentMemory[]>
+    --
+    **Mapping Methods**
+    - mapToEntity(dbAgent: DbAgent): Agent
+    - mapToDb(agent: Agent): DbAgent
+  }
+  
+  class ProjectRepository {
+    - prisma: PrismaService
+    --
+    **Base CRUD Implementation**
+    + findById(id: string): Promise<Project | null>
+    + findAll(): Promise<Project[]>
+    + save(project: Project): Promise<Project>
+    + update(project: Project): Promise<Project>
+    + delete(id: string): Promise<void>
+    --
+    **Project-Specific Implementation**
+    + findByUser(userId: string): Promise<Project[]>
+    + findActive(): Promise<Project[]>
+    + findMilestones(projectId: string): Promise<Milestone[]>
+    + findTasks(projectId: string): Promise<Task[]>
+    + calculateTotalCost(projectId: string): Promise<Money>
+    --
+    **Mapping Methods**
+    - mapToEntity(dbProject: DbProject): Project
+    - mapToDb(project: Project): DbProject
+    - mapMoney(dbMoney: Decimal): Money
+  }
+  
+  class WorkflowRepository {
+    - prisma: PrismaService
+    --
+    **Base CRUD Implementation**
+    + findById(id: string): Promise<WorkflowRun | null>
+    + save(workflow: WorkflowRun): Promise<WorkflowRun>
+    + update(workflow: WorkflowRun): Promise<WorkflowRun>
+    --
+    **Workflow-Specific Implementation**
+    + findByProject(projectId: string): Promise<WorkflowRun[]>
+    + findByStatus(status: WorkflowStatus): Promise<WorkflowRun[]>
+    + findSteps(workflowRunId: string): Promise<WorkflowStep[]>
+    + findPendingApprovals(workflowRunId: string): Promise<Approval[]>
+    --
+    **Mapping Methods**
+    - mapToEntity(dbWorkflow: DbWorkflow): WorkflowRun
+    - mapToDb(workflow: WorkflowRun): DbWorkflow
+  }
+  
+  class TaskRepository {
+    - prisma: PrismaService
+    --
+    **Base CRUD Implementation**
+    + findById(id: string): Promise<Task | null>
+    + save(task: Task): Promise<Task>
+    + update(task: Task): Promise<Task>
+    + delete(id: string): Promise<void>
+    --
+    **Task-Specific Implementation**
+    + findByProject(projectId: string): Promise<Task[]>
+    + findByStatus(projectId: string, status: TaskStatus): Promise<Task[]>
+    + findByAgent(agentRole: AgentRole): Promise<Task[]>
+    + updateStatus(taskId: string, status: TaskStatus): Promise<void>
+    --
+    **Mapping Methods**
+    - mapToEntity(dbTask: DbTask): Task
+    - mapToDb(task: Task): DbTask
+  }
+  
+  class ApprovalRepository {
+    - prisma: PrismaService
+    --
+    **Base CRUD Implementation**
+    + findById(id: string): Promise<Approval | null>
+    + save(approval: Approval): Promise<Approval>
+    + update(approval: Approval): Promise<Approval>
+    --
+    **Approval-Specific Implementation**
+    + findByWorkflow(workflowRunId: string): Promise<Approval[]>
+    + findPending(userId: string): Promise<Approval[]>
+    + approve(approvalId: string, userId: string, comment?: string): Promise<void>
+    + reject(approvalId: string, userId: string, reason: string): Promise<void>
+    --
+    **Mapping Methods**
+    - mapToEntity(dbApproval: DbApproval): Approval
+    - mapToDb(approval: Approval): DbApproval
+  }
+  
+  ' Implementation relationships
+  IAgentRepository <|.. AgentRepository : implements
+  IProjectRepository <|.. ProjectRepository : implements
+  IWorkflowRepository <|.. WorkflowRepository : implements
+  ITaskRepository <|.. TaskRepository : implements
+  IApprovalRepository <|.. ApprovalRepository : implements
+  
+  ' Prisma dependency
+  AgentRepository --> PrismaService : uses
+  ProjectRepository --> PrismaService : uses
+  WorkflowRepository --> PrismaService : uses
+  TaskRepository --> PrismaService : uses
+  ApprovalRepository --> PrismaService : uses
+}
+
+' ========================================
+' APPLICATION LAYER (SERVICES)
+' ========================================
+
+package "Application Layer" <<application>> {
+  
+  class AgentService {
+    - agentRepository: IAgentRepository
+    - memoryService: MemoryService
+    --
+    + getAgent(id: string): Promise<Agent>
+    + getAgentByRole(role: AgentRole): Promise<Agent>
+    + createAgent(data: CreateAgentDto): Promise<Agent>
+    + updateAgent(id: string, data: UpdateAgentDto): Promise<Agent>
+    + deleteAgent(id: string): Promise<void>
+    + loadMemoriesForContext(agentId: string, query: string): Promise<AgentMemory[]>
+  }
+  
+  class ProjectService {
+    - projectRepository: IProjectRepository
+    - taskRepository: ITaskRepository
+    --
+    + getProject(id: string): Promise<Project>
+    + createProject(data: CreateProjectDto): Promise<Project>
+    + updateProject(id: string, data: UpdateProjectDto): Promise<Project>
+    + deleteProject(id: string): Promise<void>
+    + getProjectTasks(projectId: string): Promise<Task[]>
+    + calculateProjectCost(projectId: string): Promise<Money>
+  }
+  
+  class WorkflowService {
+    - workflowRepository: IWorkflowRepository
+    - agentService: AgentService
+    --
+    + getWorkflow(id: string): Promise<WorkflowRun>
+    + createWorkflow(projectId: string, workflowDefId: string): Promise<WorkflowRun>
+    + startWorkflow(id: string): Promise<void>
+    + pauseWorkflow(id: string): Promise<void>
+    + completeWorkflow(id: string): Promise<void>
+    + getWorkflowSteps(workflowId: string): Promise<WorkflowStep[]>
+  }
+  
+  ' Service dependencies on repositories
+  AgentService --> IAgentRepository : uses
+  ProjectService --> IProjectRepository : uses
+  ProjectService --> ITaskRepository : uses
+  WorkflowService --> IWorkflowRepository : uses
+}
+
+' ========================================
+' DEPENDENCY DIRECTION
+' ========================================
+
+note top of IRepository
+  **Dependency Inversion Principle (DIP)**:
+  
+  Domain Layer defines interfaces (abstractions)
+  ↑
+  Infrastructure Layer implements interfaces
+  ↑
+  Application Layer depends on abstractions
+  
+  **Benefits**:
+  - Domain layer independent of persistence
+  - Easy to swap implementations (Prisma → TypeORM)
+  - Easy to test with mock repositories
+  - Infrastructure details hidden from domain
+end note
+
+note bottom of PrismaService
+  **Infrastructure Layer Responsibilities**:
+  
+  1. Implement repository interfaces
+  2. Handle database connections (Prisma)
+  3. Map between domain entities and DB models
+  4. Execute SQL queries
+  5. Handle transactions
+  6. Optimize database operations
+  
+  **Mapping Strategy**:
+  - DB Model → Domain Entity (read)
+  - Domain Entity → DB Model (write)
+  - Handle complex types (Money, JSON, enums)
+end note
+
+note bottom of AgentService
+  **Application Layer Responsibilities**:
+  
+  1. Orchestrate business logic
+  2. Use repositories through interfaces
+  3. Coordinate multiple repositories
+  4. Handle transactions across aggregates
+  5. Enforce business rules
+  6. Map between DTOs and domain entities
+  
+  **Does NOT**:
+  - Know about database (Prisma)
+  - Execute SQL directly
+  - Handle persistence details
+end note
+
+' ========================================
+' USAGE EXAMPLE
+' ========================================
+
+note right of AgentService
+  **Repository Pattern Usage Example**:
+  
+  ```typescript
+  @Injectable()
+  class AgentService {
+    constructor(
+      private readonly agentRepository: IAgentRepository,
+      private readonly memoryService: MemoryService
+    ) {}
+    
+    async executeAgent(role: AgentRole, context: AgentContext): Promise<AgentResult> {
+      // Repository provides collection-like interface
+      const agent = await this.agentRepository.findByRole(role);
+      if (!agent) throw new Error('Agent not found');
+      
+      // Load memories using repository
+      const memories = await this.agentRepository.searchMemoriesByEmbedding(
+        agent.getId(),
+        context.task,
+        5
+      );
+      
+      context.relevantMemories = memories;
+      
+      // Execute agent
+      const result = await agent.execute(context);
+      
+      // Save new memory
+      const memory = new AgentMemory(...);
+      await this.agentRepository.saveMemory(memory);
+      
+      return result;
+    }
+  }
+  ```
+  
+  **Testing with Mock Repository**:
+  
+  ```typescript
+  describe('AgentService', () => {
+    it('should execute agent', async () => {
+      const mockRepo: IAgentRepository = {
+        findByRole: jest.fn().mockResolvedValue(mockAgent),
+        searchMemoriesByEmbedding: jest.fn().mockResolvedValue([]),
+        saveMemory: jest.fn().mockResolvedValue(undefined),
+        // ... other methods
+      };
+      
+      const service = new AgentService(mockRepo, mockMemoryService);
+      const result = await service.executeAgent(AgentRole.DEV, context);
+      
+      expect(result.success).toBe(true);
+      expect(mockRepo.findByRole).toHaveBeenCalledWith(AgentRole.DEV);
+    });
+  });
+  ```
+end note
+
+' ========================================
+' BENEFITS
+' ========================================
+
+note top of IAgentRepository
+  **Repository Pattern Benefits in AI-CORP**:
+  
+  1. **Persistence Ignorance**: Domain doesn't know about Prisma
+  2. **Testability**: Easy to mock repositories for testing
+  3. **Flexibility**: Can swap Prisma for TypeORM without changing domain
+  4. **Centralization**: All data access logic in one place
+  5. **Collection Interface**: Feels like in-memory collection
+  6. **Query Optimization**: Repository can optimize queries internally
+  7. **Aggregate Boundaries**: Repository enforces aggregate access rules
+  
+  **DDD Principles**:
+  - Access aggregates by root only
+  - Repository per aggregate root
+  - Hides persistence complexity
+  - Maintains domain model purity
+end note
+
+@enduml

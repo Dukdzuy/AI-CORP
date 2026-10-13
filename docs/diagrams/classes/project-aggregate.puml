@@ -1,0 +1,409 @@
+@startuml Project Aggregate - Detailed Class Diagram
+!theme plain
+title Project Aggregate - Detailed Structure
+scale 1.0
+
+' ========================================
+' PROJECT AGGREGATE
+' ========================================
+
+package "Project Aggregate" <<aggregate>> {
+  
+  class Project <<aggregate-root>> {
+    - id: string
+    - name: string
+    - description: string
+    - goal: string
+    - status: ProjectStatus
+    - budget: Money | null
+    - costAccrued: Money
+    - createdById: string
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    **Lifecycle Methods**
+    + create(data: ProjectData): Project
+    + updateStatus(status: ProjectStatus): void
+    + pause(): void
+    + resume(): void
+    + complete(): void
+    + cancel(): void
+    --
+    **Milestone Management**
+    + addMilestone(milestone: Milestone): void
+    + removeMilestone(milestoneId: string): void
+    + getMilestones(): Milestone[]
+    + getMilestoneById(id: string): Milestone | null
+    --
+    **Task Management**
+    + addTask(task: Task): void
+    + removeTask(taskId: string): void
+    + getTasks(): Task[]
+    + getTasksByStatus(status: TaskStatus): Task[]
+    + assignTask(taskId: string, agent: AgentRole): void
+    --
+    **Cost Management**
+    + setBudget(budget: Money): void
+    + recordCost(cost: Money): void
+    + calculateTotalCost(): Money
+    + validateBudget(): boolean
+    + getRemainingBudget(): Money
+    --
+    **Progress Tracking**
+    + calculateProgress(): number
+    + getCompletionPercentage(): number
+    + isOnTrack(): boolean
+    --
+    **Domain Events Emitted**
+    ~ emitProjectCreated(): void
+    ~ emitProjectStatusChanged(): void
+    ~ emitBudgetExceeded(): void
+  }
+  
+  class Milestone <<entity>> {
+    - id: string
+    - projectId: string
+    - name: string
+    - description: string
+    - status: MilestoneStatus
+    - dueDate: DateTime | null
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    **Lifecycle Methods**
+    + create(data: MilestoneData): Milestone
+    + updateStatus(status: MilestoneStatus): void
+    + start(): void
+    + complete(): void
+    --
+    **Task Management**
+    + addTask(task: Task): void
+    + removeTask(taskId: string): void
+    + getTasks(): Task[]
+    --
+    **Progress Tracking**
+    + calculateProgress(): number
+    + getCompletionPercentage(): number
+    + isOverdue(): boolean
+    + getDaysUntilDue(): number
+    --
+    **Validation**
+    + validate(): boolean
+    + canComplete(): boolean
+    --
+    **Domain Events Emitted**
+    ~ emitMilestoneCreated(): void
+    ~ emitMilestoneCompleted(): void
+  }
+  
+  class Task <<entity>> {
+    - id: string
+    - projectId: string
+    - milestoneId: string | null
+    - title: string
+    - description: string
+    - status: TaskStatus
+    - priority: Priority
+    - assignedAgent: AgentRole | null
+    - estimatedCost: Money | null
+    - actualCost: Money
+    - createdAt: DateTime
+    - updatedAt: DateTime
+    --
+    **Lifecycle Methods**
+    + create(data: TaskData): Task
+    + updateStatus(newStatus: TaskStatus): void
+    + transitionStatus(newStatus: TaskStatus): void
+    --
+    **Assignment**
+    + assignToAgent(role: AgentRole): void
+    + unassign(): void
+    + isAssigned(): boolean
+    --
+    **Status Transitions (Kanban)**
+    + moveToInProgress(): void
+    + moveToReview(): void
+    + moveToDone(): void
+    + moveBackToInProgress(): void
+    --
+    **Cost Management**
+    + setEstimatedCost(cost: Money): void
+    + recordCost(cost: Money): void
+    + getActualCost(): Money
+    + isOverBudget(): boolean
+    --
+    **Validation**
+    + validate(): boolean
+    + canTransitionTo(status: TaskStatus): boolean
+    + isValidTransition(from: TaskStatus, to: TaskStatus): boolean
+    --
+    **Domain Events Emitted**
+    ~ emitTaskCreated(): void
+    ~ emitTaskStatusChanged(): void
+    ~ emitTaskAssigned(): void
+  }
+  
+  enum ProjectStatus <<value-object>> {
+    active
+    paused
+    completed
+    cancelled
+    --
+    + isActive(): boolean
+    + isTerminal(): boolean
+  }
+  
+  enum MilestoneStatus <<value-object>> {
+    pending
+    in_progress
+    completed
+    --
+    + canTransitionTo(target: MilestoneStatus): boolean
+  }
+  
+  enum TaskStatus <<value-object>> {
+    todo
+    in_progress
+    review
+    done
+    --
+    **Kanban Transition Rules**
+    + canTransitionTo(target: TaskStatus): boolean
+    + getValidTransitions(): TaskStatus[]
+  }
+  
+  enum Priority <<value-object>> {
+    low
+    medium
+    high
+    critical
+    --
+    + getValue(): number
+    + compare(other: Priority): number
+  }
+  
+  class Money <<value-object>> {
+    + amount: Decimal
+    + currency: string
+    --
+    **Operations**
+    + add(other: Money): Money
+    + subtract(other: Money): Money
+    + multiply(factor: number): Money
+    + divide(factor: number): Money
+    --
+    **Comparison**
+    + equals(other: Money): boolean
+    + greaterThan(other: Money): boolean
+    + lessThan(other: Money): boolean
+    --
+    **Conversion**
+    + format(): string
+    + toJSON(): object
+    --
+    **Validation**
+    + isPositive(): boolean
+    + isZero(): boolean
+    + isNegative(): boolean
+    + validate(): boolean
+  }
+}
+
+' ========================================
+' RELATIONSHIPS
+' ========================================
+
+' Aggregate composition
+Project "1" *-- "0..*" Milestone : contains
+Project "1" *-- "0..*" Task : contains
+Milestone "1" o-- "0..*" Task : groups
+
+' Value object associations
+Project --> ProjectStatus : has
+Milestone --> MilestoneStatus : has
+Task --> TaskStatus : has
+Task --> Priority : has
+Project --> Money : budget
+Task --> Money : cost
+
+' External references
+Project --> User : created by
+Task --> Agent : assigned to
+
+' Domain Events
+Project ..> ProjectCreatedEvent : emits
+Project ..> ProjectStatusChangedEvent : emits
+Milestone ..> MilestoneCreatedEvent : emits
+Milestone ..> MilestoneCompletedEvent : emits
+Task ..> TaskCreatedEvent : emits
+Task ..> TaskStatusChangedEvent : emits
+Task ..> TaskAssignedEvent : emits
+
+' ========================================
+' MULTIPLICITIES
+' ========================================
+
+note left of Project::getMilestones
+  **Multiplicity**: 0..*
+  A project can have zero or more milestones
+end note
+
+note left of Project::getTasks
+  **Multiplicity**: 0..*
+  A project can have zero or more tasks
+end note
+
+note left of Milestone::getTasks
+  **Multiplicity**: 0..*
+  A milestone can group zero or more tasks
+end note
+
+' ========================================
+' BUSINESS RULES
+' ========================================
+
+note bottom of Project
+  **Aggregate Root Invariants**:
+  
+  1. Project name must be unique per user
+  2. Budget must be positive when provided
+  3. Cost accrued cannot exceed budget (warning threshold at 90%)
+  4. Cannot delete project with active tasks or workflows
+  5. Project completion requires all milestones completed
+  6. Status transitions:
+     - active ↔ paused
+     - active → completed | cancelled
+     - paused → completed | cancelled
+  
+  **Consistency Boundary**:
+  - All milestones and tasks belong to exactly one project
+  - Project cost is sum of all task actual costs
+  - Project progress is weighted average of milestone progress
+end note
+
+note bottom of Milestone
+  **Entity Invariants**:
+  
+  1. Milestone must belong to valid project
+  2. Due date must be in future when created
+  3. Cannot complete milestone with incomplete tasks
+  4. Status transitions:
+     - pending → in_progress → completed
+  5. Name must be unique within project
+end note
+
+note bottom of Task
+  **Entity Invariants** (Kanban Rules):
+  
+  1. Task must belong to valid project
+  2. Valid status transitions (Req 12, 17):
+     - todo → in_progress → review → done
+     - todo → done (simple tasks)
+     - review → in_progress (rework)
+  3. Cannot transition backwards (except review → in_progress)
+  4. Estimated cost must be non-negative
+  5. Actual cost cannot be negative
+  6. Can only be assigned to active agents
+  7. High priority tasks should be worked first
+  8. Cannot delete task in review or done status
+end note
+
+note bottom of TaskStatus
+  **Valid Kanban Transitions**:
+  
+  todo → in_progress
+  in_progress → review
+  review → done
+  review → in_progress (rework only)
+  todo → done (fast-track)
+  
+  **Invalid Transitions**:
+  - done → * (cannot reopen)
+  - * → todo (no backwards except review→in_progress)
+end note
+
+note top of Money
+  **Value Object Characteristics**:
+  
+  - Immutable: All operations return new Money instance
+  - Value equality: Two Money objects equal if amount and currency match
+  - Self-validating: Cannot create invalid Money
+  - Currency must match for arithmetic operations
+  - Uses Decimal for precision (no floating point)
+end note
+
+' ========================================
+' DOMAIN EVENTS
+' ========================================
+
+class ProjectCreatedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'ProjectCreated'
+  + projectId: string
+  + projectName: string
+  + createdBy: string
+  + timestamp: DateTime
+  + metadata: object
+}
+
+class ProjectStatusChangedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'ProjectStatusChanged'
+  + projectId: string
+  + previousStatus: ProjectStatus
+  + newStatus: ProjectStatus
+  + reason: string | null
+  + timestamp: DateTime
+}
+
+class MilestoneCreatedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'MilestoneCreated'
+  + milestoneId: string
+  + projectId: string
+  + milestoneName: string
+  + dueDate: DateTime | null
+  + timestamp: DateTime
+}
+
+class MilestoneCompletedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'MilestoneCompleted'
+  + milestoneId: string
+  + projectId: string
+  + completionPercentage: number
+  + timestamp: DateTime
+}
+
+class TaskCreatedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'TaskCreated'
+  + taskId: string
+  + projectId: string
+  + title: string
+  + assignedAgent: AgentRole | null
+  + priority: Priority
+  + timestamp: DateTime
+}
+
+class TaskStatusChangedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'TaskStatusChanged'
+  + taskId: string
+  + projectId: string
+  + previousStatus: TaskStatus
+  + newStatus: TaskStatus
+  + changedBy: string
+  + timestamp: DateTime
+}
+
+class TaskAssignedEvent <<domain-event>> {
+  + eventId: string
+  + eventType: 'TaskAssigned'
+  + taskId: string
+  + projectId: string
+  + agentRole: AgentRole
+  + timestamp: DateTime
+}
+
+@enduml
