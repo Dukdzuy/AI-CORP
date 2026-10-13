@@ -62,6 +62,17 @@ export class PrismaProjectRepository implements IProjectRepository {
       },
     });
     this.logger.log(`Created project ${project.id}`);
+    
+    // Task 10: Publish ProjectCreatedEvent
+    const { DomainEvents } = require('../../domain/events/DomainEvents');
+    const { ProjectCreatedEvent } = require('../../domain/events/ProjectCreatedEvent');
+    DomainEvents.raise(new ProjectCreatedEvent(
+      project.id,
+      project.name,
+      project.createdById,
+      project.budget ? Number(project.budget) : undefined
+    ));
+    
     return this.mapToDTO(project);
   }
 

@@ -127,6 +127,16 @@ export class WorkflowEngine {
 
     this.logger.log(`Started workflow run ${run.id} for project ${projectId}`);
     
+    // Task 10: Publish WorkflowStartedEvent
+    const { DomainEvents } = require('../../domain/events/DomainEvents');
+    const { WorkflowStartedEvent } = require('../../domain/events/WorkflowStartedEvent');
+    DomainEvents.raise(new WorkflowStartedEvent(
+      run.id,
+      projectId,
+      workflowDefId,
+      context.startedBy as string | undefined
+    ));
+    
     // Emit state changed event
     const event: WorkflowStateChangedEvent = {
       workflowRunId: run.id,
@@ -208,6 +218,15 @@ export class WorkflowEngine {
       });
 
       this.logger.log(`Workflow run ${runId} completed. Project ${run.projectId} marked as completed.`);
+      
+      // Task 10: Publish WorkflowCompletedEvent (uses existing event from domain/events)
+      const { DomainEvents } = require('../../domain/events/DomainEvents');
+      const { WorkflowCompletedEvent } = require('../../domain/events/WorkflowCompletedEvent');
+      DomainEvents.raise(new WorkflowCompletedEvent(
+        run.id,
+        run.projectId,
+        run.workflowDefId
+      ));
       
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,

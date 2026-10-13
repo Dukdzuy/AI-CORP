@@ -144,14 +144,19 @@ export class Project {
     if (this.budget && this.costAccrued.greaterThanOrEqual(this.budget)) {
       if (this.status.isActive()) {
         this.status = ProjectStatus.PAUSED;
-        // Task 10 will wire domain events here
-        // DomainEvents.raise(new BudgetExceededEvent(this.id, this.budget, this.costAccrued));
+        // Raise domain event - will trigger workflow pause and notification
+        const { DomainEvents } = require('../events/DomainEvents');
+        const { BudgetExceededEvent } = require('../events/BudgetExceededEvent');
+        DomainEvents.raise(new BudgetExceededEvent(
+          this.id,
+          this.costAccrued.toNumber(),
+          this.budget.toNumber()
+        ));
       }
     }
-    // Business rule: warn at 90% budget
+    // Business rule: warn at 90% budget (not implemented yet - future task)
     else if (this.budget && this.costAccrued.greaterThanOrEqual(this.budget.multiply(0.9))) {
-      // Task 10 will wire domain events here
-      // DomainEvents.raise(new BudgetWarningEvent(this.id, this.costAccrued, this.budget));
+      // Future: DomainEvents.raise(new BudgetWarningEvent(this.id, this.costAccrued, this.budget));
     }
   }
 

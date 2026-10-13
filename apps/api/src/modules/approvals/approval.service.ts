@@ -41,6 +41,18 @@ export class ApprovalService {
       },
     });
 
+    // Task 10: Publish ApprovalRequestedEvent
+    const { DomainEvents } = require('../../domain/events/DomainEvents');
+    const { ApprovalRequestedEvent } = require('../../domain/events/ApprovalRequestedEvent');
+    DomainEvents.raise(new ApprovalRequestedEvent(
+      approval.id,
+      run.projectId,
+      approval.workflowRunId,
+      params.userId,
+      approval.approvalType,
+      approval.requestData
+    ));
+
     // Notify the user via WebSocket
     const event: WebSocketEvent = {
       type: WebSocketEventType.HUMAN_APPROVAL_REQUIRED,

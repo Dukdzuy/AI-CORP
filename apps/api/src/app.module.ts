@@ -14,6 +14,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { HealthModule } from './modules/health/health.module';
 import { CostModule } from './modules/cost/cost.module';
+import { EventsModule } from './modules/events/events.module';
 import { EnvValidator } from './modules/security/env-validator';
 
 @Module({
@@ -24,6 +25,7 @@ import { EnvValidator } from './modules/security/env-validator';
     }),
     PrismaModule,
     InfrastructureModule,
+    EventsModule, // Task 10: Import EventsModule (@Global module)
     LLMModule,
     ProjectsModule,
     AgentsModule,

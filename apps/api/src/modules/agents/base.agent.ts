@@ -66,9 +66,23 @@ export abstract class BaseAgent {
    */
   async execute(context: any): Promise<any> {
     const projectId = context.projectId || context.projectContext?.id || 'unknown';
+    const taskId = context.taskId || 'unknown';
+    const taskTitle = context.taskTitle || context.title || 'Untitled Task';
     const agentId = this.role; // Using role as agentId for now
+    const startTime = Date.now();
 
     try {
+      // Task 10: Publish TaskAssignedEvent when agent starts working on a task
+      const { DomainEvents } = require('../../domain/events/DomainEvents');
+      const { TaskAssignedEvent } = require('../../domain/events/TaskAssignedEvent');
+      DomainEvents.raise(new TaskAssignedEvent(
+        taskId,
+        projectId,
+        this.role,
+        taskTitle,
+        context.priority
+      ));
+
       // State transition: IDLE → THINKING
       this.stateMachine.transitionTo(AgentState.THINKING, 'Starting thought process');
       this.emitStateChanged(agentId, AgentState.IDLE, AgentState.THINKING, projectId);
@@ -92,6 +106,28 @@ export abstract class BaseAgent {
         this.stateMachine.transitionTo(AgentState.COMPLETED, 'Task completed successfully');
         this.emitStateChanged(agentId, AgentState.ACTING, AgentState.COMPLETED, projectId);
         
+        const executionTimeMs = Date.now() - startTime;
+        
+        // Task 10: Publish TaskCompletedEvent
+        const { TaskCompletedEvent } = require('../../domain/events/TaskCompletedEvent');
+        DomainEvents.raise(new TaskCompletedEvent(
+          taskId,
+          projectId,
+          this.role,
+          taskTitle,
+          executionTimeMs,
+          { thought, action }
+        ));
+        
+        // Raise domain event for successful task completion (legacy)
+        const { AgentCompletedTaskEvent } = require('../../domain/events/AgentCompletedTaskEvent');
+        DomainEvents.raise(new AgentCompletedTaskEvent(
+          agentId,
+          agentContext.taskId || 'unknown',
+          agentContext.projectId || projectId,
+          { thought, action }
+        ));
+        
         // Reset to IDLE for reuse
         this.stateMachine.transitionTo(AgentState.IDLE, 'Agent ready for next task');
         this.emitStateChanged(agentId, AgentState.COMPLETED, AgentState.IDLE, projectId);
@@ -111,6 +147,28 @@ export abstract class BaseAgent {
       // State transition: ACTING → COMPLETED
       this.stateMachine.transitionTo(AgentState.COMPLETED, 'Task completed successfully');
       this.emitStateChanged(agentId, AgentState.ACTING, AgentState.COMPLETED, projectId);
+      
+      const executionTimeMs = Date.now() - startTime;
+      
+      // Task 10: Publish TaskCompletedEvent (legacy path)
+      const { TaskCompletedEvent } = require('../../domain/events/TaskCompletedEvent');
+      DomainEvents.raise(new TaskCompletedEvent(
+        taskId,
+        projectId,
+        this.role,
+        taskTitle,
+        executionTimeMs,
+        { thought, action }
+      ));
+      
+      // Raise domain event for successful task completion (legacy)
+      const { AgentCompletedTaskEvent } = require('../../domain/events/AgentCompletedTaskEvent');
+      DomainEvents.raise(new AgentCompletedTaskEvent(
+        agentId,
+        context.taskId || 'unknown',
+        context.projectId || projectId,
+        { thought, action }
+      ));
       
       // Reset to IDLE for reuse
       this.stateMachine.transitionTo(AgentState.IDLE, 'Agent ready for next task');
@@ -132,6 +190,16 @@ export abstract class BaseAgent {
         timestamp: new Date(),
         context: { projectId, currentState: currentState.toString() }
       });
+      
+      // Raise domain event for agent error
+      const { DomainEvents } = require('../../domain/events/DomainEvents');
+      const { AgentErrorEvent } = require('../../domain/events/AgentErrorEvent');
+      DomainEvents.raise(new AgentErrorEvent(
+        agentId,
+        context.taskId || 'unknown',
+        projectId,
+        error instanceof Error ? error.message : String(error)
+      ));
       
       // Log error
       this.logger.error(`Agent ${this.role} execution error: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
