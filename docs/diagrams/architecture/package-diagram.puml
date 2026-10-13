@@ -1,0 +1,306 @@
+@startuml package-diagram
+title AI-CORP Package / Module Dependency Diagram
+'Architecture: Layered Architecture with Dependency Inversion
+'Enforces: No upward dependencies (outer layers depend on inner layers)
+
+skinparam defaultFontSize 11
+skinparam backgroundColor #FEFEFE
+skinparam package {
+  BackgroundColor #EBF5FB
+  BorderColor #2980B9
+}
+skinparam rectangle {
+  BackgroundColor #FDFEFE
+  BorderColor #7F8C8D
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #F9A825
+}
+skinparam ArrowColor #2C3E50
+
+' ============================================================
+' LAYER 1: DOMAIN (Core — No Dependencies)
+' ============================================================
+package "Domain Layer\n(Core Business Logic)" as DOMAIN_LAYER #FEF9E7 {
+
+  package "agent (domain)" as PKG_AGENT_DOMAIN {
+    class "AgentEntity" as AgentEntity
+    class "AgentStateMachine" as AgentSM
+    class "AgentRole (enum)" as AgentRole
+    class "AgentState (enum)" as AgentState
+    interface "IAgentRepository" as IAgentRepo
+    interface "IAgentFactory" as IAgentFactory
+  }
+
+  package "workflow (domain)" as PKG_WF_DOMAIN {
+    class "WorkflowRunEntity" as WFRun
+    class "WorkflowNodeVO" as WFNode
+    class "WorkflowStateMachine" as WFSM
+    interface "IWorkflowRepository" as IWFRepo
+    interface "IWorkflowEngine" as IWFEngine
+  }
+
+  package "project (domain)" as PKG_PROJ_DOMAIN {
+    class "ProjectAggregateRoot" as ProjAgg
+    class "TaskEntity" as TaskEnt
+    class "MilestoneEntity" as MileEnt
+    class "TaskStateMachine" as TaskSM
+    interface "IProjectRepository" as IProjRepo
+    interface "ITaskRepository" as ITaskRepo
+  }
+
+  package "approval (domain)" as PKG_APPR_DOMAIN {
+    class "ApprovalEntity" as ApprEnt
+    class "ApprovalStateMachine" as ApprSM
+    interface "IApprovalRepository" as IApprRepo
+  }
+
+  package "shared (domain)" as PKG_SHARED {
+    class "DomainEvent" as DomEvent
+    class "AggregateRoot" as AggRoot
+    class "ValueObject" as VO
+    class "Entity" as EntityBase
+    class "Result<T>" as Result
+  }
+}
+
+' ============================================================
+' LAYER 2: APPLICATION (Uses Domain via Interfaces)
+' ============================================================
+package "Application Layer\n(Use Cases / Services)" as APP_LAYER #E8F8F5 {
+
+  package "agents (application)" as PKG_AGENT_APP {
+    class "AgentService" as AgentSvc
+    class "AgentRegistryService" as RegSvc
+    class "CEOAgent" as CEOAgent
+    class "PMAgent" as PMAgent
+    class "DEVAgent" as DEVAgent
+    class "QAAgent" as QAAgent
+    class "MarketingAgent" as MktgAgent
+    class "BAAgent" as BAAgent
+    class "ArchitectAgent" as ArchAgent
+    class "DevOpsAgent" as DevOpsAgent
+  }
+
+  package "workflow (application)" as PKG_WF_APP {
+    class "WorkflowEngineService" as WFEngSvc
+    class "WorkflowNodeExecutorService" as NodeExSvc
+    class "DAGValidatorService" as DAGVal
+    class "BullMQWorkerService" as BullWorker
+  }
+
+  package "projects (application)" as PKG_PROJ_APP {
+    class "ProjectService" as ProjSvc
+    class "TaskService" as TaskSvc
+    class "MilestoneService" as MileSvc
+  }
+
+  package "approvals (application)" as PKG_APPR_APP {
+    class "ApprovalService" as ApprSvc
+    class "ApprovalNotifierService" as ApprNotify
+  }
+
+  package "orchestrator (application)" as PKG_ORCH_APP {
+    class "OrchestratorService" as OrchSvc
+  }
+
+  package "cost (application)" as PKG_COST_APP {
+    class "CostTrackerService" as CostSvc
+    class "BudgetAlertService" as BudgetSvc
+  }
+
+  package "auth (application)" as PKG_AUTH_APP {
+    class "AuthService" as AuthSvc
+    class "JwtStrategy" as JwtStrat
+    class "LocalStrategy" as LocalStrat
+  }
+}
+
+' ============================================================
+' LAYER 3: INFRASTRUCTURE (Implements Domain Interfaces)
+' ============================================================
+package "Infrastructure Layer\n(Persistence / External)" as INFRA_LAYER #F4ECF7 {
+
+  package "persistence (infrastructure)" as PKG_PERSIST {
+    class "PrismaAgentRepository" as PrismaAgentRepo
+    class "PrismaProjectRepository" as PrismaProjRepo
+    class "PrismaWorkflowRepository" as PrismaWFRepo
+    class "PrismaTaskRepository" as PrismaTaskRepo
+    class "PrismaApprovalRepository" as PrismaApprRepo
+    class "PrismaService" as PrismaClient
+  }
+
+  package "llm (infrastructure)" as PKG_LLM {
+    class "LLMService" as LLMSvc
+    class "LLMFactory" as LLMFac
+    class "OpenAIProvider" as OpenAIProv
+    class "AnthropicProvider" as AnthropicProv
+    class "CircuitBreaker" as CB
+    interface "ILLMProvider" as ILLMProv
+  }
+
+  package "messaging (infrastructure)" as PKG_MSG {
+    class "BullMQProducerService" as BullProd
+    class "BullMQConsumerService" as BullCons
+    class "RedisService" as RedisSvc
+  }
+
+  package "memory (infrastructure)" as PKG_MEM {
+    class "MemoryService" as MemSvc
+    class "EmbeddingService" as EmbedSvc
+    class "VectorSearchService" as VecSearch
+  }
+
+  package "security (infrastructure)" as PKG_SEC {
+    class "InputSanitizerService" as Sanitizer
+    class "EnvValidatorService" as EnvVal
+    class "JwtAuthGuard" as JwtGuard
+    class "RBACGuard" as RBACGuard
+  }
+
+  package "tools (infrastructure)" as PKG_TOOLS {
+    class "ToolRegistryService" as ToolReg
+    class "SandboxExecutorService" as Sandbox
+    class "FileSystemTool" as FileTool
+    class "WebSearchTool" as WebTool
+    interface "ITool" as ITool
+  }
+}
+
+' ============================================================
+' LAYER 4: PRESENTATION (REST + WebSocket)
+' ============================================================
+package "Presentation Layer\n(REST Controllers + WebSocket)" as PRES_LAYER #FDEDEC {
+
+  package "rest (presentation)" as PKG_REST {
+    class "AuthController" as AuthCtrl
+    class "ProjectsController" as ProjCtrl
+    class "AgentsController" as AgentCtrl
+    class "WorkflowController" as WFCtrl
+    class "ApprovalsController" as ApprCtrl
+    class "CostController" as CostCtrl
+    class "HealthController" as HealthCtrl
+  }
+
+  package "websocket (presentation)" as PKG_WS {
+    class "WebSocketGateway" as WSGateway
+    class "EventBusAdapter" as EvtBus
+    class "ProjectRoomManager" as RoomMgr
+  }
+
+  package "dto (presentation)" as PKG_DTO {
+    class "CreateProjectDTO" as CreateProjDTO
+    class "UpdateTaskDTO" as UpdateTaskDTO
+    class "ApprovalResponseDTO" as ApprDTO
+    class "AgentConfigDTO" as AgentCfgDTO
+  }
+}
+
+' ============================================================
+' DEPENDENCY ARROWS (Outer → Inner only)
+' ============================================================
+
+' Presentation → Application
+PKG_REST ..> PKG_AGENT_APP : uses
+PKG_REST ..> PKG_PROJ_APP : uses
+PKG_REST ..> PKG_WF_APP : uses
+PKG_REST ..> PKG_APPR_APP : uses
+PKG_REST ..> PKG_COST_APP : uses
+PKG_REST ..> PKG_AUTH_APP : uses
+PKG_WS ..> PKG_WF_APP : subscribes
+PKG_WS ..> PKG_AGENT_APP : observes
+
+' Presentation → Domain (DTOs use domain types)
+PKG_DTO ..> PKG_PROJ_DOMAIN : references
+
+' Application → Domain (via interfaces)
+PKG_AGENT_APP ..> PKG_AGENT_DOMAIN : uses
+PKG_WF_APP ..> PKG_WF_DOMAIN : uses
+PKG_PROJ_APP ..> PKG_PROJ_DOMAIN : uses
+PKG_APPR_APP ..> PKG_APPR_DOMAIN : uses
+PKG_ORCH_APP ..> PKG_AGENT_DOMAIN : uses
+PKG_ORCH_APP ..> PKG_WF_DOMAIN : uses
+PKG_AUTH_APP ..> PKG_AGENT_DOMAIN : uses
+PKG_COST_APP ..> PKG_PROJ_DOMAIN : uses
+
+' Application → Domain Interfaces (Dependency Inversion)
+PKG_AGENT_APP ..> IAgentRepo : depends on interface
+PKG_WF_APP ..> IWFRepo : depends on interface
+PKG_PROJ_APP ..> IProjRepo : depends on interface
+PKG_PROJ_APP ..> ITaskRepo : depends on interface
+PKG_APPR_APP ..> IApprRepo : depends on interface
+
+' Infrastructure → Domain (implements interfaces)
+PrismaAgentRepo ..|> IAgentRepo : implements
+PrismaProjRepo ..|> IProjRepo : implements
+PrismaWFRepo ..|> IWFRepo : implements
+PrismaApprRepo ..|> IApprRepo : implements
+OpenAIProv ..|> ILLMProv : implements
+AnthropicProv ..|> ILLMProv : implements
+FileTool ..|> ITool : implements
+WebTool ..|> ITool : implements
+
+' Infrastructure → Domain (reads domain entities)
+PKG_PERSIST ..> PKG_AGENT_DOMAIN : persists
+PKG_PERSIST ..> PKG_PROJ_DOMAIN : persists
+PKG_PERSIST ..> PKG_WF_DOMAIN : persists
+PKG_PERSIST ..> PKG_APPR_DOMAIN : persists
+
+' Application uses Infrastructure services (via interfaces)
+PKG_AGENT_APP ..> PKG_LLM : uses ILLMService
+PKG_AGENT_APP ..> PKG_MEM : uses IMemoryService
+PKG_AGENT_APP ..> PKG_TOOLS : uses IToolExecutor
+PKG_WF_APP ..> PKG_MSG : uses IQueueService
+PKG_ORCH_APP ..> PKG_LLM : uses ILLMService
+
+' Shared Domain types used everywhere
+PKG_AGENT_DOMAIN ..> PKG_SHARED : extends
+PKG_WF_DOMAIN ..> PKG_SHARED : extends
+PKG_PROJ_DOMAIN ..> PKG_SHARED : extends
+PKG_APPR_DOMAIN ..> PKG_SHARED : extends
+
+note top of DOMAIN_LAYER
+  <b>SOLID: Dependency Inversion Principle</b>
+  Domain layer defines interfaces.
+  Infrastructure IMPLEMENTS them.
+  Application DEPENDS ON interfaces only.
+  
+  Domain layer has ZERO external dependencies.
+  Pure TypeScript — no framework imports.
+end note
+
+note bottom of INFRA_LAYER
+  <b>Pattern: Repository Pattern</b>
+  PrismaXxxRepository implements domain
+  repository interfaces, shielding application
+  from ORM/database specifics.
+  
+  <b>Pattern: Abstract Factory</b>
+  LLMFactory creates provider-specific clients
+  based on runtime configuration.
+end note
+
+note right of APP_LAYER
+  <b>Pattern: Facade</b>
+  Application services expose simple
+  facade interfaces to presentation layer.
+  
+  <b>Pattern: Strategy</b>
+  Agent classes implement common interface
+  with role-specific reasoning strategies.
+end note
+
+note left of PRES_LAYER
+  <b>Allowed dependencies:</b>
+  Presentation → Application → Domain
+  Infrastructure → Domain
+  
+  <b>Prohibited dependencies:</b>
+  Domain → Application (NO)
+  Domain → Infrastructure (NO)
+  Application → Presentation (NO)
+  Infrastructure → Application (NO)
+end note
+
+@enduml

@@ -1,0 +1,212 @@
+@startuml deployment-diagram
+title AI-CORP System Deployment Diagram
+'Shows physical deployment topology, network boundaries and protocols
+
+skinparam defaultFontSize 11
+skinparam backgroundColor #FEFEFE
+skinparam node {
+  BackgroundColor #D5F5E3
+  BorderColor #27AE60
+}
+skinparam artifact {
+  BackgroundColor #D6EAF8
+  BorderColor #2980B9
+}
+skinparam database {
+  BackgroundColor #FCF3CF
+  BorderColor #D4AC0D
+}
+skinparam cloud {
+  BackgroundColor #EBDEF0
+  BorderColor #8E44AD
+}
+skinparam rectangle {
+  BackgroundColor #FDFEFE
+  BorderColor #7F8C8D
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #F9A825
+}
+
+' ============================================================
+' SECURITY ZONES
+' ============================================================
+
+rectangle "<<Security Zone: Public Internet>>" as PUBLIC_ZONE #EEF {
+  node "Client Browser\n<<User Device>>" as CLIENT {
+    artifact "React 18 SPA\n(Vite bundled)" as REACT_APP
+    artifact "Zustand State\n(Client State)" as ZUSTAND
+    artifact "Socket.IO Client\n(WebSocket)" as WS_CLIENT
+    artifact "React Query\n(HTTP Cache)" as RQ
+  }
+}
+
+rectangle "<<Security Zone: DMZ / Reverse Proxy>>" as DMZ_ZONE #FEF {
+  node "Reverse Proxy\n<<Nginx>>" as NGINX {
+    artifact "TLS Termination\n(HTTPS/WSS)" as TLS
+    artifact "Rate Limiter\n(req/min)" as RATE_LIMIT
+    artifact "Static Assets\n(CDN Cache)" as STATIC
+  }
+}
+
+rectangle "<<Security Zone: Application Tier>>" as APP_ZONE #EFE {
+
+  node "API Server\n<<Docker Container>>\nPort: 3000" as API_SERVER {
+    artifact "NestJS Application\n(Node.js 18 LTS)" as NESTJS
+    artifact "Auth Module\n(JWT / RBAC)" as AUTH_MOD
+    artifact "Agent Orchestrator\n(8 AI Agents)" as AGENT_ORCH
+    artifact "Workflow Engine\n(DAG + BullMQ)" as WF_ENGINE_ART
+    artifact "WebSocket Gateway\n(Socket.IO)" as WS_GW
+    artifact "LLM Client\n(Circuit Breaker)" as LLM_CLIENT_ART
+    artifact "Health Endpoint\n(/health)" as HEALTH
+  }
+
+  node "BullMQ Worker\n<<Docker Container>>\n(Separate Process)" as BULL_CONTAINER {
+    artifact "Workflow Worker\n(BullMQ Consumer)" as BULL_WORKER_ART
+    artifact "Retry Handler\n(Exponential Backoff)" as RETRY_ART
+    artifact "Dead Letter Queue\n(Failed Jobs)" as DLQ
+  }
+
+}
+
+rectangle "<<Security Zone: Data Tier>>" as DATA_ZONE #FFF8E1 {
+
+  database "PostgreSQL 16\n+ pgvector\n<<Docker Container>>\nPort: 5432" as POSTGRES {
+    artifact "ai_corp_dev\n(Database)" as PG_DB
+    artifact "pgvector extension\n(Vector Embeddings)" as PGVEC
+    artifact "Prisma Migrations\n(Schema Versioning)" as PG_SCHEMA
+  }
+
+  database "Redis 7\n<<Docker Container>>\nPort: 6379" as REDIS_NODE {
+    artifact "BullMQ Queues\n(Job Processing)" as BULL_Q_ART
+    artifact "Session Cache\n(JWT Blacklist)" as SESSION_CACHE
+    artifact "Pub/Sub Channels\n(Event Bus)" as PUBSUB
+  }
+
+}
+
+rectangle "<<Security Zone: AI/ML Tier>>" as AI_ZONE #F0F8FF {
+
+  node "9Router LLM Gateway\n<<External / Docker>>\nPort: 20128" as LLM_GW {
+    artifact "OpenAI-Compatible API\n(REST Proxy)" as OPENAI_API
+    artifact "Model Router\n(Load Balancer)" as MODEL_ROUTER
+    artifact "Usage Tracker\n(Token Metering)" as USAGE_TRACKER
+  }
+
+  cloud "LLM Providers\n<<External APIs>>" as LLM_CLOUD {
+    artifact "OpenCode Free Models\n(gpt-4o-mini, etc.)" as FREE_MODELS
+    artifact "Anthropic Claude\n(claude-3-haiku)" as CLAUDE
+    artifact "Google Gemini\n(gemini-pro)" as GEMINI
+  }
+
+}
+
+rectangle "<<Security Zone: Execution Sandbox>>" as SANDBOX_ZONE #FFF0F0 {
+
+  node "Docker Host\n<<Sandbox Manager>>" as DOCKER_HOST {
+    node "Sandbox Container 1\n<<node:18-alpine>>\n(Ephemeral)" as SANDBOX_1 {
+      artifact "DEV Agent Code\n(Isolated Exec)" as CODE_EXEC_1
+    }
+    node "Sandbox Container 2\n<<node:18-alpine>>\n(Ephemeral)" as SANDBOX_2 {
+      artifact "QA Agent Tests\n(Isolated Exec)" as CODE_EXEC_2
+    }
+    artifact "seccomp Profile\n(System Call Filter)" as SECCOMP
+    artifact "Non-root User\n(UID 1001)" as NONROOT
+  }
+
+}
+
+' ============================================================
+' CONNECTIONS & PROTOCOLS
+' ============================================================
+
+' Client → DMZ
+CLIENT --> NGINX : HTTPS (TLS 1.3)\nPort 443
+
+' DMZ → App
+NGINX --> API_SERVER : HTTP (internal)\nPort 3000
+NGINX --> API_SERVER : WS (internal)\nPort 3000
+
+' Client WebSocket
+WS_CLIENT --> WS_GW : WSS (WebSocket Secure)\nvia Nginx Proxy
+
+' App → Data
+NESTJS --> POSTGRES : TCP\nPort 5432\n(Prisma ORM)
+NESTJS --> REDIS_NODE : TCP\nPort 6379\n(ioredis)
+BULL_CONTAINER --> REDIS_NODE : TCP\nPort 6379\n(BullMQ)
+WF_ENGINE_ART --> REDIS_NODE : TCP\nPort 6379\n(Job Enqueue)
+
+' App → AI
+LLM_CLIENT_ART --> LLM_GW : HTTP (internal)\nPort 20128\n(OpenAI-compatible)
+LLM_GW --> LLM_CLOUD : HTTPS\nPort 443\n(External API)
+
+' App → Sandbox
+AGENT_ORCH --> DOCKER_HOST : Docker API\nUnix Socket\n(/var/run/docker.sock)
+DOCKER_HOST --> SANDBOX_1 : spawn/destroy
+DOCKER_HOST --> SANDBOX_2 : spawn/destroy
+
+' Worker → App Events
+BULL_WORKER_ART --> NESTJS : Internal Events\n(NestJS EventEmitter)
+NESTJS --> WS_GW : WebSocket Broadcast\n(State Changes)
+
+note bottom of POSTGRES
+  <b>Persistence Strategy:</b>
+  - Relational data (Projects, Tasks, Agents)
+  - Vector embeddings for memory search
+  - Prisma ORM with type-safe queries
+  - Automated migrations via Prisma Migrate
+  
+  <b>Backup:</b> Daily pg_dump snapshots
+  <b>Replication:</b> Not configured (dev/thesis)
+end note
+
+note bottom of REDIS_NODE
+  <b>Usage Patterns:</b>
+  - BullMQ job queues (persistent jobs)
+  - Session cache (JWT token blacklist)
+  - Pub/Sub (real-time state events)
+  
+  <b>Persistence:</b> AOF (Append Only File)
+  <b>Max Memory:</b> 256MB (dev configuration)
+end note
+
+note right of DOCKER_HOST
+  <b>Sandbox Security:</b>
+  - No network access from sandbox
+  - seccomp system call filtering
+  - Non-root execution (UID 1001)
+  - 30 second timeout limit
+  - 256MB memory limit per container
+  - Read-only filesystem (except /tmp)
+  - Containers destroyed after use
+end note
+
+note right of LLM_GW
+  <b>Circuit Breaker Config:</b>
+  - Opens after 3 consecutive failures
+  - Half-open after 30 seconds
+  - Closes after 2 successful probes
+  
+  <b>Rate Limiting:</b>
+  - 60 requests/minute per project
+  - 1000 tokens/request limit
+  
+  <b>Cost Tracking:</b>
+  - Per-request token metering
+  - Budget enforcement at API layer
+end note
+
+note top of CLIENT
+  <b>Security Headers:</b>
+  - Content-Security-Policy
+  - X-Frame-Options: DENY
+  - HSTS (Strict-Transport-Security)
+  
+  <b>Auth Flow:</b>
+  - JWT stored in httpOnly cookie
+  - Token refresh via /auth/refresh
+  - Auto-logout on 401 responses
+end note
+
+@enduml

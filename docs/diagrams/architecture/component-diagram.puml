@@ -1,0 +1,316 @@
+@startuml component-diagram
+title AI-CORP System Component Diagram
+'Architecture Style: Layered Architecture + Domain-Driven Design
+'Pattern: Module per Bounded Context (NestJS modules)
+
+skinparam componentStyle rectangle
+skinparam defaultFontSize 11
+skinparam backgroundColor #FEFEFE
+skinparam component {
+  BackgroundColor #D6EAF8
+  BorderColor #2980B9
+  ArrowColor #2C3E50
+}
+skinparam interface {
+  BackgroundColor #FDFEFE
+  BorderColor #7F8C8D
+}
+skinparam package {
+  BackgroundColor #EBF5FB
+  BorderColor #85C1E9
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #F9A825
+}
+
+' ============================================================
+' PRESENTATION LAYER
+' ============================================================
+package "Presentation Layer" as PRESENTATION #EBF5FB {
+
+  package "Frontend (React 18 + Vite)" as FRONTEND {
+    [Dashboard Page] as DASH
+    [Kanban Board] as KANBAN
+    [Virtual Office] as VOFFICE
+    [Cost Analytics] as COST_UI
+    [Agent Settings] as AGENT_UI
+    [Auth Page] as AUTH_UI
+    [Project Detail] as PROJ_UI
+    [Admin Dashboard] as ADMIN_UI
+  }
+
+  package "API Gateway (NestJS REST)" as API_GW {
+    [Auth Controller] as AUTH_CTRL
+    [Projects Controller] as PROJ_CTRL
+    [Agents Controller] as AGENT_CTRL
+    [Workflow Controller] as WF_CTRL
+    [Approvals Controller] as APPR_CTRL
+    [Cost Controller] as COST_CTRL
+    [Health Controller] as HEALTH_CTRL
+  }
+
+  package "Realtime Gateway (Socket.IO)" as WS_GW {
+    [WebSocket Gateway] as WS
+    [Event Bus Adapter] as EVENT_BUS
+  }
+}
+
+' ============================================================
+' APPLICATION LAYER
+' ============================================================
+package "Application Layer" as APPLICATION #EBF5FB {
+
+  package "Agent Module" as AGENT_MOD {
+    [Agent Registry] as REGISTRY
+    [Agent Factory] as FACTORY
+    [CEO Agent] as CEO
+    [PM Agent] as PM
+    [DEV Agent] as DEV
+    [QA Agent] as QA
+    [Marketing Agent] as MKTG
+    [BA Agent] as BA
+    [Architect Agent] as ARCH
+    [DevOps Agent] as DEVOPS
+  }
+
+  package "Workflow Module" as WF_MOD {
+    [Workflow Engine] as WF_ENGINE
+    [DAG Validator] as DAG_VAL
+    [Node Executor] as NODE_EXEC
+    [BullMQ Worker] as BULL_WORKER
+    [BullMQ Queue] as BULL_Q
+  }
+
+  package "Orchestrator Module" as ORCH_MOD {
+    [Orchestrator Service] as ORCH
+  }
+
+  package "Projects Module" as PROJ_MOD {
+    [Project Service] as PROJ_SVC
+    [Task Service] as TASK_SVC
+    [Milestone Service] as MILE_SVC
+  }
+
+  package "Approvals Module" as APPR_MOD {
+    [Approval Service] as APPR_SVC
+    [Approval State Machine] as APPR_SM
+  }
+
+  package "Cost Module" as COST_MOD {
+    [Cost Tracker] as COST_TRACKER
+    [Budget Alert Service] as BUDGET_SVC
+  }
+}
+
+' ============================================================
+' DOMAIN LAYER
+' ============================================================
+package "Domain Layer" as DOMAIN #EBF5FB {
+
+  package "Agent Domain" as AGENT_DOMAIN {
+    [Agent Entity] as AGENT_ENT
+    [Agent State Machine] as AGENT_SM
+    [Agent Repository Interface] as AGENT_REPO_I
+  }
+
+  package "Workflow Domain" as WF_DOMAIN {
+    [WorkflowRun Entity] as WF_ENT
+    [WorkflowNode ValueObject] as NODE_VO
+    [Workflow Repository Interface] as WF_REPO_I
+  }
+
+  package "Project Domain" as PROJ_DOMAIN {
+    [Project Aggregate Root] as PROJ_AGG
+    [Task Entity] as TASK_ENT
+    [Milestone Entity] as MILE_ENT
+    [Project Repository Interface] as PROJ_REPO_I
+  }
+}
+
+' ============================================================
+' INFRASTRUCTURE LAYER
+' ============================================================
+package "Infrastructure Layer" as INFRA #EBF5FB {
+
+  package "LLM Module" as LLM_MOD {
+    [LLM Factory] as LLM_FAC
+    [LLM Service] as LLM_SVC
+    [OpenAI Provider] as OPENAI
+    [Anthropic Provider] as ANTHROPIC
+    [9Router Gateway] as ROUTER
+    [Circuit Breaker] as CB
+  }
+
+  package "Memory Module" as MEM_MOD {
+    [Memory Service] as MEM_SVC
+    [Embedding Service] as EMBED_SVC
+    [Vector Search] as VEC_SEARCH
+  }
+
+  package "Security Module" as SEC_MOD {
+    [Input Sanitizer] as SANITIZER
+    [Env Validator] as ENV_VAL
+    [JWT Guard] as JWT_GUARD
+    [RBAC Guard] as RBAC_GUARD
+  }
+
+  package "Tools Module" as TOOL_MOD {
+    [Tool Registry] as TOOL_REG
+    [Sandbox Executor] as SANDBOX
+    [File Tool] as FILE_TOOL
+    [Web Search Tool] as SEARCH_TOOL
+  }
+
+  package "Persistence (Prisma + PostgreSQL)" as PERSIST {
+    [Prisma Client] as PRISMA
+    [Agent Repository] as AGENT_REPO
+    [Project Repository] as PROJ_REPO
+    [Workflow Repository] as WF_REPO
+    [Task Repository] as TASK_REPO
+  }
+
+  package "External Services" as EXT {
+    database "PostgreSQL 16\n+ pgvector" as PG
+    database "Redis 7" as REDIS
+    [Docker Daemon] as DOCKER
+    [9Router / LLM API] as LLM_API
+  }
+}
+
+' ============================================================
+' INTERFACES (Provided / Required)
+' ============================================================
+interface "IAgentService" as I_AGENT
+interface "IWorkflowEngine" as I_WF
+interface "IProjectService" as I_PROJ
+interface "ILLMService" as I_LLM
+interface "IMemoryService" as I_MEM
+interface "IToolExecutor" as I_TOOL
+interface "IApprovalService" as I_APPR
+interface "ICostTracker" as I_COST
+
+' ============================================================
+' CONNECTIONS
+' ============================================================
+
+' Frontend → Backend
+DASH ..> AUTH_CTRL : HTTP REST
+KANBAN ..> PROJ_CTRL : HTTP REST
+VOFFICE ..> WS : WebSocket
+COST_UI ..> COST_CTRL : HTTP REST
+AUTH_UI ..> AUTH_CTRL : HTTP REST
+PROJ_UI ..> PROJ_CTRL : HTTP REST
+ADMIN_UI ..> AGENT_CTRL : HTTP REST
+
+' API Controllers → Application Services
+AUTH_CTRL ..> JWT_GUARD : uses
+PROJ_CTRL ..> I_PROJ : requires
+AGENT_CTRL ..> I_AGENT : requires
+WF_CTRL ..> I_WF : requires
+APPR_CTRL ..> I_APPR : requires
+COST_CTRL ..> I_COST : requires
+
+' WebSocket → Event Bus
+WS --> EVENT_BUS : delegates
+EVENT_BUS ..> WF_ENGINE : broadcasts
+
+' Application Services → Domain
+PROJ_SVC --> PROJ_AGG : uses
+TASK_SVC --> TASK_ENT : uses
+APPR_SVC --> APPR_SM : uses
+
+' Agent Module
+REGISTRY --> FACTORY : creates via
+FACTORY ..> CEO : creates
+FACTORY ..> PM : creates
+FACTORY ..> DEV : creates
+FACTORY ..> QA : creates
+ORCH --> REGISTRY : lookupAgent()
+CEO ..> I_LLM : requires
+PM ..> I_LLM : requires
+DEV ..> I_LLM : requires
+DEV ..> I_TOOL : requires
+QA ..> I_TOOL : requires
+
+' Workflow
+WF_ENGINE --> BULL_Q : enqueues
+BULL_WORKER --> BULL_Q : consumes
+BULL_WORKER --> NODE_EXEC : executes
+NODE_EXEC --> ORCH : delegates
+NODE_EXEC --> APPR_SVC : requestApproval()
+
+' Infrastructure
+I_LLM -- LLM_SVC
+LLM_SVC --> LLM_FAC : creates via
+LLM_FAC ..> OPENAI : creates
+LLM_FAC ..> ANTHROPIC : creates
+OPENAI --> CB : protected by
+ANTHROPIC --> CB : protected by
+CB --> ROUTER : proxy
+ROUTER --> LLM_API : HTTP/HTTPS
+
+I_MEM -- MEM_SVC
+MEM_SVC --> EMBED_SVC : generates embeddings
+MEM_SVC --> VEC_SEARCH : performs similarity search
+VEC_SEARCH --> PG : pgvector queries
+
+I_TOOL -- TOOL_REG
+TOOL_REG --> SANDBOX : delegate exec
+SANDBOX --> DOCKER : spawn container
+
+' Repository Implementations
+AGENT_REPO ..|> AGENT_REPO_I : implements
+PROJ_REPO ..|> PROJ_REPO_I : implements
+WF_REPO ..|> WF_REPO_I : implements
+
+PRISMA --> PG : TCP:5432
+BULL_Q --> REDIS : TCP:6379
+BULL_WORKER --> REDIS : TCP:6379
+
+' Security
+JWT_GUARD --> AUTH_CTRL : guards
+RBAC_GUARD --> AGENT_CTRL : guards
+SANITIZER --> NODE_EXEC : validates input
+
+note top of AGENT_MOD
+  <b>Design Pattern: Factory Method</b>
+  AgentFactory creates specialized agents
+  based on role configuration.
+  
+  <b>Design Pattern: Registry</b>
+  AgentRegistry maintains active agents
+  and supports lookup by role.
+end note
+
+note top of WF_MOD
+  <b>Design Pattern: Interpreter</b>
+  DAG Validator interprets workflow definitions.
+  
+  <b>Design Pattern: Template Method</b>
+  NodeExecutor defines execution skeleton;
+  subclasses override node-specific logic.
+end note
+
+note bottom of SEC_MOD
+  <b>Design Pattern: Decorator</b>
+  JWT/RBAC Guards decorate controller methods
+  without modifying their logic.
+  
+  <b>Security:</b>
+  - 15+ prompt injection patterns blocked
+  - Seccomp sandbox isolation
+  - JWT expiry enforced
+end note
+
+note bottom of LLM_MOD
+  <b>Design Pattern: Circuit Breaker</b>
+  Opens after 3 consecutive LLM failures.
+  Auto-resets after cooldown period.
+  
+  <b>Design Pattern: Abstract Factory</b>
+  LLMFactory creates provider-specific
+  clients (OpenAI / Anthropic).
+end note
+
+@enduml
