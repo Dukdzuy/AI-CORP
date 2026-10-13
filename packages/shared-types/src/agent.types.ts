@@ -6,6 +6,9 @@ export enum AgentRole {
   DEV = 'DEV',
   QA = 'QA',
   MARKETING = 'MARKETING',
+  BA = 'BA',
+  ARCHITECT = 'ARCHITECT',
+  DEVOPS = 'DEVOPS',
 }
 
 export interface AgentContext {

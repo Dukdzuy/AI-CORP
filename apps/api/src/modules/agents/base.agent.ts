@@ -9,6 +9,9 @@ import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { AgentThinkingEvent, AgentActionEvent, AgentMessageEvent, WebSocketEventType } from '@ai-corp/shared-types';
 import { sanitizeUserInput, sanitizeToolOutput } from '../security/input-sanitizer';
 import { validateParameters } from '../security/parameter-validator';
+import { IThinkingStrategy } from '../../domain/agent/interfaces/IThinkingStrategy.interface';
+import { IActionStrategy } from '../../domain/agent/interfaces/IActionStrategy.interface';
+import { AgentContext } from '../../domain/common/types';
 
 export abstract class BaseAgent {
   protected readonly logger = new Logger(this.constructor.name);
@@ -22,23 +25,39 @@ export abstract class BaseAgent {
     protected readonly toolRegistry: ToolRegistry,
     protected readonly sandboxExecutor: SandboxExecutor,
     protected readonly apiUsageService: ApiUsageService,
-    protected readonly websocketGateway: AppWebSocketGateway
+    protected readonly websocketGateway: AppWebSocketGateway,
+    protected readonly thinkingStrategy?: IThinkingStrategy,
+    protected readonly actionStrategy?: IActionStrategy
   ) {}
 
   /**
-   * Agents must implement their specific thinking process
+   * Agents must implement their specific thinking process (backward compatibility)
    */
   abstract think(context: any): Promise<any>;
 
   /**
-   * Agents must implement their specific action execution
+   * Agents must implement their specific action execution (backward compatibility)
    */
   abstract act(context: any): Promise<any>;
 
   /**
    * Execute the thought and action cycle.
+   * Uses Strategy Pattern if strategies are injected, falls back to abstract methods otherwise.
    */
   async execute(context: any): Promise<any> {
+    // Use Strategy Pattern if strategies are injected
+    if (this.thinkingStrategy && this.actionStrategy) {
+      const agentContext = context as AgentContext;
+      const thought = await this.thinkingStrategy.think(agentContext);
+      
+      // Emit thinking event
+      this.emitThinking(agentContext.projectId || 'unknown', thought.reasoning);
+      
+      const action = await this.actionStrategy.act(agentContext, thought);
+      return { thought, action };
+    }
+    
+    // Fall back to existing behavior for backward compatibility
     const thought = await this.think(context);
     const action = await this.act(context);
     return { thought, action };

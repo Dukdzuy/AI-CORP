@@ -20,6 +20,7 @@ export class CeoAgent extends BaseAgent {
   ) {
     const systemPrompt = `You are the CEO. Your objective is to define the strategic vision, plan high-level milestones, and ensure the product aligns with market needs.`;
     const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
+    // Don't pass strategies - keep existing behavior
     super(AgentRole.CEO, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
   }
 
