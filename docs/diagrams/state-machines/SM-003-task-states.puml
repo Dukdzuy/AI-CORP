@@ -1,0 +1,181 @@
+@startuml SM-003-task-states
+title Task Status State Machine - State Transitions
+'Based on: apps/api/prisma/schema.prisma Task.status
+'Valid states: todo, in_progress, review, done, cancelled
+'Requirement 12: Kanban status transitions
+
+[*] --> TODO : <b>createTask()</b>\n[guard: project.active]\naction: addToBacklog()
+
+state TODO {
+  [*] --> Backlog
+  Backlog --> ReadyForDev
+  ReadyForDev --> Assigned
+  --
+  <b>Entry:</b> Set priority, estimate cost
+  <b>Exit:</b> Assign to agent, log start time
+  <b>Internal:</b> Can update priority
+  <b>Invariant:</b> assignedAgent == null
+}
+
+state IN_PROGRESS {
+  [*] --> Analyzing
+  Analyzing --> Implementing
+  Implementing --> Testing
+  Testing --> Documenting
+  --
+  <b>Entry:</b> Agent claims task, start timer
+  <b>Exit:</b> Stop timer, calculate actualCost
+  <b>Internal:</b> Progress updates every 15min
+  <b>Invariant:</b> assignedAgent != null
+}
+
+state REVIEW {
+  [*] --> CodeReview
+  CodeReview --> QualityChecks
+  QualityChecks --> AwaitingApproval
+  --
+  <b>Entry:</b> Submit for QA, run automated checks
+  <b>Exit:</b> Approval decision recorded
+  <b>Internal:</b> QA agent adds comments
+  <b>Invariant:</b> Implementation complete
+}
+
+state DONE {
+  [*] --> VerifyingCompletion
+  VerifyingCompletion --> RecordingMetrics
+  RecordingMetrics --> Archived
+  --
+  <b>Entry:</b> Mark complete, update project cost
+  <b>Exit:</b> Release agent, archive data
+  <b>Internal:</b> Cannot be modified
+  <b>Invariant:</b> actualCost recorded
+}
+
+state CANCELLED {
+  [*] --> RecordingReason
+  RecordingReason --> CleaningUp
+  --
+  <b>Entry:</b> Stop work, cancel subtasks
+  <b>Exit:</b> Archive partial work
+  <b>Reason:</b> Stored in metadata
+}
+
+TODO --> IN_PROGRESS : <b>agentPicksUp()</b>\n[guard: agentAvailable]\naction: assignAgent()
+
+IN_PROGRESS --> REVIEW : <b>implementationComplete()</b>\n[guard: allCriteriaMet]\naction: submitForReview()
+
+IN_PROGRESS --> TODO : <b>blocked()</b>\n[guard: dependencyMissing]\naction: unassignAgent()
+
+REVIEW --> DONE : <b>qaApproves()</b>\n[guard: qualityGatePassed]\naction: markComplete()
+
+REVIEW --> IN_PROGRESS : <b>changesRequested()</b>\n[guard: issuesFound]\naction: sendFeedback()
+
+TODO --> CANCELLED : <b>projectCancelled()</b>\n[guard: project.cancelled]\naction: cleanup()
+
+IN_PROGRESS --> CANCELLED : <b>projectCancelled()</b>\n[guard: project.cancelled]\naction: cleanup()
+
+TODO --> DONE : <b>skipToComplete()</b>\n[guard: noImplementationNeeded]\naction: markComplete()
+note on link
+  Rare case: Task was
+  already completed
+  by another task
+end note
+
+DONE --> [*]
+
+CANCELLED --> [*]
+
+note right of TODO
+  <b>Entry Actions:</b>
+  - Validate task definition
+  - Set priority & estimate
+  - Add to Kanban board
+  
+  <b>Business Rule:</b>
+  - Cannot start without estimate
+  - Priority: low | medium | high
+  
+  <b>SOLID - Liskov Substitution:</b>
+  - Task subtypes maintain contract
+end note
+
+note right of IN_PROGRESS
+  <b>Entry Actions:</b>
+  - Agent: IDLE → THINKING
+  - Start cost tracking
+  - Lock task to agent
+  
+  <b>Progress Tracking:</b>
+  - Completion percentage
+  - Time elapsed vs estimate
+  - Blockers encountered
+  
+  <b>Pattern - Observer:</b>
+  - PM notified of progress updates
+end note
+
+note left of REVIEW
+  <b>Entry Actions:</b>
+  - Run static analysis
+  - Execute test suite
+  - Check code coverage
+  - Security scan
+  
+  <b>Quality Gates:</b>
+  1. All tests pass
+  2. Coverage ≥ 80%
+  3. No critical security issues
+  4. Code standards met
+  
+  <b>Pattern - Strategy:</b>
+  - Different review strategies
+  - Based on task type
+end note
+
+note left of DONE
+  <b>Entry Actions:</b>
+  - Record completion timestamp
+  - Calculate final cost
+  - Update project metrics
+  - Store lessons learned
+  
+  <b>Invariants:</b>
+  - actualCost > 0
+  - completedAt > createdAt
+  - All acceptance criteria met
+  
+  <b>Immutability:</b>
+  - Cannot transition out
+  - Historical record preserved
+end note
+
+note bottom of CANCELLED
+  <b>Cancellation Triggers:</b>
+  1. Project cancelled by user
+  2. Task no longer needed
+  3. Replaced by other task
+  4. Scope change
+  
+  <b>Cleanup Actions:</b>
+  - Stop active agent work
+  - Release allocated resources
+  - Record partial progress
+  - Update sprint metrics
+end note
+
+note top
+  <b>Kanban Board Mapping:</b>
+  - TODO → Backlog column
+  - IN_PROGRESS → In Progress column  
+  - REVIEW → Review column
+  - DONE → Done column
+  - CANCELLED → Hidden/filtered
+  
+  <b>Business Metrics:</b>
+  - Lead Time: TODO → DONE duration
+  - Cycle Time: IN_PROGRESS → DONE duration
+  - Throughput: Tasks completed per sprint
+  - WIP Limit: Max 5 tasks in IN_PROGRESS per agent
+end note
+
+@enduml

@@ -1,0 +1,119 @@
+@startuml AD-002-workflow-execution-parallel
+title Workflow Execution with Parallel Branches - Activity Diagram
+'Requirement: Show parallel agent execution with synchronization points
+
+start
+:Workflow Engine Receives\nExecution Request;
+:Load Workflow Definition;
+:Initialize Execution Context;
+:Set Status = RUNNING;
+
+partition "Sequential Preparation Phase" {
+  :Parse Workflow Graph;
+  :Validate Node Dependencies;
+  :Allocate Agent Resources;
+}
+
+:Reach Parallel Fork Point;
+fork
+  :Execute Branch A (DEV);
+  partition "Development Branch" {
+    :Assign DEV Agent;
+    :DEV Agent: IDLE → THINKING;
+    :Analyze Requirements;
+    :DEV Agent: THINKING → ACTING;
+    :Generate Code;
+    :Run Unit Tests;
+    :DEV Agent: ACTING → COMPLETED;
+  }
+fork again
+  :Execute Branch B (QA);
+  partition "Quality Assurance Branch" {
+    :Assign QA Agent;
+    :QA Agent: IDLE → THINKING;
+    :Review Test Strategy;
+    :QA Agent: THINKING → ACTING;
+    :Prepare Test Environment;
+    :Write Test Cases;
+    :QA Agent: ACTING → COMPLETED;
+  }
+fork again
+  :Execute Branch C (DevOps);
+  partition "Infrastructure Branch" {
+    :Assign DevOps Agent;
+    :DevOps Agent: IDLE → THINKING;
+    :Plan Deployment Strategy;
+    :DevOps Agent: THINKING → ACTING;
+    :Configure CI/CD Pipeline;
+    :Provision Resources;
+    :DevOps Agent: ACTING → COMPLETED;
+  }
+end fork
+
+:Synchronization Join Point;
+note right
+  All parallel branches must
+  complete before proceeding
+end note
+
+:Aggregate Results from All Branches;
+
+if (All Branches Successful?) then (yes)
+  :Proceed to Approval Gate;
+  :Set Workflow Status = PAUSED;
+  :Send Approval Request;
+  
+  :Wait for Human Approval;
+  note right
+    Workflow paused until
+    Board Member responds
+  end note
+  
+  if (Approved?) then (yes)
+    :Resume Workflow;
+    :Set Status = RUNNING;
+    :Execute Next Stage;
+  else (rejected)
+    :Initiate Rollback Procedure;
+    partition "Compensation Activities" {
+      :Rollback DEV Changes;
+      :Clean QA Environment;
+      :Deallocate DevOps Resources;
+      :Restore Previous State;
+    }
+    :Set Status = FAILED;
+    stop
+  endif
+else (no)
+  :Error Detected in Branch;
+  if (Retryable Error?) then (yes)
+    :Increment Retry Count;
+    if (Retry Count < Max?) then (yes)
+      :Wait with Exponential Backoff;
+      :Retry Failed Branch;
+    else (no)
+      :Max Retries Exceeded;
+      :Execute Compensation Logic;
+      :Set Status = FAILED;
+      stop
+    endif
+  else (fatal)
+    :Log Fatal Error;
+    partition "Error Handling" {
+      :Notify All Active Agents;
+      :Cancel Pending Tasks;
+      :Execute Cleanup Handlers;
+      :Save Partial Results;
+    }
+    :Set Status = FAILED;
+    stop
+  endif
+endif
+
+:Mark Workflow Step Complete;
+:Update Execution Context;
+:Set Status = COMPLETED;
+:Generate Execution Report;
+stop
+
+@enduml

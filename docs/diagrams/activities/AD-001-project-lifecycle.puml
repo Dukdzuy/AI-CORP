@@ -1,0 +1,130 @@
+@startuml AD-001-project-lifecycle
+title Complete Project Lifecycle - Activity Diagram
+'Requirement: Show full enterprise workflow with parallel agent activities
+
+|Board Member|
+start
+:Create Project Request;
+:Define Goal & Budget;
+
+|CEO Agent|
+:Receive Project Request;
+:Validate Business Case;
+if (Approve Project?) then (yes)
+  :Initialize Project;
+  :Assign PM Agent;
+else (no)
+  :Reject Project;
+  stop
+endif
+
+|PM Agent|
+:Review Project Brief;
+:Create Initial Backlog;
+:Assign BA Agent;
+
+|BA Agent|
+:Gather Requirements;
+:Analyze Stakeholder Needs;
+:Document Use Cases;
+:Create Requirement Specs;
+:Request Approval;
+
+|Board Member|
+:Review Requirements;
+if (Approve Requirements?) then (yes)
+  :Approve & Continue;
+else (no)
+  :Request Changes;
+  |BA Agent|
+  :Revise Requirements;
+  stop
+endif
+
+|PM Agent|
+:Review Requirements;
+:Assign Architect Agent;
+
+|Architect Agent|
+:Design System Architecture;
+:Define Technical Stack;
+:Create Architecture Diagrams;
+:Document Design Patterns;
+
+|PM Agent|
+:Plan Sprint;
+:Break Down into Tasks;
+:Estimate Effort & Cost;
+fork
+  |DEV Agent|
+  :Receive Development Tasks;
+  while (More features?) is (yes)
+    :Implement Feature;
+    :Write Unit Tests;
+    :Document Code;
+  endwhile (no)
+  :Submit for Review;
+fork again
+  |QA Agent|
+  :Receive Testing Tasks;
+  :Prepare Test Cases;
+  :Set Up Test Environment;
+endfork
+
+|QA Agent|
+:Execute Code Review;
+:Run Static Analysis;
+:Execute Test Suites;
+:Check Coverage;
+if (Quality Gate Passed?) then (yes)
+  :Approve Code;
+else (no)
+  |DEV Agent|
+  :Fix Issues;
+  |QA Agent|
+  :Re-test;
+  stop
+endif
+
+|DevOps Agent|
+:Receive Deployment Request;
+:Build Artifacts;
+:Run Security Scan;
+if (Security Approved?) then (yes)
+  :Deploy to Staging;
+  :Run Smoke Tests;
+else (no)
+  |DEV Agent|
+  :Fix Security Issues;
+  stop
+endif
+
+|Board Member|
+:Review Staging Deployment;
+if (Approve Production Deploy?) then (yes)
+  |DevOps Agent|
+  :Deploy to Production;
+  :Monitor Deployment;
+  :Verify Health Checks;
+else (no)
+  :Rollback to Previous Version;
+  stop
+endif
+
+|PM Agent|
+:Verify Deployment Success;
+:Update Project Status;
+:Generate Completion Report;
+:Calculate Final Costs;
+
+|CEO Agent|
+:Review Project Metrics;
+:Archive Project Data;
+:Extract Lessons Learned;
+
+|Board Member|
+:Receive Final Report;
+:Close Project;
+stop
+
+@enduml

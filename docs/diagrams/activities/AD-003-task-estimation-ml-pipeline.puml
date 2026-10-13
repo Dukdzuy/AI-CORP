@@ -1,0 +1,171 @@
+@startuml AD-003-task-estimation-ml-pipeline
+title Task Estimation ML Pipeline - Activity Diagram
+'New AI/ML Feature: Intelligent task estimation with continuous learning
+
+start
+:Receive Task Description\nfrom PM Agent;
+note right
+  Input: Task title, description,
+  acceptance criteria, dependencies
+end note
+
+partition "Data Preprocessing" {
+  :Clean and Normalize Text;
+  :Remove Stop Words;
+  :Apply Tokenization;
+  :Extract Keywords;
+}
+
+partition "Feature Engineering" {
+  fork
+    :Calculate Complexity Score;
+    note right
+      - Code lines estimate
+      - Logic branches count
+      - Integration points
+    end note
+  fork again
+    :Extract Domain Features;
+    note right
+      - Technology stack
+      - Programming language
+      - Framework used
+    end note
+  fork again
+    :Analyze Dependencies;
+    note right
+      - Number of dependencies
+      - Dependency complexity
+      - Blocking tasks count
+    end note
+  fork again
+    :Extract Metadata;
+    note right
+      - Task priority
+      - Assigned agent role
+      - Project phase
+    end note
+  end fork
+  :Merge Feature Vectors;
+}
+
+:Generate Embedding Vector;
+note right
+  Use LLM embedding API
+  (e.g., text-embedding-3-small)
+end note
+
+:Query Vector Database;
+note left
+  Find K=10 most similar
+  historical tasks with
+  cosine similarity > 0.75
+end note
+
+if (Similar Tasks Found?) then (yes)
+  :Retrieve Historical Data;
+  :<b>Input Features:</b>
+  - Task embeddings
+  - Complexity scores
+  - Domain features
+  - Dependency graph
+  
+  <b>Target Variable:</b>
+  - Actual completion time
+  - Actual cost;
+  
+  :Feed into ML Model;
+  note right
+    Model: Gradient Boosting Regressor
+    (XGBoost or LightGBM)
+    
+    Trained on historical data:
+    - Completed tasks (n > 1000)
+    - Actual vs estimated time
+    - Agent performance metrics
+  end note
+  
+  :Generate Prediction;
+  :Calculate Confidence Interval;
+  note right
+    Confidence based on:
+    - Similarity score
+    - Historical accuracy
+    - Data availability
+  end note
+else (no)
+  :Use Baseline Heuristics;
+  note right
+    Fallback to rule-based:
+    - Lines of code estimate × 0.5h
+    - Complexity factor [1-3]
+    - Default buffer 20%
+  end note
+  :Low Confidence Flag;
+endif
+
+:Apply Confidence Scoring;
+if (Confidence > 80%) then (yes)
+  :Mark as High Confidence;
+else (no)
+  :Flag for BA Review;
+endif
+
+partition "Validation & Adjustment" {
+  :Send to BA Agent;
+  :BA Agent Reviews Estimate;
+  if (BA Accepts Estimate?) then (yes)
+    :Approve Estimate;
+  else (no)
+    :BA Adjusts Estimate Manually;
+    :Record Adjustment Reason;
+  endif
+}
+
+:Store Final Estimate;
+:Attach to Task Record;
+
+partition "Feedback Loop - Continuous Learning" {
+  :Wait for Task Completion;
+  note right
+    This happens asynchronously
+    after task is marked DONE
+  end note
+  
+  :Collect Actual Metrics;
+  note right
+    - Actual time spent
+    - Actual cost
+    - Blockers encountered
+    - Agent feedback
+  end note
+  
+  :Calculate Estimation Error;
+  :Store Training Sample;
+  note left
+    Training record:
+    - Features (X)
+    - Actual result (y)
+    - Prediction error (residual)
+    - Context metadata
+  end note
+  
+  if (Training Set Size > Threshold?) then (yes)
+    :Trigger Model Retraining;
+    :Evaluate Model Performance;
+    if (New Model Better?) then (yes)
+      :Deploy Updated Model;
+      :Archive Previous Version;
+    else (no)
+      :Keep Current Model;
+      :Log Performance Metrics;
+    endif
+  else (accumulating)
+    :Add to Training Queue;
+  endif
+}
+
+:Return Estimate to PM Agent;
+stop
+
+@enduml

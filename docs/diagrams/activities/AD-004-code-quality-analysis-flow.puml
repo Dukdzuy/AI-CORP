@@ -1,0 +1,166 @@
+@startuml AD-004-code-quality-analysis-flow
+title Code Quality Analysis Flow - Activity Diagram
+'New Feature: Automated code quality gates with feedback loop
+
+start
+:DEV Agent Submits Code;
+note right
+  Trigger: PR created or
+  code pushed to review branch
+end note
+
+:QA Agent Receives Code;
+:Initialize Quality Report;
+:Set QA Status = IN_PROGRESS;
+
+partition "Parallel Quality Checks" {
+  fork
+    :Run Static Analysis;
+    partition "Linting & Style" {
+      :Execute ESLint/Prettier;
+      :Check Code Conventions;
+      :Verify Naming Standards;
+      :Count Style Violations;
+      if (Violations > Threshold?) then (yes)
+        :Mark: STYLE_FAILED;
+      else (no)
+        :Mark: STYLE_PASSED;
+      endif
+    }
+  fork again
+    :Run Type Checking;
+    partition "Type Safety" {
+      :Execute TypeScript Compiler;
+      :Check Type Annotations;
+      :Verify Interface Contracts;
+      :Detect Type Errors;
+      if (Type Errors Found?) then (yes)
+        :Mark: TYPE_FAILED;
+      else (no)
+        :Mark: TYPE_PASSED;
+      endif
+    }
+  fork again
+    :Run Security Scan;
+    partition "Security Analysis" {
+      :Execute SAST Tools;
+      :Check Dependency Vulnerabilities;
+      :Detect SQL Injection Risks;
+      :Check XSS Vulnerabilities;
+      :Scan for Hardcoded Secrets;
+      if (Critical Issues?) then (yes)
+        :Mark: SECURITY_FAILED;
+      else (no)
+        :Mark: SECURITY_PASSED;
+      endif
+    }
+  fork again
+    :Check Test Coverage;
+    partition "Test Metrics" {
+      :Run Jest/Vitest;
+      :Calculate Line Coverage;
+      :Calculate Branch Coverage;
+      :Check Critical Paths;
+      if (Coverage < 80%?) then (yes)
+        :Mark: COVERAGE_FAILED;
+      else (no)
+        :Mark: COVERAGE_PASSED;
+      endif
+    }
+  fork again
+    :Run Performance Profiling;
+    partition "Performance Analysis" {
+      :Execute Benchmark Suite;
+      :Measure Response Time;
+      :Check Memory Usage;
+      :Detect Memory Leaks;
+      :Analyze Complexity (Big-O);
+      if (Performance Degraded?) then (yes)
+        :Mark: PERF_FAILED;
+      else (no)
+        :Mark: PERF_PASSED;
+      endif
+    }
+  end fork
+}
+
+:Aggregate All Results;
+:Calculate Quality Score;
+note right
+  Quality Score Formula:
+  = (style×0.15 + type×0.20 
+    + security×0.30 + coverage×0.20 
+    + performance×0.15) × 100
+  
+  Weights reflect criticality
+end note
+
+:Generate Detailed Report;
+
+if (Quality Score >= 85?) then (yes)
+  :Quality Gate PASSED;
+  :Approve Code for Merge;
+  :Notify DEV Agent: SUCCESS;
+  :Update Task Status → DONE;
+  
+  partition "Post-Approval Actions" {
+    :Trigger CI/CD Pipeline;
+    :Merge to Main Branch;
+    :Deploy to Staging;
+    :Store Quality Metrics;
+  }
+  stop
+else (no)
+  :Quality Gate FAILED;
+  
+  partition "Categorize Failures" {
+    if (Critical Security Issue?) then (yes)
+      :Priority: CRITICAL;
+      :Block Merge Immediately;
+    elseif (Type Errors or Coverage < 60%?) then (yes)
+      :Priority: HIGH;
+      :Request Immediate Fix;
+    else (style/minor issues)
+      :Priority: MEDIUM;
+      :Suggest Improvements;
+    endif
+  }
+  
+  :Generate Feedback Report;
+  note right
+    Report includes:
+    - Failed checks details
+    - Line numbers with issues
+    - Suggested fixes
+    - Code examples
+    - Best practice links
+  end note
+  
+  :Send to DEV Agent;
+  :Update Task Status → IN_PROGRESS;
+  
+  |DEV Agent|
+  :Receive Feedback;
+  :Review Quality Report;
+  :Prioritize Fixes;
+  
+  while (Fixes Remaining?) is (yes)
+    :Fix One Issue;
+    :Run Local Tests;
+  endwhile (all fixed)
+  
+  :Commit Fixes;
+  :Push Updated Code;
+  
+  |QA Agent|
+  :Detect New Commit;
+  note left
+    Restart quality analysis
+    for updated code
+  end note
+  
+  :Re-run Quality Checks;
+  backward: Loop back to checks;
+endif
+
+@enduml

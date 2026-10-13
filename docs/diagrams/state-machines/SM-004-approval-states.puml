@@ -1,0 +1,222 @@
+@startuml SM-004-approval-states
+title Approval State Machine - State Transitions
+'Based on: apps/api/prisma/schema.prisma Approval.status
+'Requirement 17.7: Status can only transition from pending to approved or rejected
+'Implementation: apps/api/src/modules/approvals/approval.service.ts
+
+[*] --> PENDING : <b>createApprovalRequest()</b>\n[guard: workflowPaused]\naction: sendNotification()
+
+state PENDING {
+  [*] --> RequestCreated
+  RequestCreated --> NotificationSent
+  NotificationSent --> AwaitingDecision
+  AwaitingDecision --> CheckingTimeout
+  CheckingTimeout --> AwaitingDecision : [timeout not reached]
+  --
+  <b>Entry:</b> 
+  - Create approval record
+  - Send WebSocket notification
+  - Set requestedAt timestamp
+  - Pause workflow execution
+  
+  <b>Internal:</b>
+  - Check timeout every 5 minutes
+  - Reminder notifications every 30 min
+  
+  <b>Exit:</b>
+  - Record respondedAt timestamp
+  - Resume workflow execution
+  
+  <b>Invariant:</b>
+  - respondedAt == null
+  - comment == null
+  - Workflow status = PAUSED
+  
+  <b>Timeout Rule:</b>
+  - Auto-reject after 2 hours
+  - Configurable per approval type
+}
+
+state APPROVED {
+  [*] --> RecordingDecision
+  RecordingDecision --> ResumingWorkflow
+  ResumingWorkflow --> TransitioningToNextNode
+  --
+  <b>Entry:</b>
+  - Set status = "approved"
+  - Record respondedAt
+  - Log approval comment
+  - Resume workflow with "onApprove" edge
+  
+  <b>Exit:</b>
+  - Workflow continues execution
+  - Notify all stakeholders
+  
+  <b>Business Impact:</b>
+  - Deployment proceeds
+  - Budget released
+  - Task marked complete
+  - Agent continues work
+  
+  <b>Audit:</b>
+  - Who approved
+  - When approved
+  - Reason (comment)
+}
+
+state REJECTED {
+  [*] --> RecordingRejection
+  RecordingRejection --> InitiatingRollback
+  InitiatingRollback --> NotifyingAgents
+  --
+  <b>Entry:</b>
+  - Set status = "rejected"
+  - Record respondedAt
+  - Log rejection reason
+  - Trigger rollback with "onReject" edge
+  
+  <b>Exit:</b>
+  - Workflow aborts or rolls back
+  - Resources released
+  
+  <b>Compensation Actions:</b>
+  - Undo partial changes
+  - Restore previous state
+  - Cancel pending tasks
+  - Notify failure
+  
+  <b>Audit:</b>
+  - Who rejected
+  - When rejected
+  - Reason (required)
+}
+
+PENDING --> APPROVED : <b>boardMemberApproves()</b>\n[guard: user.role == 'board_member']\naction: resumeWorkflow('onApprove')
+note on link
+  <b>Requirement 17.7:</b>
+  Only valid transition
+  from PENDING
+end note
+
+PENDING --> REJECTED : <b>boardMemberRejects()</b>\n[guard: user.role == 'board_member']\naction: rollbackWorkflow('onReject')
+note on link
+  <b>Requirement 17.7:</b>
+  Only valid transition
+  from PENDING
+end note
+
+PENDING --> REJECTED : <b>autoRejectOnTimeout()</b>\n[guard: elapsed > 2 hours]\naction: timeoutRollback()
+note on link
+  <b>Automatic Timeout:</b>
+  Prevents workflow hang
+  if no response received
+end note
+
+APPROVED --> [*] : <b>workflowResumes()</b>\naction: notifySuccess()
+
+REJECTED --> [*] : <b>workflowAborts()</b>\naction: notifyFailure()
+
+note right of PENDING
+  <b>Notification Channels:</b>
+  1. WebSocket (real-time)
+  2. Email (after 15 min)
+  3. SMS (after 1 hour)
+  
+  <b>Request Data Contains:</b>
+  - approvalType: deployment | budget | design
+  - context: relevant task/workflow info
+  - requester: which agent requested
+  - urgency: low | medium | high
+  
+  <b>SOLID - Interface Segregation:</b>
+  - Different approval types
+  - Specific approval interfaces
+  
+  <b>Pattern - Chain of Responsibility:</b>
+  - Escalation to senior board member
+  - If timeout approaching
+end note
+
+note right of APPROVED
+  <b>Post-Approval Actions:</b>
+  
+  <u>Deployment Approval:</u>
+  - Trigger CI/CD pipeline
+  - Deploy to production
+  - Update deployment history
+  
+  <u>Budget Approval:</u>
+  - Release funds
+  - Update cost tracking
+  - Enable resource allocation
+  
+  <u>Design Approval:</u>
+  - Proceed with implementation
+  - Update project timeline
+  - Notify development team
+  
+  <b>Metrics Tracked:</b>
+  - Approval latency (requestedAt → respondedAt)
+  - Approval rate by type
+  - Average response time per board member
+end note
+
+note left of REJECTED
+  <b>Rejection Handling:</b>
+  
+  <u>Mandatory Comment:</u>
+  - Must provide reason
+  - Helps agents learn
+  - Improves future requests
+  
+  <u>Rollback Strategies:</u>
+  1. Full rollback: undo all changes
+  2. Partial rollback: keep safe changes
+  3. Forward fix: apply corrections
+  
+  <u>Agent Learning:</u>
+  - Rejection stored in memory
+  - Similar requests adjusted
+  - Pattern recognition for future
+  
+  <b>Pattern - Memento:</b>
+  - Saves state before risky operations
+  - Enables safe rollback
+  
+  <b>Pattern - Command:</b>
+  - Approval as command object
+  - Supports undo/redo
+end note
+
+note bottom
+  <b>State Machine Invariants:</b>
+  
+  1. <b>Single Transition Rule (Req 17.7):</b>
+     - PENDING can only go to APPROVED or REJECTED
+     - No other transitions allowed
+     - Enforced in ApprovalService.handleApprovalResponse()
+  
+  2. <b>Timestamp Ordering:</b>
+     - requestedAt < respondedAt (always)
+     - Validated in application layer
+  
+  3. <b>Idempotency:</b>
+     - Duplicate approval requests prevented
+     - One pending approval per workflow step
+  
+  4. <b>Authorization:</b>
+     - Only board_member role can approve/reject
+     - Checked before state transition
+  
+  5. <b>Atomicity:</b>
+     - Approval response + workflow resume = atomic transaction
+     - Prevents inconsistent state
+  
+  <b>Design Patterns Applied:</b>
+  - <b>State Pattern:</b> Encapsulates approval states
+  - <b>Observer Pattern:</b> Notifies workflow on decision
+  - <b>Strategy Pattern:</b> Different approval strategies per type
+  - <b>Command Pattern:</b> Approval actions as commands
+end note
+
+@enduml
