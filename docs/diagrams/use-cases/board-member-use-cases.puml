@@ -1,0 +1,203 @@
+@startuml Board Member Use Case Diagram
+!theme plain
+title Board Member Use Cases - Detailed View (UML 2.5)
+
+actor "Board Member" as BoardMember #lightblue
+actor "Workflow Engine\n(System)" as System #lightgray
+
+rectangle "Board Member Capabilities" {
+  
+  package "Authentication & Access" #E6F2FF {
+    usecase "UC-001\nUser Authentication" as UC001
+  }
+  
+  package "Project Management" #D4E9F7 {
+    usecase "UC-002\nCreate Project" as UC002
+    usecase "UC-007\nMonitor Workflow\nProgress" as UC007
+    usecase "UC-022\nGenerate Project\nReport" as UC022
+  }
+  
+  package "Task Management" #C2DFF2 {
+    usecase "UC-020\nManage Task Kanban" as UC020
+    usecase "UC-024\nEstimate Task\nComplexity" as UC024
+  }
+  
+  package "Cost & Budget Control" #B0D5ED {
+    usecase "UC-008\nView Cost Dashboard" as UC008
+    usecase "UC-011\nSet Budget Alert\nThreshold" as UC011
+  }
+  
+  package "Workflow Control" #9ECBE8 {
+    usecase "UC-004\nPause/Resume\nWorkflow" as UC004
+    usecase "UC-005\nApprove Workflow\nStep" as UC005
+    usecase "UC-006\nReject Workflow\nStep" as UC006
+    usecase "UC-019\nRequest Workflow\nRollback" as UC019
+  }
+  
+  package "Collaboration & Monitoring" #8CC1E3 {
+    usecase "UC-021\nView Agent Meeting\nRoom (Virtual Office)" as UC021
+  }
+  
+  package "Supporting Use Cases" #CCCCCC {
+    usecase "UC-004-SYS\nExecute Project\nWorkflow" as UC004SYS
+    usecase "UC-018\nRoute LLM Request" as UC018
+    usecase "UC-017\nManage Agent Memory" as UC017
+  }
+}
+
+' ====== PRIMARY ASSOCIATIONS ======
+BoardMember --> UC001
+BoardMember --> UC002
+BoardMember --> UC007
+BoardMember --> UC008
+BoardMember --> UC020
+BoardMember --> UC021
+BoardMember --> UC022
+
+BoardMember --> UC004
+BoardMember --> UC005
+BoardMember --> UC006
+BoardMember --> UC019
+BoardMember --> UC011
+
+' ====== SYSTEM ACTOR ASSOCIATIONS ======
+System --> UC004SYS
+System --> UC017
+System --> UC018
+
+' ====== INCLUDE RELATIONSHIPS ======
+UC002 .> UC004SYS : <<include>>\nAuto-starts workflow
+UC002 .> UC001 : <<include>>\nRequires authentication
+UC007 .> UC001 : <<include>>\nRequires authentication
+UC008 .> UC001 : <<include>>\nRequires authentication
+UC020 .> UC001 : <<include>>\nRequires authentication
+
+' UC-005 includes workflow resume
+UC005 .> UC004SYS : <<include>>\nResumes workflow after approval
+
+' ====== EXTEND RELATIONSHIPS ======
+UC006 .> UC005 : <<extend>>\nRejection is alternative to approval
+
+' Alternative flow: rollback extends workflow pause
+UC019 .> UC004 : <<extend>>\nRollback available when paused
+
+' Budget alert extends cost monitoring
+UC011 .> UC008 : <<extend>>\nAlert threshold is optional feature
+
+' ====== DEPENDENCY RELATIONSHIPS ======
+UC004SYS ..> UC018 : <<uses>>\nAgents call LLM
+UC004SYS ..> UC017 : <<uses>>\nAgents load/save memory
+
+' ====== NOTES ======
+note right of UC002
+  **Main Flow:**
+  1. Enter project details
+     (name, goal, description, budget)
+  2. System validates input
+  3. Project created with status='active'
+  4. CEO Agent auto-starts milestone planning
+  
+  **Pre-condition:**
+  User authenticated with board_member role
+  
+  **Post-condition:**
+  WorkflowRun created, CEO Agent executing
+end note
+
+note right of UC005
+  **Main Flow:**
+  1. System notifies via WebSocket
+  2. Board Member reviews approval data
+  3. Board Member approves (or rejects)
+  4. Workflow resumes via "onApprove" edge
+  
+  **Pre-condition:**
+  Workflow paused at human_approval node
+  Approval.status = 'pending'
+  
+  **Post-condition:**
+  Approval.status = 'approved'
+  Workflow continues to next node
+  
+  **State Machine Rule (Req 17.7):**
+  pending → approved (only valid transition)
+end note
+
+note bottom of UC008
+  **Displayed Metrics:**
+  - Total cost vs. budget (%)
+  - Cost by agent role (pie chart)
+  - Cost by LLM model (bar chart)
+  - Cost trend over time (line chart)
+  - Top 10 most expensive API calls
+  
+  **Data Source:**
+  ApiUsageLog table aggregations
+end note
+
+note top of UC020
+  **Kanban Columns:**
+  TODO → IN_PROGRESS → REVIEW → DONE
+  
+  **Valid Transitions (Req 17):**
+  - todo → in_progress
+  - in_progress → review
+  - review → done (QA approved)
+  - review → todo (QA rejected)
+  
+  **Invalid Transitions:**
+  - done → todo (rejected by system)
+  - todo → review (rejected by system)
+end note
+
+note left of UC021
+  **Virtual Office Features:**
+  - Real-time agent messages
+  - Agent avatars with status
+  - Thinking bubbles during LLM calls
+  - Action notifications (tool execution)
+  - Chat history (last 100 messages)
+  
+  **Purpose:**
+  Transparency into agent collaboration
+  and decision-making process
+end note
+
+note bottom of UC004
+  **Workflow Control Actions:**
+  - Pause: Save state, stop at node boundary
+  - Resume: Restore state, continue execution
+  
+  **Use Cases:**
+  - Pause during budget review
+  - Pause before critical deployment
+  - Resume after stakeholder approval
+end note
+
+note top of UC019
+  **Rollback Process:**
+  1. Board Member selects target checkpoint
+  2. System validates checkpoint is valid
+  3. System creates WorkflowSnapshot (memento)
+  4. System restores context to checkpoint state
+  5. System marks subsequent steps as 'skipped'
+  6. System invokes rollback handlers
+  7. Workflow resumes from checkpoint
+  
+  **Memento Pattern:**
+  WorkflowSnapshot captures/restores state
+end note
+
+legend bottom
+  |= Color |= Package Category |
+  | #E6F2FF to #8CC1E3 | Board Member capabilities (gradient) |
+  | #CCCCCC | System-level supporting use cases |
+  
+  |= Relationship |= Meaning |
+  | <<include>> | Required sub-use case (always executed) |
+  | <<extend>> | Optional extension (conditional) |
+  | <<uses>> | External dependency |
+  | --- (dashed) | Association between actor and use case |
+endlegend
+
+@enduml

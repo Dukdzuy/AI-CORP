@@ -1,0 +1,192 @@
+@startuml Overall System Use Case Diagram
+!theme plain
+title AI-CORP Multi-Agent Platform - Overall Use Case Diagram (UML 2.5)
+
+' Actors - Human Users
+actor "Board Member" as BoardMember #lightblue
+actor "Admin" as Admin #lightblue
+
+' Actors - AI Agents
+actor "CEO Agent" as CEO #lightgreen
+actor "PM Agent" as PM #lightgreen
+actor "DEV Agent" as DEV #lightgreen
+actor "QA Agent" as QA #lightgreen
+actor "Marketing Agent" as Marketing #lightgreen
+actor "BA Agent" as BA #orange
+actor "Architect Agent" as Architect #orange
+actor "DevOps Agent" as DevOps #orange
+
+' Actor - System/External
+actor "System\n(Internal)" as System #lightgray
+actor "LLM Gateway\n(External)" as LLM #lightyellow
+actor "Docker Sandbox\n(External)" as Docker #lightyellow
+
+' Use Case Packages
+rectangle "AI-CORP Platform" {
+  
+  package "Project Management" #DDFFDD {
+    usecase "UC-001\nUser Authentication" as UC001
+    usecase "UC-002\nCreate Project" as UC002
+    usecase "UC-007\nMonitor Workflow\nProgress" as UC007
+    usecase "UC-008\nView Cost\nDashboard" as UC008
+    usecase "UC-020\nManage Task\nKanban" as UC020
+    usecase "UC-022\nGenerate Project\nReport" as UC022
+  }
+  
+  package "Workflow & Approval" #FFE6CC {
+    usecase "UC-004\nExecute Project\nWorkflow" as UC004
+    usecase "UC-005\nApprove Workflow\nStep" as UC005
+    usecase "UC-006\nReject Workflow\nStep" as UC006
+    usecase "UC-019\nHandle Workflow\nRollback" as UC019
+  }
+  
+  package "Agent Configuration" #E6E6FF {
+    usecase "UC-003\nConfigure Agent\nModel Settings" as UC003
+    usecase "UC-025\nMonitor System\nHealth" as UC025
+  }
+  
+  package "Multi-Agent Collaboration" #FFFFCC {
+    usecase "UC-015\nCoordinate Multi-Agent\nWorkflow" as UC015
+    usecase "UC-009\nAnalyze Requirements\n(BA Agent)" as UC009
+    usecase "UC-010\nDesign System\nArchitecture\n(Architect)" as UC010
+    usecase "UC-011\nPlan Development\nSprint (PM)" as UC011
+    usecase "UC-012\nExecute Development\nTask (DEV)" as UC012
+    usecase "UC-013\nExecute Code Review\n(QA)" as UC013
+    usecase "UC-014\nCreate Marketing\nStrategy" as UC014
+    usecase "UC-016\nDeploy Application\n(DevOps)" as UC016
+    usecase "UC-023\nPerform Code Quality\nAnalysis (QA)" as UC023
+    usecase "UC-024\nEstimate Task\nComplexity (BA/PM)" as UC024
+  }
+  
+  package "Agent Communication" #FFE6F0 {
+    usecase "UC-021\nView Agent\nMeeting Room" as UC021
+  }
+  
+  package "System Services" #F0F0F0 {
+    usecase "UC-017\nManage Agent\nMemory" as UC017
+    usecase "UC-018\nRoute LLM\nRequest" as UC018
+    usecase "UC-028\nExecute Tool in\nSandbox" as UC028
+  }
+}
+
+' ====== ASSOCIATIONS - Board Member ======
+BoardMember --> UC001
+BoardMember --> UC002
+BoardMember --> UC005
+BoardMember --> UC006
+BoardMember --> UC007
+BoardMember --> UC008
+BoardMember --> UC020
+BoardMember --> UC021
+BoardMember --> UC022
+
+' ====== ASSOCIATIONS - Admin ======
+Admin --> UC001
+Admin --> UC003
+Admin --> UC025
+
+' ====== ASSOCIATIONS - CEO Agent ======
+CEO --> UC015
+
+' ====== ASSOCIATIONS - BA Agent ======
+BA --> UC009
+BA --> UC024
+
+' ====== ASSOCIATIONS - Architect Agent ======
+Architect --> UC010
+
+' ====== ASSOCIATIONS - PM Agent ======
+PM --> UC011
+PM --> UC024
+
+' ====== ASSOCIATIONS - DEV Agent ======
+DEV --> UC012
+
+' ====== ASSOCIATIONS - QA Agent ======
+QA --> UC013
+QA --> UC023
+
+' ====== ASSOCIATIONS - Marketing Agent ======
+Marketing --> UC014
+
+' ====== ASSOCIATIONS - DevOps Agent ======
+DevOps --> UC016
+
+' ====== ASSOCIATIONS - System ======
+System --> UC004
+System --> UC017
+System --> UC018
+System --> UC019
+
+' ====== ASSOCIATIONS - External Systems ======
+LLM <-- UC009 : <<uses>>
+LLM <-- UC010 : <<uses>>
+LLM <-- UC011 : <<uses>>
+LLM <-- UC012 : <<uses>>
+LLM <-- UC013 : <<uses>>
+LLM <-- UC014 : <<uses>>
+LLM <-- UC015 : <<uses>>
+LLM <-- UC016 : <<uses>>
+LLM <-- UC018 : <<uses>>
+Docker <-- UC028 : <<uses>>
+
+' ====== INCLUDE RELATIONSHIPS ======
+UC002 .> UC004 : <<include>>
+UC004 .> UC005 : <<include>>
+UC012 .> UC028 : <<include>>
+UC016 .> UC028 : <<include>>
+
+' ====== EXTEND RELATIONSHIPS ======
+UC006 .> UC005 : <<extend>>
+UC023 .> UC013 : <<extend>>
+
+' ====== NOTES ======
+note right of UC009
+  NEW AGENT
+  Generates FR/NFR lists,
+  use case outlines
+end note
+
+note right of UC010
+  NEW AGENT
+  Creates PlantUML diagrams,
+  Architecture Decision Records
+end note
+
+note right of UC016
+  NEW AGENT
+  Automates CI/CD,
+  deployment to staging/production
+end note
+
+note bottom of UC004
+  Core workflow orchestration:
+  - DAG execution
+  - Parallel branches
+  - Retry with backoff
+  - State persistence
+end note
+
+note top of UC018
+  LLM Gateway:
+  - 9Router integration
+  - Circuit breaker
+  - Fallback providers
+  - Token logging
+end note
+
+legend right
+  |= Symbol |= Meaning |
+  | #lightblue | Human User |
+  | #lightgreen | Existing AI Agent |
+  | #orange | New AI Agent (BA, Architect, DevOps) |
+  | #lightgray | Internal System Process |
+  | #lightyellow | External System |
+  
+  **Use Case Relationships:**
+  <<include>> = Required sub-use case
+  <<extend>> = Optional extension
+  <<uses>> = External dependency
+endlegend
+
+@enduml

@@ -1,0 +1,297 @@
+@startuml Admin Use Cases
+!theme plain
+title Admin Use Cases - System Administration (UML 2.5)
+
+actor "Admin" as Admin #FFB6C1
+actor "System\n(Background Jobs)" as System #D3D3D3
+
+rectangle "Administrative Capabilities" {
+  
+  package "Authentication & Access" #FFF0F5 {
+    usecase "UC-001\nUser Authentication" as UC001
+  }
+  
+  package "Agent Configuration" #FFE4E1 {
+    usecase "UC-003\nConfigure Agent\nModel Settings" as UC003
+    usecase "UC-003-1\nUpdate LLM Provider" as UC003_1
+    usecase "UC-003-2\nUpdate Model Name" as UC003_2
+    usecase "UC-003-3\nSet Fallback Provider" as UC003_3
+  }
+  
+  package "User Management (RBAC)" #FFD8E1 {
+    usecase "UC-008\nManage User Roles" as UC008
+    usecase "UC-008-1\nAssign Role to User" as UC008_1
+    usecase "UC-008-2\nRevoke User Access" as UC008_2
+  }
+  
+  package "System Monitoring" #FFCCD5 {
+    usecase "UC-025\nMonitor System\nHealth" as UC025
+    usecase "UC-025-1\nView Database Status" as UC025_1
+    usecase "UC-025-2\nView Redis Queue\nStatus" as UC025_2
+    usecase "UC-025-3\nView LLM Gateway\nStatus" as UC025_3
+    usecase "UC-025-4\nView Docker Sandbox\nStatus" as UC025_4
+  }
+  
+  package "Performance Monitoring" #FFC0CB {
+    usecase "UC-007\nView Agent\nPerformance Metrics" as UC007
+    usecase "UC-007-1\nView Token Usage\nby Agent" as UC007_1
+    usecase "UC-007-2\nView Average\nResponse Time" as UC007_2
+    usecase "UC-007-3\nView Success Rate" as UC007_3
+  }
+  
+  package "Audit & Logging" #FFB4C8 {
+    usecase "UC-026\nView Audit Logs" as UC026
+    usecase "UC-026-1\nView API Usage Logs" as UC026_1
+    usecase "UC-026-2\nView Security Events" as UC026_2
+  }
+  
+  package "System Maintenance" #FFA8BC {
+    usecase "UC-027\nPerform System\nMaintenance" as UC027
+    usecase "UC-027-1\nPrune Old Logs" as UC027_1
+    usecase "UC-027-2\nBackup Database" as UC027_2
+    usecase "UC-027-3\nRestart Failed\nWorkflows" as UC027_3
+  }
+}
+
+' ====== ADMIN ASSOCIATIONS ======
+Admin --> UC001
+Admin --> UC003
+Admin --> UC008
+Admin --> UC025
+Admin --> UC007
+Admin --> UC026
+Admin --> UC027
+
+' ====== SYSTEM BACKGROUND JOBS ======
+System --> UC027_1 : <<scheduled>>\nDaily at 2 AM
+System --> UC027_2 : <<scheduled>>\nWeekly
+
+' ====== INCLUDE RELATIONSHIPS ======
+' All admin actions require authentication
+UC003 .> UC001 : <<include>>
+UC008 .> UC001 : <<include>>
+UC025 .> UC001 : <<include>>
+UC007 .> UC001 : <<include>>
+UC026 .> UC001 : <<include>>
+UC027 .> UC001 : <<include>>
+
+' Agent configuration sub-use cases
+UC003 .> UC003_1 : <<include>>
+UC003 .> UC003_2 : <<include>>
+UC003 .> UC003_3 : <<include>>
+
+' User management sub-use cases
+UC008 .> UC008_1 : <<include>>
+
+' System health monitoring sub-use cases
+UC025 .> UC025_1 : <<include>>
+UC025 .> UC025_2 : <<include>>
+UC025 .> UC025_3 : <<include>>
+UC025 .> UC025_4 : <<include>>
+
+' Performance metrics sub-use cases
+UC007 .> UC007_1 : <<include>>
+UC007 .> UC007_2 : <<include>>
+UC007 .> UC007_3 : <<include>>
+
+' Audit logs sub-use cases
+UC026 .> UC026_1 : <<include>>
+
+' ====== EXTEND RELATIONSHIPS ======
+UC008_2 .> UC008 : <<extend>>\nRevoke is optional
+UC026_2 .> UC026 : <<extend>>\nSecurity events filter
+UC027_2 .> UC027 : <<extend>>\nBackup is optional
+UC027_3 .> UC027 : <<extend>>\nWorkflow restart is recovery action
+
+' ====== NOTES ======
+note right of UC003
+  **Agent Model Configuration:**
+  
+  Admin can configure LLM model for each
+  agent role (CEO, PM, DEV, QA, MARKETING,
+  BA, ARCHITECT, DEVOPS)
+  
+  **Configuration Fields:**
+  - Provider: opencode, anthropic, openai
+  - Model: e.g., "claude-3-5-sonnet-20241022"
+  - Fallback Provider: optional
+  
+  **Effect:**
+  Changes take effect immediately on next
+  LLM call (no agent restart required)
+  
+  **Stored in:**
+  Agent.modelRouteConfig (JSON field)
+end note
+
+note bottom of UC008
+  **RBAC Implementation:**
+  
+  **Roles:**
+  - admin: Full system access
+  - board_member: Project management,
+    workflow approval, cost monitoring
+  
+  **Use Cases:**
+  1. Admin assigns "admin" role to user
+     → User gains access to UC-003, UC-025, UC-008
+  2. Admin assigns "board_member" role
+     → User gains access to UC-002, UC-005, UC-008
+  
+  **Enforcement:**
+  @Roles() decorator on controllers
+  RolesGuard checks JWT token role claim
+end note
+
+note right of UC025
+  **Health Check Endpoints:**
+  
+  GET /health/db
+  → Returns { status: "connected" | "disconnected",
+              latency: 12ms }
+  
+  GET /health/redis
+  → Returns { status: "connected" | "disconnected",
+              queueLength: 5, workers: 3 }
+  
+  GET /health/llm
+  → Returns { status: "online" | "offline" | "degraded",
+              circuitBreakerState: "closed" | "open",
+              consecutiveFailures: 0 }
+  
+  GET /health/sandbox
+  → Returns { status: "available" | "unavailable",
+              dockerVersion: "20.10.8" }
+  
+  **Alert Thresholds:**
+  - Database latency > 500ms: WARNING
+  - Redis queue length > 100: WARNING
+  - LLM circuit breaker open: CRITICAL
+  - Docker unavailable: CRITICAL
+  
+  **Alert Channels:**
+  Email, Slack webhook (configurable)
+end note
+
+note bottom of UC007
+  **Performance Metrics Dashboard:**
+  
+  **Metrics per Agent Role:**
+  - Total LLM calls
+  - Total tokens used (prompt + completion)
+  - Average response time (ms)
+  - Success rate (%)
+  - Fallback trigger rate (%)
+  - Cost per agent (USD)
+  
+  **Aggregation Period:**
+  Last 24 hours, 7 days, 30 days
+  
+  **Visualization:**
+  - Line chart: Response time trend
+  - Bar chart: Token usage by agent
+  - Pie chart: Cost distribution
+  - Table: Top 10 slowest LLM calls
+  
+  **Data Source:**
+  ApiUsageLog table with Prisma aggregations
+end note
+
+note top of UC026
+  **Audit Log Categories:**
+  
+  1. **API Usage Logs** (UC-026-1)
+     - Every LLM call with token counts
+     - Model used, provider, response time
+     - Cost calculation
+     - Stored in ApiUsageLog table
+  
+  2. **Security Events** (UC-026-2)
+     - Failed login attempts
+     - Unauthorized API access (403)
+     - Prompt injection detected
+     - Sandbox violations
+     - Stored in SecurityEvent table (planned)
+  
+  3. **User Actions**
+     - Project created/deleted
+     - Approval approved/rejected
+     - Agent config changed
+     - Stored via audit interceptor
+  
+  **Retention Policy:**
+  - API usage: 90 days
+  - Security events: 365 days
+  - User actions: 365 days
+end note
+
+note right of UC027
+  **System Maintenance Tasks:**
+  
+  1. **Prune Old Logs** (UC-027-1)
+     - Delete ApiUsageLog records > 90 days
+     - Delete AgentMessage records > 30 days
+     - Runs daily at 2 AM via cron job
+  
+  2. **Backup Database** (UC-027-2)
+     - pg_dump full backup
+     - Compress and upload to S3
+     - Runs weekly on Sunday 3 AM
+     - Retention: 4 weekly + 12 monthly backups
+  
+  3. **Restart Failed Workflows** (UC-027-3)
+     - Query WorkflowRun.status = 'failed'
+     - Analyze failure reason
+     - If transient error (DB timeout, LLM outage):
+       Reset to last checkpoint, retry
+     - If permanent error: Mark as cancelled
+     - Manual trigger by admin
+  
+  4. **Vacuum Database**
+     - VACUUM ANALYZE on large tables
+     - Reclaim disk space, update statistics
+     - Runs monthly
+end note
+
+note bottom of UC025_3
+  **Circuit Breaker State Machine:**
+  
+  **States:**
+  - CLOSED: Normal operation, requests pass through
+  - OPEN: Provider failed 3x, all requests use fallback
+  - HALF_OPEN: Testing if provider recovered
+  
+  **Transitions:**
+  - CLOSED → OPEN: After 3 consecutive failures within 5 min
+  - OPEN → HALF_OPEN: After 60 seconds
+  - HALF_OPEN → CLOSED: If test request succeeds
+  - HALF_OPEN → OPEN: If test request fails
+  
+  **Stored in:**
+  LLMGatewayStatus table
+  
+  **Admin Action:**
+  Admin can manually reset circuit breaker
+  (e.g., after provider maintenance window)
+end note
+
+legend bottom
+  |= Color |= Package Category |
+  | #FFF0F5 to #FFA8BC | Admin capabilities (gradient) |
+  | #D3D3D3 | System background jobs |
+  
+  |= Relationship |= Meaning |
+  | <<include>> | Required sub-use case |
+  | <<extend>> | Optional extension |
+  | <<scheduled>> | Automated cron job |
+  
+  **Admin Privileges:**
+  Admin role has access to ALL use cases in the system
+  (board_member use cases + admin-specific use cases)
+  
+  **Security Note:**
+  Admin role is assigned during user registration
+  for first user (auto-admin) or manually by existing admin
+endlegend
+
+@enduml

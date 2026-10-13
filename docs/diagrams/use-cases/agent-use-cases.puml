@@ -1,0 +1,315 @@
+@startuml Agent Use Cases - Multi-Agent Collaboration
+!theme plain
+title AI Agent Use Cases - Detailed Multi-Agent Workflow (UML 2.5)
+
+' ====== AI AGENT ACTORS ======
+actor "CEO Agent" as CEO #90EE90
+actor "BA Agent" as BA #FFA500
+actor "Architect Agent" as Architect #FFA500
+actor "PM Agent" as PM #90EE90
+actor "DEV Agent" as DEV #90EE90
+actor "QA Agent" as QA #90EE90
+actor "Marketing Agent" as Marketing #90EE90
+actor "DevOps Agent" as DevOps #FFA500
+
+' ====== EXTERNAL ACTORS ======
+actor "LLM Gateway" as LLM #FFD700
+actor "Docker Sandbox" as Docker #D3D3D3
+
+rectangle "Multi-Agent Collaboration Platform" {
+  
+  package "Strategic Planning Phase" #E8F5E9 {
+    usecase "UC-015\nCoordinate Multi-Agent\nWorkflow" as UC015
+    usecase "UC-016-CEO\nPlan Milestones" as UC016CEO
+  }
+  
+  package "Requirements & Architecture Phase" #FFF3E0 {
+    usecase "UC-009\nAnalyze Requirements" as UC009
+    usecase "UC-010\nDesign System\nArchitecture" as UC010
+    usecase "UC-024\nEstimate Task\nComplexity" as UC024
+  }
+  
+  package "Development Planning Phase" #E3F2FD {
+    usecase "UC-011\nPlan Development\nSprint" as UC011
+  }
+  
+  package "Implementation Phase" #F3E5F5 {
+    usecase "UC-012\nExecute Development\nTask" as UC012
+    usecase "UC-028\nExecute Tool in\nSandbox" as UC028
+  }
+  
+  package "Quality Assurance Phase" #FCE4EC {
+    usecase "UC-013\nExecute Code Review" as UC013
+    usecase "UC-023\nPerform Code Quality\nAnalysis" as UC023
+  }
+  
+  package "Deployment Phase" #FFF9C4 {
+    usecase "UC-016\nDeploy Application" as UC016
+  }
+  
+  package "Marketing Phase" #E1F5FE {
+    usecase "UC-014\nCreate Marketing\nStrategy" as UC014
+  }
+  
+  package "Agent Infrastructure" #F5F5F5 {
+    usecase "UC-017\nManage Agent\nMemory" as UC017
+    usecase "UC-018\nRoute LLM Request" as UC018
+    usecase "UC-004\nAgent Think-Act\nCycle" as UC004
+  }
+}
+
+' ====== AGENT ASSOCIATIONS ======
+CEO --> UC015
+CEO --> UC016CEO
+
+BA --> UC009
+BA --> UC024
+
+Architect --> UC010
+
+PM --> UC011
+PM --> UC024
+
+DEV --> UC012
+
+QA --> UC013
+QA --> UC023
+
+DevOps --> UC016
+
+Marketing --> UC014
+
+' ====== EXTERNAL SYSTEM USAGE ======
+UC009 ..> LLM : <<uses>>\nLLM reasoning
+UC010 ..> LLM : <<uses>>\nArchitecture generation
+UC011 ..> LLM : <<uses>>\nTask breakdown
+UC012 ..> LLM : <<uses>>\nCode generation
+UC012 ..> Docker : <<uses>>\nSandbox execution
+UC013 ..> LLM : <<uses>>\nCode review
+UC014 ..> LLM : <<uses>>\nMarketing copy
+UC015 ..> LLM : <<uses>>\nStrategy coordination
+UC016 ..> LLM : <<uses>>\nDeployment script generation
+UC016 ..> Docker : <<uses>>\nDeployment execution
+UC016CEO ..> LLM : <<uses>>\nMilestone planning
+
+' ====== INCLUDE RELATIONSHIPS ======
+UC009 .> UC004 : <<include>>\nThink-Act cycle
+UC010 .> UC004 : <<include>>
+UC011 .> UC004 : <<include>>
+UC012 .> UC004 : <<include>>
+UC012 .> UC028 : <<include>>\nSandbox required
+UC013 .> UC004 : <<include>>
+UC014 .> UC004 : <<include>>
+UC015 .> UC004 : <<include>>
+UC016 .> UC004 : <<include>>
+UC016 .> UC028 : <<include>>\nSandbox required
+UC016CEO .> UC004 : <<include>>
+
+' All agents use memory and LLM routing
+UC004 .> UC017 : <<include>>\nLoad/save memory
+UC004 .> UC018 : <<include>>\nLLM calls
+
+' ====== EXTEND RELATIONSHIPS ======
+UC023 .> UC013 : <<extend>>\nDeep quality analysis
+
+' ====== DELEGATION CHAIN (DEPENDENCIES) ======
+UC016CEO ..> UC009 : <<delegates>>\n1. CEO → BA
+UC009 ..> UC010 : <<delegates>>\n2. BA → Architect
+UC010 ..> UC011 : <<delegates>>\n3. Architect → PM
+UC011 ..> UC012 : <<delegates>>\n4. PM → DEV
+UC012 ..> UC013 : <<delegates>>\n5. DEV → QA
+UC013 ..> UC016 : <<delegates>>\n6. QA → DevOps
+UC016 ..> UC014 : <<delegates>>\n7. DevOps → Marketing
+
+' ====== NOTES ======
+note right of UC015
+  **CEO Orchestration:**
+  - Analyzes project goal
+  - Determines workflow sequence
+  - Monitors overall progress
+  - Handles failures/escalations
+  - Provides strategic oversight
+  
+  **Coordination Pattern:**
+  CEO → BA → Architect → PM → DEV → QA → DevOps → Marketing
+end note
+
+note right of UC009
+  **BA Agent Output:**
+  - Functional Requirements (FR-001, FR-002, ...)
+  - Non-Functional Requirements (NFR-001, ...)
+  - Use Case Outlines
+  - Acceptance Criteria
+  - Requirements Document (Markdown)
+  
+  **Think Phase:**
+  Loads semantic memories from
+  "requirements_patterns" namespace
+  
+  **Act Phase:**
+  Calls LLM with structured output parsing
+  Generates IEEE 830 format document
+end note
+
+note bottom of UC010
+  **Architect Agent Output:**
+  - System Architecture Design
+  - Component Diagram (PlantUML)
+  - Technology Stack Recommendation
+  - Architecture Decision Record (ADR)
+  
+  **Think Phase:**
+  Loads memories from "architecture_patterns"
+  and "technology_decisions"
+  
+  **Act Phase:**
+  Validates PlantUML syntax
+  Generates ADR with rationale
+end note
+
+note right of UC011
+  **PM Agent Responsibilities:**
+  - Break down milestones into tasks
+  - Prioritize backlog (MoSCoW method)
+  - Estimate task effort (hours or story points)
+  - Assign tasks to sprints
+  
+  **Task Estimation:**
+  Uses ML model (UC-024) when ≥50
+  historical tasks exist, else heuristic
+end note
+
+note bottom of UC012
+  **DEV Agent Workflow:**
+  1. Load task description + architecture
+  2. Load coding conventions from memory
+  3. Call LLM for code + unit tests
+  4. Write files to temp directory
+  5. Execute tests in Docker sandbox
+  6. Parse test results
+  7. If tests pass: Task → "review"
+  8. If tests fail: Retry (up to 2 times)
+  
+  **Sandbox Execution:**
+  Docker container: node:18-alpine
+  Resource limits: 256MB RAM, 50% CPU, 30s timeout
+end note
+
+note top of UC013
+  **QA Agent Review Process:**
+  1. Load code files from DEV Agent
+  2. Load quality standards from memory
+  3. Call LLM for code review
+  4. Run static analysis (ESLint, SonarQube)
+  5. Merge findings
+  6. Calculate quality score (0-100)
+  7. If score ≥80 and no high-severity issues:
+     Approve (Task → "done")
+  8. Else: Reject (Task → "todo", feedback)
+  
+  **OWASP Check:**
+  Reviews against OWASP Top 10 vulnerabilities
+end note
+
+note right of UC016
+  **DevOps Agent Process:**
+  1. Receive approved code from QA
+  2. Generate deployment artifacts:
+     - Dockerfile
+     - docker-compose.yml
+     - CI/CD pipeline config
+  3. Execute deployment in sandbox (Docker-in-Docker)
+  4. Perform health checks (HTTP /health endpoint)
+  5. If success: Report deployment URL
+  6. If failure: Rollback and notify
+  
+  **Zero-Downtime:**
+  Supports blue-green or rolling updates
+end note
+
+note left of UC014
+  **Marketing Agent Output:**
+  - Product Announcement (Markdown)
+  - Release Notes
+  - Social Media Posts (Twitter, LinkedIn)
+  
+  **Brand Voice:**
+  Loads examples from "brand_voice" memory
+  to maintain consistent tone
+end note
+
+note bottom of UC004
+  **Template Method Pattern:**
+  BaseAgent.execute() defines skeleton:
+  
+  async execute(context) {
+    thought = await this.think(context)
+    action = await this.act(context)
+    return { thought, action }
+  }
+  
+  All agents implement:
+  - abstract think(context)
+  - abstract act(context)
+end note
+
+note top of UC017
+  **Memory Management:**
+  - Generate vector embeddings (LLM embed API)
+  - Store in AgentMemory with pgvector
+  - Semantic search via cosine similarity
+  - Prune old low-importance memories (importance < 5)
+  
+  **Namespaces:**
+  - requirements_patterns
+  - architecture_patterns
+  - coding_conventions
+  - brand_voice
+  - lessons_learned
+end note
+
+note bottom of UC018
+  **LLM Routing:**
+  1. Read agent model config from DB
+  2. Create provider (9Router/Anthropic/OpenAI)
+  3. Send request with circuit breaker
+  4. If primary fails 3x: Use fallback
+  5. Log usage to ApiUsageLog
+  6. Return ChatResult with token counts
+  
+  **Circuit Breaker:**
+  Open after 3 failures → Half-open after 60s
+end note
+
+note right of UC028
+  **Sandbox Security:**
+  - Isolated Docker container per execution
+  - No network access (unless whitelisted)
+  - Read-only file system (except /tmp)
+  - Resource limits enforced
+  - Execution timeout: 30 seconds
+  - Output sanitized before returning to agent
+  
+  **Tool Authorization:**
+  ToolRegistry validates agent role
+  before allowing tool execution
+end note
+
+legend bottom
+  |= Color |= Agent Type |
+  | #90EE90 (Green) | Existing Agent (CEO, PM, DEV, QA, Marketing) |
+  | #FFA500 (Orange) | New Agent (BA, Architect, DevOps) |
+  | #FFD700 (Gold) | External LLM Service |
+  | #D3D3D3 (Gray) | External Docker Sandbox |
+  
+  |= Relationship |= Meaning |
+  | <<include>> | Required sub-use case |
+  | <<extend>> | Optional extension |
+  | <<uses>> | External dependency |
+  | <<delegates>> | Agent-to-agent task handoff |
+  
+  **Workflow Sequence:**
+  CEO → BA → Architect → PM → DEV → QA → DevOps → Marketing
+endlegend
+
+@enduml
