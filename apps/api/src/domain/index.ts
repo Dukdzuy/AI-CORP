@@ -5,8 +5,8 @@
  * Contains core business logic, entities, and interfaces.
  * 
  * Following Domain-Driven Design (DDD) principles:
- * - Entities: Agent, Tool
- * - Value Objects: AgentState, AgentContext, etc.
+ * - Entities: Agent, Tool, Project, Task, Milestone
+ * - Value Objects: AgentState, AgentContext, Money, ProjectStatus, TaskStatus
  * - Interfaces: Service contracts
  * - Domain Events: State changes, actions
  * 
@@ -25,3 +25,12 @@ export * from './tool/interfaces';
 
 // Common Types
 export * from './common/types';
+
+// Value Objects (Task 7)
+export * from './value-objects';
+
+// Domain Entities (Task 7)
+export * from './entities';
+
+// Repository Interfaces (Task 6)
+export * from './repositories';
