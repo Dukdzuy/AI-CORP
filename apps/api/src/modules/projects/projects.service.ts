@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { Injectable, NotFoundException, BadRequestException, Logger, Inject } from '@nestjs/common';
 import { WorkflowEngine } from '../workflow/workflow.engine';
 import { WorkflowDefinitionService } from '../workflow/workflow-definition.service';
 import { WorkflowContext } from '@ai-corp/shared-types';
 import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, MinLength } from 'class-validator';
+import { IProjectRepository } from '../../domain/repositories';
+import { PROJECT_REPOSITORY } from '../../infrastructure/infrastructure.module';
 
 export class CreateProjectDto {
   @IsString()
@@ -53,22 +54,13 @@ export class ProjectsService {
   private readonly logger = new Logger(ProjectsService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PROJECT_REPOSITORY) private readonly projectRepository: IProjectRepository,
     private readonly workflowEngine: WorkflowEngine,
     private readonly workflowDefinitionService: WorkflowDefinitionService,
   ) {}
 
   async listProjects() {
-    return this.prisma.project.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        _count: { select: { tasks: true, milestones: true } },
-        workflowRuns: {
-          orderBy: { startedAt: 'desc' },
-          take: 1, // Only get the latest workflow run
-        },
-      },
-    });
+    return this.projectRepository.findAll({ orderBy: 'createdAt', order: 'desc' });
   }
 
   async createProject(data: CreateProjectDto & { createdById: string }) {
@@ -76,14 +68,12 @@ export class ProjectsService {
       throw new BadRequestException('Budget must be positive when provided.');
     }
 
-    const project = await this.prisma.project.create({
-      data: {
-        name: data.name,
-        description: data.description,
-        goal: data.goal,
-        budget: data.budget,
-        createdById: data.createdById,
-      },
+    const project = await this.projectRepository.create({
+      name: data.name,
+      description: data.description,
+      goal: data.goal,
+      budget: data.budget,
+      createdById: data.createdById,
     });
 
     this.logger.log(`Created project ${project.id}`);
@@ -110,23 +100,23 @@ export class ProjectsService {
   }
 
   async getProjectDetails(id: string) {
-    const project = await this.prisma.project.findUnique({
-      where: { id },
-      include: {
-        milestones: true,
-        tasks: true,
-        workflowRuns: {
-          orderBy: { startedAt: 'desc' },
-          take: 10,
-        },
-      },
-    });
+    const project = await this.projectRepository.findById(id);
 
     if (!project) {
       throw new NotFoundException(`Project with ID ${id} not found.`);
     }
 
-    return project;
+    // Fetch related data
+    const projectWithMilestones = await this.projectRepository.findWithMilestones(id);
+    const projectWithTasks = await this.projectRepository.findWithTasks(id);
+    const projectWithWorkflows = await this.projectRepository.findWithWorkflowRuns(id, 10);
+
+    return {
+      ...project,
+      milestones: projectWithMilestones?.milestones || [],
+      tasks: projectWithTasks?.tasks || [],
+      workflowRuns: projectWithWorkflows?.workflowRuns || [],
+    };
   }
 
   async updateProject(id: string, data: UpdateProjectDto) {
@@ -134,10 +124,7 @@ export class ProjectsService {
       throw new BadRequestException('Budget must be positive when provided.');
     }
 
-    const project = await this.prisma.project.update({
-      where: { id },
-      data,
-    });
+    const project = await this.projectRepository.update(id, data);
 
     this.logger.log(`Updated project ${id}`);
     return project;
@@ -148,72 +135,28 @@ export class ProjectsService {
   }
 
   async deleteProject(id: string) {
-    const project = await this.prisma.project.findUnique({ where: { id } });
+    const project = await this.projectRepository.findById(id);
     if (!project) {
       throw new NotFoundException(`Project with ID ${id} not found.`);
     }
 
-    // Delete related records first
-    await this.prisma.workflowStep.deleteMany({ where: { workflowRun: { projectId: id } } });
-    await this.prisma.approval.deleteMany({ where: { workflowRun: { projectId: id } } });
-    await this.prisma.workflowRun.deleteMany({ where: { projectId: id } });
-    await this.prisma.task.deleteMany({ where: { projectId: id } });
-    await this.prisma.milestone.deleteMany({ where: { projectId: id } });
-    await this.prisma.agentMessage.deleteMany({ where: { projectId: id } });
-    await this.prisma.project.delete({ where: { id } });
+    await this.projectRepository.delete(id);
 
     this.logger.log(`Deleted project ${id}`);
     return { success: true, id };
   }
 
   async incrementCost(id: string, cost: number) {
-    const project = await this.prisma.project.findUnique({ where: { id } });
-    if (!project) {
-      throw new NotFoundException(`Project with ID ${id} not found.`);
+    // Repository handles all business logic for cost increment
+    const updatedProject = await this.projectRepository.updateCost(id, cost);
+
+    // Check if budget was exceeded (indicated by status change to 'paused')
+    if (updatedProject.status === 'paused' && updatedProject.budget) {
+      return {
+        ...updatedProject,
+        budgetExceeded: Number(updatedProject.costAccrued) >= Number(updatedProject.budget),
+      };
     }
-
-    const newCostAccrued = Number(project.costAccrued) + cost;
-
-    // Check if budget is set
-    if (project.budget) {
-      const budgetLimit = Number(project.budget);
-      
-      // Check if costs exceed budget
-      if (newCostAccrued >= budgetLimit) {
-        this.logger.warn(
-          `Project ${id} exceeded budget: ${newCostAccrued} >= ${budgetLimit}. Pausing project.`
-        );
-        
-        // Auto-pause project when budget exceeded
-        await this.prisma.project.update({
-          where: { id },
-          data: { 
-            costAccrued: newCostAccrued,
-            status: 'paused'
-          },
-        });
-        
-        return { 
-          ...project, 
-          costAccrued: newCostAccrued, 
-          status: 'paused',
-          budgetExceeded: true 
-        };
-      }
-      
-      // Check if approaching budget (90% threshold)
-      if (newCostAccrued >= budgetLimit * 0.9 && Number(project.costAccrued) < budgetLimit * 0.9) {
-        this.logger.warn(
-          `Project ${id} approaching budget limit: ${newCostAccrued} >= ${budgetLimit * 0.9} (90% of ${budgetLimit})`
-        );
-        // Could emit WebSocket warning here
-      }
-    }
-
-    const updatedProject = await this.prisma.project.update({
-      where: { id },
-      data: { costAccrued: newCostAccrued },
-    });
 
     return updatedProject;
   }

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
+import { InfrastructureModule } from './infrastructure/infrastructure.module';
 import { LLMModule } from './modules/llm';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { AgentsModule } from './modules/agents/agents.module';
@@ -22,6 +23,7 @@ import { EnvValidator } from './modules/security/env-validator';
       envFilePath: '.env',
     }),
     PrismaModule,
+    InfrastructureModule,
     LLMModule,
     ProjectsModule,
     AgentsModule,
