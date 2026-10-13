@@ -1,0 +1,160 @@
+@startuml SD-001: Project Creation Workflow
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title SD-001: Project Creation Workflow
+subtitle Multi-Agent Enterprise Workflow Automation System
+
+actor "Board Member" as BoardMember #LightBlue
+participant "AuthService" as Auth #LightGreen
+participant "ProjectController" as Controller #LightYellow
+participant "ProjectService" as ProjectSvc #LightYellow
+participant "PrismaDB" as DB #LightGray
+participant "WorkflowEngine" as Engine #Orange
+participant "CEOAgent" as CEO #Pink
+participant "PMAgent" as PM #Pink
+participant "WebSocket" as WS #LightCyan
+
+== Authentication & Project Creation ==
+
+BoardMember -> Auth: POST /api/auth/login(email, password)
+activate Auth
+Auth -> DB: findUser(email)
+activate DB
+DB --> Auth: User
+deactivate DB
+Auth -> Auth: validatePassword()
+Auth --> BoardMember: JWT token
+deactivate Auth
+
+BoardMember -> Controller: POST /api/projects(name, description, goal, budget)
+activate Controller
+note right of Controller: **Design Pattern: Template Method**\nController defines the skeleton,\nservice implements business logic
+
+Controller -> Controller: sanitizeInput()
+Controller -> ProjectSvc: createProject(data)
+activate ProjectSvc
+
+ProjectSvc -> ProjectSvc: validate(name, description, goal)
+note right of ProjectSvc: **Business Rules:**\n- Name: 3-200 chars\n- Budget > 0 if provided\n- Name unique per user
+
+ProjectSvc -> DB: project.create({...})
+activate DB
+DB --> ProjectSvc: Project { id, name, status: 'active' }
+deactivate DB
+
+== Workflow Initialization ==
+
+ProjectSvc -> Engine: startWorkflow(projectId, 'default_workflow', context)
+activate Engine
+note right of Engine: **Design Pattern: State Machine**\nWorkflow transitions through states:\nPENDING → RUNNING → COMPLETED
+
+Engine -> DB: workflowRun.create({projectId, status: 'running', currentNodeId: 'ceo_plan'})
+activate DB
+DB --> Engine: WorkflowRun { id, status: 'running' }
+deactivate DB
+
+Engine -> WS: sendToProject(projectId, WorkflowStateChangedEvent)
+activate WS
+WS -->> BoardMember: WebSocket: workflow:state_changed
+deactivate WS
+
+Engine ->> Engine: processCurrentNode(runId)
+note right of Engine: **Asynchronous Processing:**\nWorkflow execution continues\nin background via BullMQ job
+
+== CEO Agent Strategic Planning ==
+
+Engine -> CEO: execute(context)
+activate CEO
+note right of CEO: **Design Pattern: Strategy Pattern**\nCEO uses ThinkingStrategy\nand ActionStrategy
+
+CEO -> CEO: think(context)
+note right of CEO: **Agent Think Phase:**\nLoad semantic memories,\nanalyze project goal
+
+CEO -> DB: searchMemories(agentRole='CEO', namespace='strategy', query=goal)
+activate DB
+DB --> CEO: MemorySearchResult[]
+deactivate DB
+
+CEO -> CEO: callLLM({messages: [...], model: 'gpt-4'})
+note right of CEO: **LLM Integration:**\nCircuit breaker pattern\nwith fallback models
+
+CEO -> WS: emitThinking(projectId, 'Analyzing project goals...')
+WS -->> BoardMember: WebSocket: agent:thinking
+
+CEO -> CEO: act(context)
+note right of CEO: **Agent Act Phase:**\nGenerate milestones,\nstore results
+
+CEO -> DB: milestone.createMany([...])
+activate DB
+DB --> CEO: Milestone[] (2-4 milestones)
+deactivate DB
+
+CEO -> DB: saveMemory(agentId, namespace='strategy', content='Created milestones for: ...')
+activate DB
+DB --> CEO: memoryId
+deactivate DB
+
+CEO --> Engine: { thought: {...}, action: { action: 'planMilestones', output: [...] } }
+deactivate CEO
+
+Engine -> WS: sendToProject(projectId, AgentActionEvent)
+WS -->> BoardMember: WebSocket: agent:action
+
+== PM Agent Task Breakdown ==
+
+Engine -> Engine: transitionToNextNode(runId, 'onSuccess')
+Engine -> DB: workflowRun.update({currentNodeId: 'pm_breakdown'})
+activate DB
+DB --> Engine: Updated
+deactivate DB
+
+Engine -> PM: execute(context)
+activate PM
+
+PM -> PM: think(context)
+note right of PM: **PM loads CEO milestones**\nand breaks them into tasks
+
+PM -> DB: milestone.findMany({projectId})
+activate DB
+DB --> PM: Milestone[]
+deactivate DB
+
+PM -> PM: callLLM({messages: [...], model: 'gpt-3.5-turbo'})
+PM -> WS: emitThinking(projectId, 'Breaking down milestones into tasks...')
+WS -->> BoardMember: WebSocket: agent:thinking
+
+PM -> PM: act(context)
+
+PM -> DB: task.createMany([...])
+activate DB
+DB --> PM: Task[] (5-20 tasks per milestone)
+deactivate DB
+
+PM --> Engine: { thought: {...}, action: { action: 'breakdownTasks', output: [...] } }
+deactivate PM
+
+== Completion & Notification ==
+
+Engine -> Engine: transitionToNextNode(runId, 'onSuccess')
+Engine -> DB: workflowRun.update({status: 'completed', completedAt: now()})
+activate DB
+DB --> Engine: Updated
+deactivate DB
+
+Engine -> WS: sendToProject(projectId, WorkflowStateChangedEvent)
+WS -->> BoardMember: WebSocket: workflow:state_changed { status: 'completed' }
+
+Engine --> ProjectSvc: WorkflowRun { status: 'completed' }
+deactivate Engine
+
+ProjectSvc --> Controller: Project { id, name, status: 'active' }
+deactivate ProjectSvc
+
+Controller --> BoardMember: 201 Created { project: {...}, workflowRunId: '...' }
+deactivate Controller
+
+note over BoardMember, WS: **Design Patterns Used:**\n- **Template Method**: Controller → Service flow\n- **State Machine**: Workflow state transitions\n- **Strategy Pattern**: Agent thinking/acting strategies\n- **Observer Pattern**: WebSocket event broadcasting\n- **Factory Pattern**: LLMProviderFactory creates providers\n- **Repository Pattern**: PrismaService abstracts data access
+
+@enduml

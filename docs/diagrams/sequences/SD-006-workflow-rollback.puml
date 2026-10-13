@@ -1,0 +1,197 @@
+@startuml SD-006: Workflow Rollback (Compensating Transactions)
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title SD-006: Workflow Rollback (Compensating Transactions)
+subtitle Implementing Saga Pattern for Distributed Transaction Management
+
+participant "WorkflowEngine" as Engine #Orange
+participant "WorkflowStep" as Step #LightYellow
+participant "CompensationService" as CompSvc #LightGreen
+participant "PrismaDB" as DB #LightGray
+participant "CEOAgent" as CEO #Pink
+participant "PMAgent" as PM #Pink
+participant "DEVAgent" as DEV #Pink
+participant "WebSocketGateway" as WS #LightCyan
+participant "BoardMember" as User #LightBlue
+
+== Workflow Execution in Progress ==
+
+Engine -> Engine: processCurrentNode(runId)
+activate Engine
+
+Engine -> Step: executeNode(nodeId='dev_implementation')
+activate Step
+note right of Step: **Workflow Context:**\n- 3 steps completed:\n  1. CEO created milestones\n  2. PM created tasks\n  3. DEV started implementation\n- Current step: DEV writes code\n- Next step: QA review
+
+Step -> DEV: execute(context)
+activate DEV
+
+DEV -> DEV: think(context)
+DEV -> DEV: act(context)
+
+DEV -> DEV: executeTool('code_execution', 'npm test')
+note right of DEV: **Sandbox Execution Failure:**\nDocker container timeout\nafter 30 seconds
+
+DEV --> Step: Error: Sandbox timeout - container unresponsive
+deactivate DEV
+
+Step --> Engine: NodeResult { status: 'failure', error: 'Sandbox timeout - container unresponsive' }
+deactivate Step
+
+== Error Detection & Retry Logic ==
+
+Engine -> Engine: handleNodeFailure(runId, nodeId, error)
+note right of Engine: **Requirement 19:**\nRetry with exponential backoff:\n- Attempt 1: immediate\n- Attempt 2: 2^1 = 2 seconds\n- Attempt 3: 2^2 = 4 seconds\n- Attempt 4: 2^3 = 8 seconds
+
+Engine -> Engine: retryCount = step.retryCount + 1
+Engine -> Engine: maxRetries = node.maxRetries || 3
+
+alt retryCount <= maxRetries
+    Engine -> Engine: backoffDelay = 2^retryCount seconds
+    Engine -> WS: sendToProject(projectId, WorkflowRetryEvent)
+    activate WS
+    WS -->> User: WebSocket: workflow:retrying { attempt: 2, maxRetries: 3, delay: 2000 }
+    deactivate WS
+    
+    Engine -> Engine: delay(backoffDelay)
+    Engine -> Step: executeNode(nodeId='dev_implementation')
+    note right of Engine: **Retry attempt 2...**
+    
+else retryCount > maxRetries
+    Engine -> Engine: Max retries exceeded, initiating rollback
+    note right of Engine: **Rollback Decision:**\nAfter 3 failed retries,\nworkflow cannot proceed.\n\n**Saga Pattern:**\nExecute compensating transactions\nin reverse order to undo\ncompleted steps.
+end
+
+== Identify Compensation Actions ==
+
+Engine -> CompSvc: identifyCompensationActions(runId)
+activate CompSvc
+
+CompSvc -> DB: workflowStep.findMany({workflowRunId: runId, status: 'completed'})
+activate DB
+DB --> CompSvc: WorkflowStep[] [\n  { id, nodeId: 'ceo_plan', status: 'completed', agentRole: 'CEO', output: {...} },\n  { id, nodeId: 'pm_breakdown', status: 'completed', agentRole: 'PM', output: {...} },\n]
+deactivate DB
+
+CompSvc -> CompSvc: reverseSteps(completedSteps)
+note right of CompSvc: **Reverse Order Execution:**\nCompensating transactions must\nexecute in reverse to maintain\ndata consistency:\n\n**Forward:** CEO → PM → DEV\n**Rollback:** DEV → PM → CEO
+
+CompSvc -> CompSvc: buildCompensationPlan(reversedSteps)
+note right of CompSvc: **Compensation Plan:**\n[\n  { stepId, agentRole: 'PM', action: 'deleteTasks', data: taskIds },\n  { stepId, agentRole: 'CEO', action: 'deleteMilestones', data: milestoneIds },\n]
+
+CompSvc --> Engine: CompensationPlan { actions: [...], totalSteps: 2 }
+deactivate CompSvc
+
+== Execute Compensating Transactions ==
+
+Engine -> WS: sendToProject(projectId, WorkflowRollbackStartedEvent)
+activate WS
+WS -->> User: WebSocket: workflow:rollback_started { totalSteps: 2, reason: 'Step failure after max retries' }
+deactivate WS
+
+loop For each compensation action (reverse order)
+    Engine -> CompSvc: executeCompensation(action)
+    activate CompSvc
+    
+    alt action.agentRole == 'PM'
+        CompSvc -> CompSvc: Compensate PM step: delete tasks
+        note right of CompSvc: **Compensation: Delete Tasks**\nUndo PM agent's work\nby removing created tasks
+        
+        CompSvc -> DB: task.deleteMany({id: {in: action.data.taskIds}})
+        activate DB
+        note right of DB: **Transactional Delete:**\nAll tasks deleted atomically\nwithin database transaction\n\n**Referential Integrity:**\nCascade deletes to:\n- TaskAssignments\n- TaskComments\n- TaskAttachments
+        
+        DB --> CompSvc: DeleteResult { count: 15 }
+        deactivate DB
+        
+        CompSvc -> PM: notifyRollback(stepId, reason)
+        activate PM
+        note right of PM: **Agent Notification:**\nInform PM that its work\nwas rolled back
+        
+        PM -> PM: saveMemory(namespace='rollback', content='Tasks rolled back due to downstream failure', importance=7)
+        PM --> CompSvc: acknowledged
+        deactivate PM
+        
+        CompSvc -> DB: compensationLog.create({workflowRunId, action: 'delete_tasks', status: 'success', taskIds: [...]})
+        activate DB
+        DB --> CompSvc: CompensationLog { id, status: 'success' }
+        deactivate DB
+        
+    else action.agentRole == 'CEO'
+        CompSvc -> CompSvc: Compensate CEO step: delete milestones
+        note right of CompSvc: **Compensation: Delete Milestones**\nUndo CEO agent's work\nby removing created milestones
+        
+        CompSvc -> DB: milestone.deleteMany({id: {in: action.data.milestoneIds}})
+        activate DB
+        note right of DB: **Cascade Constraint Check:**\nVerify no tasks reference\nthese milestones before delete\n\n(Already deleted by PM compensation)
+        
+        DB --> CompSvc: DeleteResult { count: 3 }
+        deactivate DB
+        
+        CompSvc -> CEO: notifyRollback(stepId, reason)
+        activate CEO
+        CEO -> CEO: saveMemory(namespace='rollback', content='Milestones rolled back due to downstream failure', importance=7)
+        CEO --> CompSvc: acknowledged
+        deactivate CEO
+        
+        CompSvc -> DB: compensationLog.create({workflowRunId, action: 'delete_milestones', status: 'success', milestoneIds: [...]})
+        activate DB
+        DB --> CompSvc: CompensationLog { id, status: 'success' }
+        deactivate DB
+    end
+    
+    CompSvc --> Engine: CompensationResult { action, status: 'success' }
+    deactivate CompSvc
+    
+    Engine -> WS: sendToProject(projectId, CompensationStepCompletedEvent)
+    activate WS
+    WS -->> User: WebSocket: workflow:compensation_completed { action: action.action, agentRole: action.agentRole }
+    deactivate WS
+end
+
+== Update Workflow Status ==
+
+Engine -> DB: workflowRun.update({id: runId, status: 'failed', failedAt: now(), failureReason: 'Step failure after max retries', compensationCompleted: true})
+activate DB
+DB --> Engine: WorkflowRun { status: 'failed', compensationCompleted: true }
+deactivate DB
+
+Engine -> DB: project.update({id: projectId, status: 'failed', failureReason: 'Workflow rollback completed'})
+activate DB
+DB --> Engine: Project { status: 'failed' }
+deactivate DB
+
+== Notify Stakeholders ==
+
+Engine -> WS: sendToProject(projectId, WorkflowRollbackCompletedEvent)
+activate WS
+WS -> User: WebSocket: workflow:rollback_completed {\n  workflowRunId,\n  projectId,\n  originalError: 'Sandbox timeout',\n  compensationActions: [\n    { action: 'delete_tasks', status: 'success', count: 15 },\n    { action: 'delete_milestones', status: 'success', count: 3 }\n  ],\n  timestamp: now()\n}
+activate User
+
+note right of User: **User Notification:**\nBoard Member sees:\n- Workflow failed\n- All changes rolled back\n- System state consistent\n- Can safely retry or abandon project
+
+User --> WS: acknowledged
+deactivate User
+deactivate WS
+
+Engine -> Engine: logStructured({event: 'workflow_rollback', workflowRunId, projectId, compensationActionsCount: 2, status: 'success'})
+
+Engine --> Engine: Workflow rollback completed successfully
+deactivate Engine
+
+note over Engine, User: **Saga Pattern Implementation:**\n\n**Forward Transactions (T1, T2, T3):**\nT1: CEO creates milestones\nT2: PM creates tasks\nT3: DEV implements code (FAILED)\n\n**Compensating Transactions (C3, C2, C1):**\nC3: DEV cleanup (none, as it failed)\nC2: PM deletes tasks\nC1: CEO deletes milestones\n\n**Guarantee: Atomicity**\nEither all steps succeed, or all\nare compensated, leaving system\nin consistent state.
+
+note over Engine, User: **Alternative: Partial Compensation Failure**\n\nIf compensation fails (e.g., database unavailable):\n\n1. Mark compensation as 'failed'\n2. Persist compensation plan to database\n3. Retry compensation with exponential backoff\n4. Alert admin if compensation retries exhausted\n5. Manual intervention required\n\n**Compensation Idempotency:**\nAll compensation actions are idempotent:\n- DELETE tasks WHERE id IN (...) - safe to retry\n- If already deleted, no-op
+
+note over Engine, User: **Design Patterns Used:**\n- **Saga Pattern**: Distributed transaction management with compensating transactions\n- **Command Pattern**: Each compensation action is a reversible command\n- **Memento Pattern**: WorkflowStep stores state for rollback\n- **Chain of Responsibility**: Compensation actions chained in reverse order\n- **Strategy Pattern**: Different compensation strategies per agent role
+
+note over Engine, User: **Key Invariants:**\n1. Compensations execute in strict reverse order\n2. Each compensation is atomic (database transaction)\n3. Compensation logs persisted before execution\n4. Agent notifications are best-effort (non-blocking)\n5. Workflow status transitions: running → failed (no intermediate states)\n6. Project status updated after workflow status\n7. All compensation results logged for audit trail
+
+note over Engine, User: **Timing Constraints:**\n- Compensation identification: < 1 second\n- Per-compensation execution: < 5 seconds\n- Total rollback time: < 30 seconds (for typical workflow)\n- WebSocket notifications: < 500ms delivery\n- Database transaction timeout: 10 seconds
+
+note over Engine, User: **Business Rules:**\n- BR-101: Workflow can only roll back if at least one step completed\n- BR-102: Compensation must execute for all completed steps\n- BR-103: Partial compensation leaves workflow in 'failed_partial_rollback' state\n- BR-104: Board Member notified immediately of rollback\n- BR-105: Agents notified asynchronously (best-effort)
+
+note over Engine, User: **Recovery Scenarios:**\n\n**Scenario 1: System crash during compensation**\n- On restart, WorkflowEngine.recoverWorkflows() detects\n  workflows with status='failed' and compensationCompleted=false\n- Resume compensation from last logged action\n- Idempotent operations ensure safe retry\n\n**Scenario 2: Database unavailable during compensation**\n- Retry compensation with exponential backoff (max 5 retries)\n- If all retries fail, mark workflow as 'failed_partial_rollback'\n- Alert admin for manual intervention\n\n**Scenario 3: Agent notification failure**\n- Log error but continue compensation (notifications are non-critical)\n- Agent will discover rollback on next task poll
+
+@enduml

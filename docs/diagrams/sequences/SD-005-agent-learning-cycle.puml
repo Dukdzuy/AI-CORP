@@ -1,0 +1,156 @@
+@startuml SD-005: Agent Learning Cycle
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title SD-005: Agent Learning Cycle
+subtitle Semantic Memory Storage and Retrieval with Vector Embeddings
+
+participant "BaseAgent" as Agent #Pink
+participant "TaskResult" as Result #LightYellow
+participant "MemoryService" as MemorySvc #LightGreen
+participant "EmbeddingService" as EmbeddingSvc #LightBlue
+participant "VectorStore\n(pgvector)" as VectorDB #LightGray
+participant "SemanticSearchService" as SearchSvc #LightCyan
+
+== Agent Completes Task ==
+
+Agent -> Agent: execute(context)
+activate Agent
+
+Agent -> Agent: think(context)
+Agent -> Agent: act(context)
+
+Agent -> Result: evaluateResult(action, context)
+activate Result
+note right of Result: **Evaluation Criteria:**\n1. Task success/failure\n2. Execution time\n3. Resource usage\n4. Output quality\n5. Novel patterns learned
+
+Result -> Result: calculateImportance(result)
+note right of Result: **Importance Score (1-10):**\n- 10: Critical insight, major breakthrough\n- 8: Significant learning, reusable pattern\n- 5: Routine completion, standard approach\n- 3: Minor observation\n- 1: Trivial fact
+
+Result --> Agent: TaskEvaluation { success: true, importance: 8, lesson: 'Using factory pattern simplified code generation' }
+deactivate Result
+
+== Extract Lesson Learned ==
+
+Agent -> Agent: extractLesson(taskEvaluation)
+note right of Agent: **Lesson Extraction:**\nAgent synthesizes:\n- What worked well\n- What could improve\n- Patterns identified\n- Context for future reuse
+
+Agent -> Agent: formulateLessonContent()
+note right of Agent: **Lesson Content Format:**\n"When implementing [context],\nI used [approach],\nwhich resulted in [outcome].\nKey insight: [learning]."
+
+== Generate Embedding ==
+
+Agent -> MemorySvc: saveMemory(agentId, agentRole, namespace, content, metadata)
+activate MemorySvc
+note right of MemorySvc: **Parameters:**\n- agentId: UUID from Agent table\n- agentRole: 'DEV'\n- namespace: 'coding_patterns'\n- content: lesson text\n- metadata: { importance: 8, projectId, tags: ['factory-pattern'] }
+
+MemorySvc -> MemorySvc: validate(agentId, agentRole, namespace, content)
+note right of MemorySvc: **Preconditions:**\n- agentRole is valid (CEO, PM, DEV, QA, ...)\n- namespace is non-empty\n- content is non-empty\n- importance ∈ [1, 10]
+
+MemorySvc -> EmbeddingSvc: generateEmbedding(content)
+activate EmbeddingSvc
+note right of EmbeddingSvc: **Embedding Generation:**\nUses text-embedding-ada-002\nor local model (BGE-small-en-v1.5)\nto convert text → 1536-dimensional vector
+
+EmbeddingSvc -> EmbeddingSvc: callEmbeddingAPI(content)
+note right of EmbeddingSvc: **API Call:**\nPOST /embeddings\n{\n  model: 'text-embedding-ada-002',\n  input: content\n}
+
+EmbeddingSvc --> MemorySvc: embedding: number[] (1536 dimensions)
+deactivate EmbeddingSvc
+
+== Store in Vector Database ==
+
+MemorySvc -> VectorDB: agentMemory.create({agentId, agentRole, namespace, content, embedding, importance, metadata})
+activate VectorDB
+note right of VectorDB: **pgvector Storage:**\nCREATE TABLE agent_memory (\n  id UUID PRIMARY KEY,\n  agent_id UUID REFERENCES agent(id),\n  agent_role VARCHAR NOT NULL,\n  namespace VARCHAR NOT NULL,\n  content TEXT NOT NULL,\n  embedding VECTOR(1536),\n  importance INTEGER CHECK (importance BETWEEN 1 AND 10),\n  metadata JSONB,\n  created_at TIMESTAMP\n);\n\nCREATE INDEX ON agent_memory\nUSING ivfflat (embedding vector_cosine_ops)\nWITH (lists = 100);
+
+VectorDB -> VectorDB: INSERT INTO agent_memory VALUES (...)
+VectorDB -> VectorDB: Update vector index (IVFFlat)
+note right of VectorDB: **Index Type: IVFFlat**\n- Approximate nearest neighbor\n- Cosine similarity metric\n- Trade-off: speed vs accuracy
+
+VectorDB --> MemorySvc: AgentMemory { id, createdAt }
+deactivate VectorDB
+
+MemorySvc -> MemorySvc: logStructured({event: 'memory_save', agentRole, namespace, importance, contentLength, embeddingTimeMs})
+
+MemorySvc --> Agent: memoryId: string
+deactivate MemorySvc
+
+Agent --> Agent: Memory saved successfully
+deactivate Agent
+
+note over Agent, VectorDB: **Memory Stored:**\nThe agent's lesson is now in\nvector database, ready for\nsemantic retrieval by any agent
+
+== Next Task Starts ==
+
+Agent -> Agent: execute(newContext)
+activate Agent
+note right of Agent: **New Task:**\nImplement authentication system\nwith token management
+
+== Query Semantic Memory ==
+
+Agent -> Agent: think(newContext)
+
+Agent -> MemorySvc: searchMemories(agentRole, namespace, query, limit=5)
+activate MemorySvc
+note right of MemorySvc: **Parameters:**\n- agentRole: 'DEV' (namespace isolation)\n- namespace: 'coding_patterns'\n- query: 'token management authentication'\n- limit: 5 (top-k results)
+
+MemorySvc -> EmbeddingSvc: generateEmbedding(query)
+activate EmbeddingSvc
+EmbeddingSvc -> EmbeddingSvc: callEmbeddingAPI('token management authentication')
+EmbeddingSvc --> MemorySvc: queryEmbedding: number[] (1536 dimensions)
+deactivate EmbeddingSvc
+
+== Semantic Similarity Search ==
+
+MemorySvc -> VectorDB: searchSimilarMemories(agentRole, namespace, queryEmbedding, limit)
+activate VectorDB
+note right of VectorDB: **pgvector Query:**\nSELECT\n  id, agent_role, namespace, content,\n  importance, created_at,\n  1 - (embedding <=> $1) AS similarity\nFROM agent_memory\nWHERE agent_role = $2\n  AND namespace = $3\nORDER BY embedding <=> $1\nLIMIT $4;\n\n**Operator <=>: Cosine distance**\n- 0 = identical vectors\n- 2 = opposite vectors\n- similarity = 1 - distance
+
+VectorDB -> VectorDB: IVFFlat index scan
+VectorDB -> VectorDB: Calculate cosine similarity for candidates
+VectorDB -> VectorDB: Filter by similarity >= 0.7 (threshold)
+note right of VectorDB: **Similarity Threshold:**\nRequirement 7.6 specifies:\nOnly return memories with\nsimilarity >= 0.7 (70% match)\n\n**Prevents low-quality retrieval**
+
+VectorDB --> MemorySvc: RawMemoryResult[] { id, content, importance, similarity }
+deactivate VectorDB
+
+== Rank Results ==
+
+MemorySvc -> MemorySvc: rankResults(rawResults)
+note right of MemorySvc: **Ranking Formula:**\nrank = similarity × 0.7 + (importance / 10) × 0.3\n\n**Example:**\nMemory A: similarity=0.9, importance=8\n  rank = 0.9 × 0.7 + 0.8 × 0.3 = 0.87\n\nMemory B: similarity=0.8, importance=10\n  rank = 0.8 × 0.7 + 1.0 × 0.3 = 0.86\n\n**A ranks higher despite lower importance**
+
+MemorySvc -> MemorySvc: sortByRankDescending(rankedResults)
+
+MemorySvc -> MemorySvc: logStructured({event: 'memory_search', agentRole, namespace, resultCount, topSimilarity, topRank, threshold: 0.7})
+
+MemorySvc --> Agent: MemorySearchResult[] [\n  { id, agentRole, namespace, content, importance, similarity: 0.92, rank: 0.88 },\n  { id, agentRole, namespace, content, importance, similarity: 0.85, rank: 0.81 },\n  { id, agentRole, namespace, content, importance, similarity: 0.78, rank: 0.72 },\n  ...\n]
+deactivate MemorySvc
+
+== Enrich Context with Memories ==
+
+Agent -> Agent: enrichContextWithMemories(newContext, memories)
+note right of Agent: **Context Enhancement:**\nAgent adds retrieved memories\nto LLM prompt:\n\n"You are implementing authentication.\n\n**Relevant past experiences:**\n1. [Memory 1 content with similarity 0.92]\n2. [Memory 2 content with similarity 0.85]\n...\n\nUse these insights to guide your implementation."
+
+Agent -> Agent: callLLM({messages: [systemPrompt, memoryContext, userTask], model: 'gpt-4'})
+note right of Agent: **LLM Benefits from Memory:**\n- Consistent patterns across tasks\n- Avoids repeating mistakes\n- Reuses proven solutions\n- Faster, better quality output
+
+Agent -> Agent: act(enrichedContext)
+
+Agent -> Agent: Better decision making due to semantic memory
+note right of Agent: **Learning Feedback Loop:**\n1. Complete task\n2. Extract lesson\n3. Store with embedding\n4. Retrieve on similar future task\n5. Apply lesson → better outcome\n6. Store new lesson\n→ Continuous improvement
+
+Agent --> Agent: Task completed with higher quality
+deactivate Agent
+
+note over Agent, VectorDB: **Memory Isolation (Requirement 8):**\n- Each agent has separate namespace\n- DEV agent cannot access CEO memories\n- searchMemories() filters by agentRole\n- Prevents cross-role information leakage\n- Ensures role-specific learning
+
+note over Agent, VectorDB: **Key Algorithm: Semantic Search**\n\n**Input:** query string, agentRole, namespace, limit\n**Output:** Top-k memories ranked by relevance\n\n**Steps:**\n1. Generate query embedding (1536-dim vector)\n2. Query pgvector with cosine similarity\n3. Filter by agentRole (namespace isolation)\n4. Filter by namespace (e.g., 'coding_patterns')\n5. Filter by similarity >= 0.7 (quality threshold)\n6. Rank by: similarity × 0.7 + importance × 0.3\n7. Sort descending, return top-k\n\n**Complexity:**\n- Embedding generation: O(1) API call\n- Vector search: O(log n) with IVFFlat index\n- Ranking: O(k) where k = limit\n- Total: O(log n + k) ≈ O(log n)
+
+note over Agent, VectorDB: **Timing Constraints:**\n- Embedding generation: < 500ms\n- Vector search: < 200ms\n- Total memory retrieval: < 1 second\n- Memory save: < 300ms (async, non-blocking)
+
+note over Agent, VectorDB: **Design Patterns:**\n- **Repository Pattern**: MemoryService abstracts storage\n- **Strategy Pattern**: EmbeddingService supports multiple embedding models\n- **Observer Pattern**: Memory events trigger analytics\n- **Lazy Loading**: Embeddings generated on-demand
+
+note over Agent, VectorDB: **Postconditions:**\n1. All memories have embeddings (non-null constraint)\n2. Importance ∈ [1, 10] (CHECK constraint)\n3. Similarity scores ∈ [0, 1] (cosine similarity bounds)\n4. Results always filtered by agentRole (namespace isolation)\n5. Search returns at most 'limit' results\n6. Results sorted by rank descending
+
+@enduml

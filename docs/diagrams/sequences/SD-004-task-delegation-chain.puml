@@ -1,0 +1,316 @@
+@startuml SD-004: Task Delegation Chain
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title SD-004: Task Delegation Chain (Multi-Agent Hierarchy)
+subtitle Demonstrating Chain of Responsibility Pattern
+
+actor "Board Member" as User #LightBlue
+participant "WorkflowEngine" as Engine #Orange
+participant "CEOAgent" as CEO #Pink
+participant "PMAgent" as PM #Pink
+participant "BAAgent" as BA #LightGreen
+participant "ArchitectAgent" as Architect #LightGreen
+participant "DEVAgent" as DEV #LightGreen
+participant "QAAgent" as QA #LightGreen
+participant "DevOpsAgent" as DevOps #LightGreen
+participant "PrismaDB" as DB #LightGray
+
+== Project Initialization ==
+
+User -> Engine: startWorkflow(projectId, workflowDefId='enterprise_workflow', context)
+activate Engine
+activate User
+
+Engine -> DB: workflowRun.create({projectId, status: 'running', currentNodeId: 'ceo_strategic_planning'})
+activate DB
+DB --> Engine: WorkflowRun { id, status: 'running' }
+deactivate DB
+
+note right of Engine: **Design Pattern: Chain of Responsibility**\nEach agent in the chain:\n1. Processes the request\n2. Delegates to next agent\n3. Returns result upward
+
+== CEO: Strategic Analysis ==
+
+Engine -> CEO: execute({projectId, goal, description, budget})
+activate CEO
+
+CEO -> CEO: think(context)
+note right of CEO: **CEO Responsibilities:**\n1. Define strategic vision\n2. Identify high-level milestones\n3. Assess market fit\n4. Allocate budget to phases
+
+CEO -> CEO: callLLM('Analyze project goal and create strategic roadmap...')
+CEO -> CEO: act(context)
+
+CEO -> DB: milestone.createMany([{name: 'Requirements', ...}, {name: 'Design', ...}, {name: 'Implementation', ...}, {name: 'Testing', ...}, {name: 'Deployment', ...}])
+activate DB
+DB --> CEO: Milestone[] (5 milestones)
+deactivate DB
+
+CEO -> CEO: saveMemory(namespace='strategy', content='Created 5-phase roadmap for AI platform')
+
+CEO -> PM: delegate({task: 'breakdown_requirements', context: {milestones, goal}})
+note right of CEO: **Delegation Message:**\n{\n  fromAgent: 'CEO',\n  toAgent: 'PM',\n  taskType: 'breakdown_requirements',\n  context: {...},\n  priority: 'high'\n}
+
+CEO --> Engine: { action: 'strategic_plan_created', delegatedTo: 'PM' }
+deactivate CEO
+
+== PM: Sprint Planning ==
+
+Engine -> PM: execute({projectId, milestones, goal})
+activate PM
+
+PM -> PM: think(context)
+note right of PM: **PM Responsibilities:**\n1. Break milestones into tasks\n2. Estimate effort (story points)\n3. Prioritize backlog\n4. Identify dependencies
+
+PM -> DB: milestone.findMany({projectId})
+activate DB
+DB --> PM: Milestone[] (5 milestones)
+deactivate DB
+
+PM -> PM: callLLM('Create detailed tasks for each milestone with priorities...')
+PM -> PM: act(context)
+
+PM -> DB: task.createMany([{title: 'Gather user requirements', milestoneId, priority: 1, ...}, ...])
+activate DB
+DB --> PM: Task[] (20 tasks across milestones)
+deactivate DB
+
+PM -> BA: delegate({task: 'analyze_requirements', context: {tasks: tasksForRequirementsPhase}})
+note right of PM: **Delegation to BA:**\nPM identifies first milestone\nneeds requirements analysis\n\n**Chain continues:**\nCEO → PM → BA
+
+PM --> Engine: { action: 'tasks_created', delegatedTo: 'BA', taskCount: 20 }
+deactivate PM
+
+== BA: Requirements Analysis ==
+
+Engine -> BA: execute({projectId, tasks, goal, stakeholderInputs})
+activate BA
+
+BA -> BA: think(context)
+note right of BA: **BA Responsibilities (NEW):**\n1. Elicit functional requirements\n2. Elicit non-functional requirements\n3. Create use case diagrams\n4. Document acceptance criteria\n5. Identify constraints
+
+BA -> DB: task.findMany({projectId, milestoneId: requirementsMilestoneId})
+activate DB
+DB --> BA: Task[] (requirements phase tasks)
+deactivate DB
+
+BA -> BA: callLLM('Extract functional and non-functional requirements from project goal...')
+note right of BA: **LLM Prompt Includes:**\n- Project goal\n- Stakeholder inputs\n- Industry standards (ISO, IEEE)\n- Similar project patterns from memory
+
+BA -> BA: act(context)
+
+BA -> BA: generateUseCaseDiagram(requirements)
+BA -> BA: generateRequirementsSpec(requirements)
+
+BA -> DB: projectDocument.create({projectId, type: 'requirements_spec', content: {...}, format: 'markdown'})
+activate DB
+DB --> BA: ProjectDocument { id, type: 'requirements_spec' }
+deactivate DB
+
+BA -> BA: saveMemory(namespace='requirements', content='Documented 15 functional requirements for AI platform')
+
+BA -> Architect: delegate({task: 'design_architecture', context: {requirements, constraints}})
+note right of BA: **Delegation to Architect:**\nBA hands off complete\nrequirements specification\n\n**Chain continues:**\nCEO → PM → BA → Architect
+
+BA --> Engine: { action: 'requirements_documented', delegatedTo: 'Architect', requirementsCount: 15 }
+deactivate BA
+
+== Architect: System Design ==
+
+Engine -> Architect: execute({projectId, requirements, constraints})
+activate Architect
+
+Architect -> Architect: think(context)
+note right of Architect: **Architect Responsibilities (NEW):**\n1. Design system architecture\n2. Select technology stack\n3. Design component interfaces\n4. Write Architecture Decision Records\n5. Generate architecture diagrams
+
+Architect -> DB: projectDocument.findUnique({type: 'requirements_spec'})
+activate DB
+DB --> Architect: ProjectDocument { content: requirements }
+deactivate DB
+
+Architect -> Architect: callLLM('Design scalable architecture for multi-agent system with these requirements...')
+note right of Architect: **LLM Context Includes:**\n- Functional requirements\n- Non-functional requirements (scalability, security)\n- Technology constraints\n- Best practices from memory
+
+Architect -> Architect: act(context)
+
+Architect -> Architect: evaluateTechnologyOptions(['NestJS vs Express', 'PostgreSQL vs MongoDB', ...])
+Architect -> Architect: generateComponentDiagram(components)
+Architect -> Architect: generateDeploymentDiagram(infrastructure)
+Architect -> Architect: writeADR(decision='Use NestJS + PostgreSQL', rationale='...')
+
+Architect -> DB: projectDocument.createMany([{type: 'architecture_spec', ...}, {type: 'component_diagram', ...}, {type: 'adr', ...}])
+activate DB
+DB --> Architect: ProjectDocument[] (3 documents)
+deactivate DB
+
+Architect -> Architect: saveMemory(namespace='architecture', content='Designed microservices architecture with event-driven communication')
+
+Architect -> PM: delegateBack({task: 'create_implementation_tasks', context: {architecture, components}})
+note right of Architect: **Return to PM:**\nArchitect returns to PM\nfor implementation planning\n\n**Chain forks:**\nPM creates tasks for each component
+
+Architect --> Engine: { action: 'architecture_designed', delegatedTo: 'PM', componentsCount: 8 }
+deactivate Architect
+
+== PM: Implementation Planning ==
+
+Engine -> PM: execute({projectId, architecture, components})
+activate PM
+
+PM -> PM: think(context)
+note right of PM: **PM Re-Entry:**\nPM receives architecture\nand creates implementation tasks
+
+PM -> PM: callLLM('Break down components into development tasks with dependencies...')
+PM -> PM: act(context)
+
+PM -> DB: task.createMany([{title: 'Implement AuthService', component: 'auth', assignedTo: 'DEV', ...}, ...])
+activate DB
+DB --> PM: Task[] (implementation tasks per component)
+deactivate DB
+
+PM -> DEV: delegate({task: 'implement_component', context: {taskId, component: 'AuthService', spec: {...}}})
+note right of PM: **Delegation to DEV:**\nPM assigns first task to DEV\n\n**Chain continues:**\nCEO → PM → BA → Architect → PM → DEV
+
+PM --> Engine: { action: 'implementation_tasks_created', delegatedTo: 'DEV' }
+deactivate PM
+
+== DEV: Code Implementation ==
+
+Engine -> DEV: execute({projectId, taskId, componentSpec, codingConventions})
+activate DEV
+
+DEV -> DEV: think(context)
+note right of DEV: **DEV Responsibilities:**\n1. Implement component logic\n2. Write unit tests\n3. Follow coding conventions\n4. Document code
+
+DEV -> DB: task.findUnique({id: taskId})
+activate DB
+DB --> DEV: Task { title, description, componentSpec }
+deactivate DB
+
+DEV -> DEV: callLLM('Implement AuthService with JWT authentication following NestJS best practices...')
+
+DEV -> DEV: act(context)
+DEV -> DEV: executeTool('code_execution', 'npm test', {code: generatedCode})
+note right of DEV: **Sandbox Execution:**\nCode runs in isolated\nDocker container
+
+DEV -> DB: task.update({id: taskId, status: 'review', code: generatedCode})
+activate DB
+DB --> DEV: Task { status: 'review' }
+deactivate DB
+
+DEV -> DEV: saveMemory(namespace='coding', content='Implemented JWT auth with refresh token rotation')
+
+DEV -> QA: delegate({task: 'review_code', context: {taskId, code: generatedCode, tests: testResults}})
+note right of DEV: **Delegation to QA:**\nDEV hands off code for review\n\n**Chain continues:**\nCEO → PM → BA → Architect → PM → DEV → QA
+
+DEV --> Engine: { action: 'code_implemented', delegatedTo: 'QA', taskId }
+deactivate DEV
+
+== QA: Code Review & Testing ==
+
+Engine -> QA: execute({projectId, taskId, code, tests})
+activate QA
+
+QA -> QA: think(context)
+note right of QA: **QA Responsibilities:**\n1. Static code analysis\n2. Security review\n3. Integration testing\n4. Performance testing\n5. Approve or reject
+
+QA -> DB: task.findUnique({id: taskId})
+activate DB
+DB --> QA: Task { code, tests, status: 'review' }
+deactivate DB
+
+QA -> QA: callLLM('Review this code for security vulnerabilities, code smells, and best practices...')
+
+QA -> QA: act(context)
+QA -> QA: runStaticAnalysis(code)
+QA -> QA: runSecurityScan(code)
+QA -> QA: executeTool('integration_test', 'npm run test:e2e')
+
+alt Code Approved
+    QA -> DB: task.update({id: taskId, status: 'done', qa_approved: true, qa_feedback: 'LGTM'})
+    activate DB
+    DB --> QA: Task { status: 'done' }
+    deactivate DB
+    
+    QA -> DevOps: delegate({task: 'deploy_component', context: {taskId, code, environment: 'staging'}})
+    note right of QA: **Delegation to DevOps:**\nQA approves and hands off\nfor deployment\n\n**Chain continues:**\nCEO → PM → BA → Architect →\nPM → DEV → QA → DevOps
+    
+    QA --> Engine: { action: 'code_approved', delegatedTo: 'DevOps', taskId }
+    
+else Code Rejected
+    QA -> DB: task.update({id: taskId, status: 'in_progress', qa_approved: false, qa_feedback: 'Security issue: SQL injection risk'})
+    activate DB
+    DB --> QA: Task { status: 'in_progress' }
+    deactivate DB
+    
+    QA -> DEV: delegateBack({task: 'fix_issues', context: {taskId, feedback: 'Security issue: SQL injection risk'}})
+    note right of QA: **Return to DEV:**\nQA rejects and returns\nto DEV for fixes\n\n**Chain loops back:**\nDEV fixes → QA reviews again
+    
+    QA --> Engine: { action: 'code_rejected', delegatedTo: 'DEV', taskId }
+end
+
+deactivate QA
+
+== DevOps: Deployment ==
+
+Engine -> DevOps: execute({projectId, taskId, code, environment: 'staging'})
+activate DevOps
+
+DevOps -> DevOps: think(context)
+note right of DevOps: **DevOps Responsibilities (NEW):**\n1. Generate deployment configs\n2. Build Docker images\n3. Deploy to environment\n4. Run health checks\n5. Monitor metrics
+
+DevOps -> DB: task.findUnique({id: taskId})
+activate DB
+DB --> DevOps: Task { code, status: 'done' }
+deactivate DB
+
+DevOps -> DevOps: callLLM('Generate Dockerfile and docker-compose.yml for NestJS service...')
+
+DevOps -> DevOps: act(context)
+DevOps -> DevOps: generateDockerfile(code)
+DevOps -> DevOps: generateDockerCompose(services)
+
+DevOps -> DevOps: executeTool('docker_build', 'docker build -t auth-service:latest .')
+DevOps -> DevOps: executeTool('docker_deploy', 'docker-compose up -d')
+note right of DevOps: **Sandbox Deployment:**\nDeployment scripts run\nin isolated environment
+
+DevOps -> DevOps: runHealthChecks(serviceUrl)
+
+alt Deployment Successful
+    DevOps -> DB: deployment.create({projectId, taskId, environment: 'staging', status: 'success', url: '...'})
+    activate DB
+    DB --> DevOps: Deployment { status: 'success' }
+    deactivate DB
+    
+    DevOps -> DevOps: saveMemory(namespace='deployment', content='Deployed AuthService to staging with zero downtime')
+    
+    DevOps --> Engine: { action: 'deployment_successful', environment: 'staging', url: 'https://staging.ai-corp.com' }
+    
+else Deployment Failed
+    DevOps -> DB: deployment.create({projectId, taskId, environment: 'staging', status: 'failed', error: '...'})
+    activate DB
+    DB --> DevOps: Deployment { status: 'failed' }
+    deactivate DB
+    
+    DevOps --> Engine: { action: 'deployment_failed', error: 'Health check timeout' }
+end
+
+deactivate DevOps
+
+== Workflow Completion ==
+
+Engine -> DB: workflowRun.update({id: runId, status: 'completed', completedAt: now()})
+activate DB
+DB --> Engine: Updated
+deactivate DB
+
+Engine --> User: WorkflowCompleted { projectId, totalTasks: 20, deployed: true }
+deactivate Engine
+deactivate User
+
+note over User, DevOps: **Chain of Responsibility Pattern:**\nEach agent:\n1. Handles its responsibility\n2. Delegates to appropriate next agent\n3. Can return to previous agent on failure\n4. Maintains context through delegation\n\n**Complete Chain:**\nBoard Member → CEO → PM → BA → Architect → PM → DEV → QA → DevOps
+
+note over User, DevOps: **Delegation Context:**\nEach delegation includes:\n- fromAgent: AgentRole\n- toAgent: AgentRole\n- taskType: string\n- context: AgentContext\n- priority: Priority\n- metadata: Record<string, any>
+
+note over User, DevOps: **Key Characteristics:**\n1. Bidirectional delegation (forward and backward)\n2. Context preservation across chain\n3. Each agent has single responsibility\n4. Loose coupling via AgentOrchestrator\n5. All delegations logged for audit trail
+
+@enduml

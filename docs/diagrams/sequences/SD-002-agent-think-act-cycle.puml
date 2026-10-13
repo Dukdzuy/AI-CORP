@@ -1,0 +1,180 @@
+@startuml SD-002: Agent Think-Act Cycle
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title SD-002: Agent Think-Act Cycle
+subtitle Demonstrating State Machine, Strategy, and Observer Patterns
+
+participant "WorkflowEngine" as Engine #Orange
+participant "BaseAgent" as Agent #Pink
+participant "AgentStateMachine" as StateMachine #LightGreen
+participant "ThinkingStrategy" as ThinkStrategy #LightYellow
+participant "ActionStrategy" as ActStrategy #LightYellow
+participant "LLMProvider" as LLM #LightBlue
+participant "ToolExecutor" as Tool #LightGray
+participant "AgentEventEmitter" as Emitter #LightCyan
+participant "Observer" as Observer #LightCyan
+
+== Workflow Node Execution Trigger ==
+
+Engine -> Agent: execute(context)
+activate Agent
+note right of Agent: **Design Pattern: Template Method**\nexecute() defines skeleton:\n1. think()\n2. act()\n3. return result
+
+== State Transition: IDLE → THINKING ==
+
+Agent -> StateMachine: transitionTo(AgentState.THINKING)
+activate StateMachine
+note right of StateMachine: **Design Pattern: State Pattern**\nValidates transition rules:\n- IDLE → THINKING: valid\n- IDLE → ACTING: invalid
+
+StateMachine -> StateMachine: validateTransition(IDLE, THINKING)
+note right of StateMachine: **State Transition Rules:**\nIDLE → THINKING → ACTING → COMPLETED\nAny state → ERROR (on failure)\nWAITING_APPROVAL → THINKING (on approval)
+
+StateMachine -> StateMachine: currentState = THINKING
+StateMachine -> StateMachine: history.push({from: IDLE, to: THINKING, timestamp})
+
+StateMachine -> Emitter: emit(StateChangedEvent)
+activate Emitter
+Emitter -> Observer: onStateChanged(event)
+activate Observer
+note right of Observer: **Design Pattern: Observer**\nObservers (WebSocket, Logger, Metrics)\nreact to agent state changes
+Observer --> Emitter: acknowledged
+deactivate Observer
+deactivate Emitter
+
+StateMachine --> Agent: transitionSuccess
+deactivate StateMachine
+
+== Think Phase: Strategy Pattern ==
+
+Agent -> ThinkStrategy: think(context)
+activate ThinkStrategy
+note right of ThinkStrategy: **Design Pattern: Strategy Pattern**\nEach agent role has custom\nthinking strategy:\n- CEOThinkingStrategy\n- PMThinkingStrategy\n- DevThinkingStrategy
+
+ThinkStrategy -> ThinkStrategy: analyzeContext(context)
+note right of ThinkStrategy: **Thinking Process:**\n1. Load semantic memories\n2. Identify key constraints\n3. Formulate reasoning prompt
+
+ThinkStrategy -> Agent: loadMemory(namespace, query, limit=5)
+activate Agent
+Agent -> Agent: memoryService.searchMemories(...)
+Agent --> ThinkStrategy: MemorySearchResult[] (top 5 by similarity)
+deactivate Agent
+
+ThinkStrategy -> LLM: chat({messages: [...], model: 'gpt-4', maxTokens: 2000})
+activate LLM
+note right of LLM: **External Boundary:**\nLLM Gateway (9Router)\nwith circuit breaker\nand fallback models
+
+LLM -> LLM: processRequest()
+note right of LLM: **Circuit Breaker States:**\n- CLOSED: normal operation\n- OPEN: fallback to secondary model\n- HALF_OPEN: testing recovery
+
+LLM --> ThinkStrategy: ChatResult { content, tokenUsage, actualModelUsed }
+deactivate LLM
+
+ThinkStrategy -> ThinkStrategy: parseThought(llmResponse)
+ThinkStrategy --> Agent: ThinkingResult { reasoning, nextAction, confidence }
+deactivate ThinkStrategy
+
+Agent -> Emitter: emit(ThinkingEvent)
+activate Emitter
+Emitter -> Observer: onThinking(event)
+activate Observer
+Observer --> Emitter: acknowledged
+deactivate Observer
+deactivate Emitter
+
+== State Transition: THINKING → ACTING ==
+
+Agent -> StateMachine: transitionTo(AgentState.ACTING)
+activate StateMachine
+StateMachine -> StateMachine: validateTransition(THINKING, ACTING)
+StateMachine -> StateMachine: currentState = ACTING
+StateMachine -> Emitter: emit(StateChangedEvent)
+activate Emitter
+Emitter -> Observer: onStateChanged(event)
+activate Observer
+Observer --> Emitter: acknowledged
+deactivate Observer
+deactivate Emitter
+StateMachine --> Agent: transitionSuccess
+deactivate StateMachine
+
+== Act Phase: Strategy Pattern ==
+
+Agent -> ActStrategy: act(thought, context)
+activate ActStrategy
+note right of ActStrategy: **Design Pattern: Strategy Pattern**\nAction strategies vary by agent:\n- CEO: create milestones\n- PM: breakdown tasks\n- DEV: write code in sandbox
+
+ActStrategy -> ActStrategy: determineTools(thought)
+note right of ActStrategy: **Tool Selection:**\nBased on agent role\nand task requirements
+
+ActStrategy -> Agent: executeTool(toolName, command, params)
+activate Agent
+
+Agent -> Agent: toolRegistry.isToolAuthorizedForRole(toolName, agentRole)
+note right of Agent: **Security Check:**\nRole-Based Tool Access Control\n- DEV: can use 'code_execution'\n- QA: can use 'static_analysis'\n- CEO: cannot use 'code_execution'
+
+Agent -> Agent: validateParameters(params, toolSchema)
+
+Agent -> Tool: executeInSandbox(toolName, command, resourceLimits)
+activate Tool
+note right of Tool: **Sandbox Isolation:**\nDocker container (node:18-alpine)\nResource limits:\n- 256MB RAM\n- 50% CPU\n- 30s timeout
+
+Tool -> Tool: spawnDockerContainer()
+Tool -> Tool: runCommandInContainer()
+Tool -> Tool: captureOutput()
+Tool -> Tool: sanitizeOutput()
+Tool --> Agent: ToolResult { success, output, executionTimeMs, resourceUsage }
+deactivate Tool
+
+Agent --> ActStrategy: ToolResult
+deactivate Agent
+
+ActStrategy -> ActStrategy: interpretToolResult(result)
+
+ActStrategy -> LLM: chat({messages: [thought, toolResult, 'Summarize outcome'], model: 'gpt-3.5-turbo'})
+activate LLM
+LLM --> ActStrategy: ChatResult { content: 'Task completed successfully...' }
+deactivate LLM
+
+ActStrategy --> Agent: ActionResult { action: 'createMilestones', output: {...}, status: 'success' }
+deactivate ActStrategy
+
+Agent -> Emitter: emit(ActionEvent)
+activate Emitter
+Emitter -> Observer: onAction(event)
+activate Observer
+Observer --> Emitter: acknowledged
+deactivate Observer
+deactivate Emitter
+
+== State Transition: ACTING → COMPLETED ==
+
+Agent -> StateMachine: transitionTo(AgentState.COMPLETED)
+activate StateMachine
+StateMachine -> StateMachine: validateTransition(ACTING, COMPLETED)
+StateMachine -> StateMachine: currentState = COMPLETED
+StateMachine -> Emitter: emit(StateChangedEvent)
+activate Emitter
+Emitter -> Observer: onStateChanged(event)
+activate Observer
+note right of Observer: **Observer Actions:**\n- WebSocket: notify frontend\n- Logger: structured log\n- Metrics: record duration\n- Memory: save lesson learned
+Observer --> Emitter: acknowledged
+deactivate Observer
+deactivate Emitter
+StateMachine --> Agent: transitionSuccess
+deactivate StateMachine
+
+== Return Result ==
+
+Agent -> Agent: saveMemory(namespace, content='Completed task: ...', importance=8)
+note right of Agent: **Learning Cycle:**\nAgent stores experience\nfor future context retrieval
+
+Agent --> Engine: AgentResult { thought, action, state: COMPLETED }
+deactivate Agent
+
+note over Engine, Observer: **Design Patterns Summary:**\n- **Template Method**: BaseAgent.execute() defines think → act skeleton\n- **State Pattern**: AgentStateMachine validates transitions with rules\n- **Strategy Pattern**: ThinkingStrategy & ActionStrategy (interface-based polymorphism)\n- **Observer Pattern**: AgentEventEmitter notifies multiple observers\n- **Circuit Breaker**: LLMProvider handles external service failures\n- **Factory Pattern**: ToolRegistry.getTool() creates tool executors
+
+note over Engine, Observer: **Timing Constraints:**\n- Think phase: < 10 seconds (LLM timeout)\n- Act phase: < 30 seconds (sandbox timeout)\n- Total execution: < 60 seconds per agent\n- State transitions: atomic (database transaction)
+
+@enduml

@@ -1,0 +1,180 @@
+@startuml SD-003: Human Approval Flow
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title SD-003: Human Approval Flow
+subtitle Human-in-the-Loop with State Pattern and Real-Time Notifications
+
+participant "WorkflowEngine" as Engine #Orange
+participant "ApprovalService" as ApprovalSvc #LightYellow
+participant "WebSocketGateway" as WS #LightCyan
+participant "BoardMember" as User #LightBlue
+participant "ApprovalController" as Controller #LightYellow
+participant "PrismaDB" as DB #LightGray
+
+== Workflow Reaches Approval Node ==
+
+Engine -> Engine: processCurrentNode(runId)
+activate Engine
+note right of Engine: **Current Node Type:**\nhuman_approval\nRequires explicit user decision
+
+Engine -> Engine: getCurrentNode(runId)
+Engine -> Engine: node.type == 'human_approval'
+
+Engine -> ApprovalSvc: createApprovalRequest({workflowRunId, userId, approvalType, requestData})
+activate ApprovalSvc
+
+ApprovalSvc -> DB: workflowRun.findUnique({id: workflowRunId})
+activate DB
+DB --> ApprovalSvc: WorkflowRun { projectId, status: 'running' }
+deactivate DB
+
+== Create Approval Record ==
+
+ApprovalSvc -> DB: approval.create({workflowRunId, userId, approvalType, requestData, status: 'pending'})
+activate DB
+note right of DB: **Design Pattern: State Pattern**\nApproval has 3 states:\n- pending\n- approved\n- rejected\n\n**State Transition Rules:**\npending → approved (valid)\npending → rejected (valid)\napproved → rejected (INVALID)\nrejected → approved (INVALID)
+
+DB --> ApprovalSvc: Approval { id, status: 'pending', requestedAt }
+deactivate DB
+
+== Real-Time Notification to User ==
+
+ApprovalSvc -> WS: sendToUser(userId, HumanApprovalRequiredEvent)
+activate WS
+note right of WS: **WebSocket Event:**\ntype: HUMAN_APPROVAL_REQUIRED\ndata: {\n  approvalId, workflowRunId,\n  projectId, approvalType,\n  requestData, requestedAt\n}
+
+WS -> User: WebSocket: human_approval_required
+activate User
+note right of User: **Frontend Behavior:**\n1. Display notification badge\n2. Show approval modal\n3. Render requestData\n4. Enable Approve/Reject buttons
+
+User --> WS: acknowledged (WebSocket ACK)
+deactivate User
+deactivate WS
+
+ApprovalSvc --> Engine: Approval { id, status: 'pending' }
+deactivate ApprovalSvc
+
+== Workflow Pauses ==
+
+Engine -> Engine: pauseWorkflow(runId)
+note right of Engine: **State Transition:**\nWorkflowStatus: running → paused\n\n**Design Pattern: State Machine**\nPaused state prevents further\nnode execution until resumed
+
+Engine -> Engine: saveWorkflowState(runId)
+note right of Engine: **State Persistence:**\n- currentNodeId saved\n- context variables saved\n- execution stack saved\n\n**Enables crash recovery**
+
+Engine -> DB: workflowRun.update({id: runId, status: 'paused'})
+activate DB
+DB --> Engine: Updated
+deactivate DB
+
+Engine -> WS: sendToProject(projectId, WorkflowStateChangedEvent)
+activate WS
+WS -->> User: WebSocket: workflow:state_changed { status: 'paused' }
+deactivate WS
+
+Engine --> Engine: Workflow paused, awaiting human decision
+deactivate Engine
+
+note over Engine, User: **Timing Note:**\nWorkflow can remain paused indefinitely\nNo timeout enforced (human decision required)
+
+== User Reviews Approval Request ==
+
+User -> User: Review approval data
+note right of User: **Approval Context:**\n- Project summary\n- Agent recommendations\n- Cost implications\n- Risk assessment
+
+User -> User: Make decision (Approve / Reject)
+
+User -> Controller: POST /api/approvals/:id/respond { status: 'approved', comment: 'Looks good' }
+activate Controller
+activate User
+
+Controller -> Controller: authenticate(jwt)
+Controller -> Controller: validateInput(status ∈ ['approved', 'rejected'])
+
+== Handle Approval Response ==
+
+Controller -> ApprovalSvc: handleApprovalResponse(approvalId, status, comment)
+activate ApprovalSvc
+
+ApprovalSvc -> DB: approval.findUnique({id: approvalId})
+activate DB
+DB --> ApprovalSvc: Approval { id, status: 'pending', workflowRunId }
+deactivate DB
+
+== Validate State Transition ==
+
+ApprovalSvc -> ApprovalSvc: validateTransition(currentStatus='pending', newStatus='approved')
+note right of ApprovalSvc: **Business Rule:**\nRequirement 17.7 states:\n"Approval can only transition\nfrom 'pending' to 'approved'\nor 'rejected'"\n\n**State Pattern Enforcement:**\nif (currentStatus != 'pending')\n  throw Error('Invalid transition')
+
+alt Current Status is 'pending' (Valid)
+    ApprovalSvc -> DB: approval.update({id, status: 'approved', comment, respondedAt: now()})
+    activate DB
+    DB --> ApprovalSvc: Approval { status: 'approved', respondedAt }
+    deactivate DB
+    
+else Current Status is NOT 'pending' (Invalid)
+    ApprovalSvc --> Controller: Error: Cannot transition from '${currentStatus}'
+    Controller --> User: 400 Bad Request { error: 'Invalid state transition' }
+    deactivate User
+end
+
+== Resume Workflow ==
+
+ApprovalSvc -> Engine: resumeWorkflow(runId, skipProcessNode=true)
+activate Engine
+note right of Engine: **skipProcessNode=true:**\nDon't re-process approval node,\ninstead transition to next node
+
+Engine -> DB: workflowRun.update({id: runId, status: 'running'})
+activate DB
+DB --> Engine: Updated
+deactivate DB
+
+Engine -> WS: sendToProject(projectId, WorkflowStateChangedEvent)
+activate WS
+WS -->> User: WebSocket: workflow:state_changed { status: 'running' }
+deactivate WS
+
+== Conditional Edge Transition ==
+
+ApprovalSvc -> Engine: transitionToNextNode(runId, edgeCondition='onApprove')
+note right of Engine: **Design Pattern: State Machine**\nWorkflow edges have conditions:\n- 'onApprove' → continue to success path\n- 'onReject' → transition to fallback/abort
+
+Engine -> Engine: findOutgoingEdges(currentNodeId, condition='onApprove')
+note right of Engine: **Edge Resolution:**\nWorkflowEdge[] filtered by:\n1. from === currentNodeId\n2. condition === 'onApprove'
+
+Engine -> DB: workflowRun.update({currentNodeId: nextNodeId, context: {..., approval_result: 'approved'}})
+activate DB
+DB --> Engine: Updated
+deactivate DB
+
+Engine -> WS: sendToProject(projectId, WorkflowStateChangedEvent)
+activate WS
+WS -->> User: WebSocket: workflow:state_changed { currentNodeId: nextNodeId }
+deactivate WS
+
+== Continue Workflow Execution ==
+
+Engine -> Engine: processCurrentNode(runId)
+note right of Engine: **Asynchronous Processing:**\nWorkflow continues with next node\n(e.g., DevOps deployment step)
+
+Engine --> ApprovalSvc: Success
+deactivate Engine
+
+ApprovalSvc --> Controller: Approval { status: 'approved', respondedAt }
+deactivate ApprovalSvc
+
+Controller --> User: 200 OK { approval: {...}, workflowResumed: true }
+deactivate Controller
+deactivate User
+
+note over Engine, User: **Alternative Flow: Rejection**\nIf user rejects:\n1. edgeCondition = 'onReject'\n2. Workflow transitions to abort/rollback node\n3. Compensating transactions execute\n4. Workflow status → 'cancelled'
+
+note over Engine, User: **Design Patterns Used:**\n- **State Pattern**: Approval state transitions (pending → approved/rejected)\n- **State Machine**: Workflow pause/resume lifecycle\n- **Observer Pattern**: WebSocket broadcasts state changes\n- **Command Pattern**: ApprovalCommand encapsulates decision\n- **Memento Pattern**: saveWorkflowState() captures recovery point
+
+note over Engine, User: **Timing Constraints:**\n- Notification delivery: < 500ms (WebSocket)\n- State persistence: < 200ms (database write)\n- Workflow resume: < 1 second\n- No timeout on user decision (indefinite pause)
+
+note over Engine, User: **Key Invariants:**\n1. Only one pending approval per workflow run\n2. Approval status can only transition once\n3. Workflow cannot proceed until approval resolved\n4. All state changes are atomic (DB transaction)
+
+@enduml
