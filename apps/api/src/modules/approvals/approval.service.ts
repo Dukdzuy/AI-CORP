@@ -3,6 +3,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { WorkflowEngine } from '../workflow/workflow.engine';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { WebSocketEvent, WebSocketEventType } from '@ai-corp/shared-types';
+import { EventBus } from '../../domain/events/EventBus';
+import { ApprovalRequestedEvent } from '../../domain/events/ApprovalRequestedEvent';
 
 export interface CreateApprovalParams {
   workflowRunId: string;
@@ -18,7 +20,8 @@ export class ApprovalService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => WorkflowEngine)) private readonly workflowEngine: WorkflowEngine,
-    private readonly websocketGateway: AppWebSocketGateway
+    private readonly websocketGateway: AppWebSocketGateway,
+    private readonly eventBus: EventBus
   ) {}
 
   /**
@@ -41,17 +44,15 @@ export class ApprovalService {
       },
     });
 
-    // Task 10: Publish ApprovalRequestedEvent
-    const { DomainEvents } = require('../../domain/events/DomainEvents');
-    const { ApprovalRequestedEvent } = require('../../domain/events/ApprovalRequestedEvent');
-    DomainEvents.raise(new ApprovalRequestedEvent(
+    // Publish ApprovalRequestedEvent via injected EventBus (satisfies DIP)
+    await this.eventBus.publish(new ApprovalRequestedEvent(
       approval.id,
       run.projectId,
       approval.workflowRunId,
       params.userId,
       approval.approvalType,
       approval.requestData
-    ));
+    )).catch(err => this.logger.error(`Failed to publish ApprovalRequestedEvent: ${err.message}`));
 
     // Notify the user via WebSocket
     const event: WebSocketEvent = {

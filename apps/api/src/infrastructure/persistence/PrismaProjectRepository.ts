@@ -17,16 +17,22 @@ import {
   DatabaseConnectionException,
   UniqueConstraintViolationException,
 } from '../../domain/exceptions';
+import { EventBus } from '../../domain/events/EventBus';
+import { ProjectCreatedEvent } from '../../domain/events/ProjectCreatedEvent';
 
 /**
  * Prisma implementation of IProjectRepository
  * Infrastructure layer - depends on domain interfaces
+ * EventBus injected via DI to publish domain events (satisfies DIP)
  */
 @Injectable()
 export class PrismaProjectRepository implements IProjectRepository {
   private readonly logger = new Logger(PrismaProjectRepository.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventBus: EventBus
+  ) {}
 
   async findById(id: string): Promise<ProjectDTO | null> {
     try {
@@ -99,15 +105,13 @@ export class PrismaProjectRepository implements IProjectRepository {
       });
       this.logger.log(`Created project ${project.id}`);
       
-      // Task 10: Publish ProjectCreatedEvent
-      const { DomainEvents } = require('../../domain/events/DomainEvents');
-      const { ProjectCreatedEvent } = require('../../domain/events/ProjectCreatedEvent');
-      DomainEvents.raise(new ProjectCreatedEvent(
+      // Publish ProjectCreatedEvent via injected EventBus (satisfies DIP)
+      await this.eventBus.publish(new ProjectCreatedEvent(
         project.id,
         project.name,
         project.createdById,
         project.budget ? Number(project.budget) : undefined
-      ));
+      )).catch(err => this.logger.error(`Failed to publish ProjectCreatedEvent: ${err.message}`));
       
       return this.mapToDTO(project);
     } catch (error) {

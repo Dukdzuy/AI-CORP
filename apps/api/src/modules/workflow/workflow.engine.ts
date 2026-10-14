@@ -6,6 +6,9 @@ import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { WorkflowStateChangedEvent } from '@ai-corp/shared-types';
 import { AgentOrchestratorService } from '../orchestrator/agent-orchestrator.service';
 import { Queue, Worker, Job, ConnectionOptions } from 'bullmq';
+import { EventBus } from '../../domain/events/EventBus';
+import { WorkflowStartedEvent } from '../../domain/events/WorkflowStartedEvent';
+import { WorkflowCompletedEvent } from '../../domain/events/WorkflowCompletedEvent';
 
 interface WorkflowJobData {
   runId: string;
@@ -33,7 +36,8 @@ export class WorkflowEngine {
   constructor(
     private readonly prisma: PrismaService,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly orchestrator: AgentOrchestratorService
+    private readonly orchestrator: AgentOrchestratorService,
+    private readonly eventBus: EventBus
   ) {
     // Initialize Redis connection options
     this.redisConnection = {
@@ -127,15 +131,13 @@ export class WorkflowEngine {
 
     this.logger.log(`Started workflow run ${run.id} for project ${projectId}`);
     
-    // Task 10: Publish WorkflowStartedEvent
-    const { DomainEvents } = require('../../domain/events/DomainEvents');
-    const { WorkflowStartedEvent } = require('../../domain/events/WorkflowStartedEvent');
-    DomainEvents.raise(new WorkflowStartedEvent(
+    // Publish WorkflowStartedEvent via injected EventBus (satisfies DIP)
+    await this.eventBus.publish(new WorkflowStartedEvent(
       run.id,
       projectId,
       workflowDefId,
       context.startedBy as string | undefined
-    ));
+    )).catch(err => this.logger.error(`Failed to publish WorkflowStartedEvent: ${err.message}`));
     
     // Emit state changed event
     const event: WorkflowStateChangedEvent = {
@@ -219,14 +221,12 @@ export class WorkflowEngine {
 
       this.logger.log(`Workflow run ${runId} completed. Project ${run.projectId} marked as completed.`);
       
-      // Task 10: Publish WorkflowCompletedEvent (uses existing event from domain/events)
-      const { DomainEvents } = require('../../domain/events/DomainEvents');
-      const { WorkflowCompletedEvent } = require('../../domain/events/WorkflowCompletedEvent');
-      DomainEvents.raise(new WorkflowCompletedEvent(
+      // Publish WorkflowCompletedEvent via injected EventBus (satisfies DIP)
+      await this.eventBus.publish(new WorkflowCompletedEvent(
         run.id,
         run.projectId,
         run.workflowDefId
-      ));
+      )).catch(err => this.logger.error(`Failed to publish WorkflowCompletedEvent: ${err.message}`));
       
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,

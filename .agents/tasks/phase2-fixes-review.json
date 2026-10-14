@@ -1,0 +1,11 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    "Application Service layer not implemented — Issue 3 required extracting event-raising from entities to Application Service. Project.accrueCost() adds NOTE comment deferring to 'Task 10', but no application service files created. Functionality broken: BudgetExceededEvent no longer raised, BudgetExceededHandler never executes. Search for application.service.ts returned zero results. Blocks approval.",
+    "Dynamic require() still in PrismaProjectRepository — PrismaProjectRepository.create() line 103-104 uses require() for DomainEvents and ProjectCreatedEvent. BaseAgent was fixed but repositories were not. TypeScript type safety bypassed.",
+    "Four additional require() calls in application layer — workflow.engine.ts lines 131-132, 223-224 and approval.service.ts lines 45-46 use require() for event classes. Less critical than repository issue but still violate directive.",
+    "Memory leak documented but not fixed — base.agent.ts line 50 adds TODO comment for Issue 11 (AgentEventEmitter observer accumulation). Documents risk and suggests cleanup() method + OnModuleDestroy hook, but no implementation provided.",
+    "Aggregate boundary documented but not refactored — Task.ts and Milestone.ts add TODO comments for Issue 12 (DDD aggregate boundaries). Refactoring deferred. Acceptable as LOW priority documentation."
+  ],
+  "reviewDoc": "d:\\AI_CORP\\AI-CORP\\.agents\\tasks\\phase2-fixes-review.md"
+}

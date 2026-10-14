@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleDestroy } from '@nestjs/common';
 import { AgentRole, ChatParams, ChatResult, ToolDefinition, ResourceLimits, ToolResult, ModelRouteConfig } from '@ai-corp/shared-types';
 import { MemoryService, MemoryMetadata, MemorySearchResult } from '../memory/memory.service';
 import { LLMProviderFactory } from '../llm/llm-provider.factory';
@@ -22,7 +22,7 @@ import { TaskCompletedEvent } from '../../domain/events/TaskCompletedEvent';
 import { AgentCompletedTaskEvent } from '../../domain/events/AgentCompletedTaskEvent';
 import { AgentErrorEvent } from '../../domain/events/AgentErrorEvent';
 
-export abstract class BaseAgent {
+export abstract class BaseAgent implements OnModuleDestroy {
   protected readonly logger = new Logger(this.constructor.name);
   protected readonly stateMachine: AgentStateMachine;
   protected readonly eventEmitter: AgentEventEmitter;
@@ -46,12 +46,30 @@ export abstract class BaseAgent {
     // Initialize state machine and event emitter (create new instances if not provided)
     this.stateMachine = stateMachine || new AgentStateMachine(AgentState.IDLE);
     this.eventEmitter = eventEmitter || new AgentEventEmitter();
-    
-    // TODO (Issue 11): Add lifecycle cleanup method
-    // - Implement onDestroy() or cleanup() method to call this.eventEmitter.clearObservers()
-    // - Prevents memory leaks from dangling observer references
-    // - Should be called when agent is decommissioned or module is destroyed
-    // - Consider NestJS OnModuleDestroy lifecycle hook
+  }
+
+  /**
+   * Lifecycle cleanup method (NestJS OnModuleDestroy hook)
+   * 
+   * Prevents memory leaks by clearing all observer references when agent is destroyed.
+   * This is called automatically by NestJS when the module is being torn down.
+   * 
+   * Issue 11: Implements observer cleanup to prevent memory leaks
+   */
+  onModuleDestroy() {
+    this.logger.debug(`Cleaning up agent ${this.role} - clearing observers`);
+    this.eventEmitter.clearObservers();
+  }
+
+  /**
+   * Manual cleanup method for explicit agent decommissioning
+   * 
+   * Call this when an agent instance is no longer needed but the module
+   * is still running (e.g., agent pool management, agent recycling).
+   */
+  cleanup(): void {
+    this.logger.debug(`Manual cleanup for agent ${this.role}`);
+    this.eventEmitter.clearObservers();
   }
 
   /**
