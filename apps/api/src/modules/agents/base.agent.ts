@@ -16,6 +16,11 @@ import { AgentStateMachine } from '../../domain/agent/AgentStateMachine';
 import { AgentEventEmitter } from '../../domain/agent/AgentEventEmitter';
 import { AgentState } from '../../domain/agent/AgentState';
 import { StateChangedEvent } from '../../domain/agent/interfaces/IAgentObserver.interface';
+import { EventBus } from '../../domain/events/EventBus';
+import { TaskAssignedEvent } from '../../domain/events/TaskAssignedEvent';
+import { TaskCompletedEvent } from '../../domain/events/TaskCompletedEvent';
+import { AgentCompletedTaskEvent } from '../../domain/events/AgentCompletedTaskEvent';
+import { AgentErrorEvent } from '../../domain/events/AgentErrorEvent';
 
 export abstract class BaseAgent {
   protected readonly logger = new Logger(this.constructor.name);
@@ -32,6 +37,7 @@ export abstract class BaseAgent {
     protected readonly sandboxExecutor: SandboxExecutor,
     protected readonly apiUsageService: ApiUsageService,
     protected readonly websocketGateway: AppWebSocketGateway,
+    protected readonly eventBus: EventBus, // Injected via DI (resolves DIP violation)
     protected readonly thinkingStrategy?: IThinkingStrategy,
     protected readonly actionStrategy?: IActionStrategy,
     stateMachine?: AgentStateMachine,
@@ -40,6 +46,12 @@ export abstract class BaseAgent {
     // Initialize state machine and event emitter (create new instances if not provided)
     this.stateMachine = stateMachine || new AgentStateMachine(AgentState.IDLE);
     this.eventEmitter = eventEmitter || new AgentEventEmitter();
+    
+    // TODO (Issue 11): Add lifecycle cleanup method
+    // - Implement onDestroy() or cleanup() method to call this.eventEmitter.clearObservers()
+    // - Prevents memory leaks from dangling observer references
+    // - Should be called when agent is decommissioned or module is destroyed
+    // - Consider NestJS OnModuleDestroy lifecycle hook
   }
 
   /**
@@ -73,15 +85,13 @@ export abstract class BaseAgent {
 
     try {
       // Task 10: Publish TaskAssignedEvent when agent starts working on a task
-      const { DomainEvents } = require('../../domain/events/DomainEvents');
-      const { TaskAssignedEvent } = require('../../domain/events/TaskAssignedEvent');
-      DomainEvents.raise(new TaskAssignedEvent(
+      await this.eventBus.publish(new TaskAssignedEvent(
         taskId,
         projectId,
         this.role,
         taskTitle,
         context.priority
-      ));
+      )).catch(err => this.logger.error(`Failed to publish TaskAssignedEvent: ${err.message}`));
 
       // State transition: IDLE → THINKING
       this.stateMachine.transitionTo(AgentState.THINKING, 'Starting thought process');
@@ -109,24 +119,22 @@ export abstract class BaseAgent {
         const executionTimeMs = Date.now() - startTime;
         
         // Task 10: Publish TaskCompletedEvent
-        const { TaskCompletedEvent } = require('../../domain/events/TaskCompletedEvent');
-        DomainEvents.raise(new TaskCompletedEvent(
+        await this.eventBus.publish(new TaskCompletedEvent(
           taskId,
           projectId,
           this.role,
           taskTitle,
           executionTimeMs,
           { thought, action }
-        ));
+        )).catch(err => this.logger.error(`Failed to publish TaskCompletedEvent: ${err.message}`));
         
         // Raise domain event for successful task completion (legacy)
-        const { AgentCompletedTaskEvent } = require('../../domain/events/AgentCompletedTaskEvent');
-        DomainEvents.raise(new AgentCompletedTaskEvent(
+        await this.eventBus.publish(new AgentCompletedTaskEvent(
           agentId,
           agentContext.taskId || 'unknown',
           agentContext.projectId || projectId,
           { thought, action }
-        ));
+        )).catch(err => this.logger.error(`Failed to publish AgentCompletedTaskEvent: ${err.message}`));
         
         // Reset to IDLE for reuse
         this.stateMachine.transitionTo(AgentState.IDLE, 'Agent ready for next task');
@@ -151,24 +159,22 @@ export abstract class BaseAgent {
       const executionTimeMs = Date.now() - startTime;
       
       // Task 10: Publish TaskCompletedEvent (legacy path)
-      const { TaskCompletedEvent } = require('../../domain/events/TaskCompletedEvent');
-      DomainEvents.raise(new TaskCompletedEvent(
+      await this.eventBus.publish(new TaskCompletedEvent(
         taskId,
         projectId,
         this.role,
         taskTitle,
         executionTimeMs,
         { thought, action }
-      ));
+      )).catch(err => this.logger.error(`Failed to publish TaskCompletedEvent: ${err.message}`));
       
       // Raise domain event for successful task completion (legacy)
-      const { AgentCompletedTaskEvent } = require('../../domain/events/AgentCompletedTaskEvent');
-      DomainEvents.raise(new AgentCompletedTaskEvent(
+      await this.eventBus.publish(new AgentCompletedTaskEvent(
         agentId,
         context.taskId || 'unknown',
         context.projectId || projectId,
         { thought, action }
-      ));
+      )).catch(err => this.logger.error(`Failed to publish AgentCompletedTaskEvent: ${err.message}`));
       
       // Reset to IDLE for reuse
       this.stateMachine.transitionTo(AgentState.IDLE, 'Agent ready for next task');
@@ -192,25 +198,65 @@ export abstract class BaseAgent {
       });
       
       // Raise domain event for agent error
-      const { DomainEvents } = require('../../domain/events/DomainEvents');
-      const { AgentErrorEvent } = require('../../domain/events/AgentErrorEvent');
-      DomainEvents.raise(new AgentErrorEvent(
+      await this.eventBus.publish(new AgentErrorEvent(
         agentId,
         context.taskId || 'unknown',
         projectId,
         error instanceof Error ? error.message : String(error)
-      ));
+      )).catch(err => this.logger.error(`Failed to publish AgentErrorEvent: ${err.message}`));
       
       // Log error
       this.logger.error(`Agent ${this.role} execution error: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
       
-      // Reset to IDLE so agent can be reused
-      this.stateMachine.transitionTo(AgentState.IDLE, 'Agent reset after error');
-      this.emitStateChanged(agentId, AgentState.ERROR, AgentState.IDLE, projectId);
+      // Issue 7: Transient vs Permanent Error Classification
+      const isTransient = this.isTransientError(error);
+      
+      // Reset to IDLE so agent can be reused (only for transient errors)
+      if (isTransient) {
+        this.stateMachine.transitionTo(AgentState.IDLE, 'Agent reset after transient error');
+        this.emitStateChanged(agentId, AgentState.ERROR, AgentState.IDLE, projectId);
+      }
       
       // Re-throw the error so callers know it failed
       throw error;
     }
+  }
+
+  /**
+   * Issue 7: Classify errors as transient (retryable) or permanent (non-retryable)
+   * 
+   * Transient errors: network timeouts, rate limits, temporary service outages
+   * Permanent errors: authentication failures, missing dependencies, invalid configuration
+   */
+  private isTransientError(error: unknown): boolean {
+    if (!(error instanceof Error)) return false;
+    
+    const message = error.message.toLowerCase();
+    
+    // Transient errors (network/timeout/rate limit)
+    if (message.includes('timeout') ||
+        message.includes('econnrefused') ||
+        message.includes('enotfound') ||
+        message.includes('rate limit') ||
+        message.includes('503') ||
+        message.includes('504') ||
+        message.includes('connection reset')) {
+      return true;
+    }
+    
+    // Permanent errors (auth/config/missing dependencies)
+    if (message.includes('authentication') ||
+        message.includes('authorization') ||
+        message.includes('api key') ||
+        message.includes('not found') ||
+        message.includes('does not exist') ||
+        message.includes('invalid config') ||
+        message.includes('missing dependency')) {
+      return false;
+    }
+    
+    // Default: treat as transient for safety (allow retry)
+    return true;
   }
 
   /**

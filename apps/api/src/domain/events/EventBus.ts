@@ -16,13 +16,14 @@
 
 import { Injectable, Logger } from '@nestjs/common';
 import { DomainEvent } from './DomainEvent';
+import { IEventPublisher } from './IEventPublisher';
 
 export interface IEventHandler<T extends DomainEvent = DomainEvent> {
   handle(event: T): Promise<void>;
 }
 
 @Injectable()
-export class EventBus {
+export class EventBus implements IEventPublisher {
   private readonly logger = new Logger(EventBus.name);
   private handlers = new Map<string, IEventHandler[]>();
 
@@ -40,8 +41,17 @@ export class EventBus {
   /**
    * Publish an event to all subscribed handlers
    * 
+   * **Important: Eventual Consistency Model**
+   * - Handlers execute asynchronously and independently
+   * - Handler execution order is UNDEFINED - do not rely on sequence
+   * - One handler's failure does not stop others from executing
+   * - Events are fire-and-forget: publish() returns immediately after dispatching
+   * - For critical operations requiring consistency, use transactions or sagas
+   * 
    * Error Handling: If one handler fails, others still execute.
    * Failures are logged but not propagated to the caller.
+   * 
+   * @param event - The domain event to publish to all handlers
    */
   async publish(event: DomainEvent): Promise<void> {
     const handlers = this.handlers.get(event.eventType) || [];

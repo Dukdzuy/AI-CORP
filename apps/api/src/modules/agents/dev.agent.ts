@@ -7,6 +7,7 @@ import { ToolRegistry } from '../tools/tool.registry';
 import { SandboxExecutor } from '../tools/sandbox.executor';
 import { ApiUsageService } from '../llm/api-usage.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
+import { EventBus } from '../../domain/events/EventBus';
 
 @Injectable()
 export class DevAgent extends BaseAgent {
@@ -16,7 +17,8 @@ export class DevAgent extends BaseAgent {
     toolRegistry: ToolRegistry,
     sandboxExecutor: SandboxExecutor,
     apiUsageService: ApiUsageService,
-    websocketGateway: AppWebSocketGateway
+    websocketGateway: AppWebSocketGateway,
+    eventBus: EventBus
   ) {
     const systemPrompt = `You are the Lead Developer. Your job is to write REAL, WORKING code for the project.
 
@@ -28,6 +30,12 @@ RULES:
 5. Each <CODE> block must be self-contained and functional
 
 FORMAT:
+<CODE filepath="src/app.js">
+// Full working code here
+</CODE>`;
+    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', fallbackProvider: 'opencode' };
+    super(AgentRole.DEV, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway, eventBus);
+  }
 <CODE filepath="path/to/file.ext">
 complete working code here
 </CODE>`;

@@ -59,6 +59,12 @@ export interface IThinkingStrategy {
    * // thought.plannedActions: [{ toolName: 'create_milestone', ... }]
    * // thought.confidence: 0.85
    * ```
+   * 
+   * TODO (Academic Enhancement): Input validation missing
+   * - Add validation for context parameter (null checks, required fields)
+   * - Validate context.taskId, context.projectId are present
+   * - Consider Result<T,E> pattern instead of throwing errors for better error handling
+   * - Example: `Result<AgentThought, ValidationError>` to make error handling explicit
    */
   think(context: AgentContext): Promise<AgentThought>;
 }

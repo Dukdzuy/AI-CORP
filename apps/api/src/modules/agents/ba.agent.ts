@@ -7,6 +7,7 @@ import { ToolRegistry } from '../tools/tool.registry';
 import { SandboxExecutor } from '../tools/sandbox.executor';
 import { ApiUsageService } from '../llm/api-usage.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
+import { EventBus } from '../../domain/events/EventBus';
 import { BAThinkingStrategy, BAActionStrategy } from './strategies';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class BaAgent extends BaseAgent {
     sandboxExecutor: SandboxExecutor,
     apiUsageService: ApiUsageService,
     websocketGateway: AppWebSocketGateway,
+    eventBus: EventBus,
     thinkingStrategy: BAThinkingStrategy,
     actionStrategy: BAActionStrategy
   ) {
@@ -46,6 +48,7 @@ Your responsibilities:
       sandboxExecutor,
       apiUsageService,
       websocketGateway,
+      eventBus,
       thinkingStrategy,
       actionStrategy
     );

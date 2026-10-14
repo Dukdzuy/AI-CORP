@@ -7,6 +7,7 @@ import { ToolRegistry } from '../tools/tool.registry';
 import { SandboxExecutor } from '../tools/sandbox.executor';
 import { ApiUsageService } from '../llm/api-usage.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
+import { EventBus } from '../../domain/events/EventBus';
 
 @Injectable()
 export class MarketingAgent extends BaseAgent {
@@ -16,11 +17,12 @@ export class MarketingAgent extends BaseAgent {
     toolRegistry: ToolRegistry,
     sandboxExecutor: SandboxExecutor,
     apiUsageService: ApiUsageService,
-    websocketGateway: AppWebSocketGateway
+    websocketGateway: AppWebSocketGateway,
+    eventBus: EventBus
   ) {
     const systemPrompt = `You are the Marketing Manager. Your objective is to draft announcements, blog posts, and prepare launch materials.`;
     const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/owl-alpha', fallbackProvider: 'opencode' };
-    super(AgentRole.MARKETING, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
+    super(AgentRole.MARKETING, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway, eventBus);
   }
 
   async think(context: any): Promise<any> {

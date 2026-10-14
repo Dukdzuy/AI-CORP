@@ -21,6 +21,15 @@
  * Domain Events (commented for Task 10):
  * - TaskCreated, TaskStatusChanged, TaskCompleted
  * 
+ * TODO (DDD Aggregate Boundary - Issue 12):
+ * - Current design: Task is a separate aggregate root with its own repository
+ * - Recommended: Task should be part of the Project aggregate
+ * - Rationale: Tasks cannot exist without a Project; they are existentially dependent
+ * - Impact: Task lifecycle and consistency should be managed through Project aggregate
+ * - Refactoring: Move Task creation/modification to Project.addTask(), Project.updateTask()
+ * - Repository: Remove TaskRepository, access tasks only through ProjectRepository
+ * - Benefits: True transactional consistency, enforces invariants across Project + Tasks
+ * 
  * @pattern Domain Entity (DDD), State Pattern
  * @principle Kanban Workflow Rules
  */

@@ -9,6 +9,14 @@ import {
   WorkflowRunDTO,
 } from '../../domain/repositories';
 import { PrismaService } from '../../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import {
+  EntityNotFoundException,
+  RepositoryException,
+  ForeignKeyViolationException,
+  DatabaseConnectionException,
+  UniqueConstraintViolationException,
+} from '../../domain/exceptions';
 
 /**
  * Prisma implementation of IProjectRepository
@@ -21,85 +29,157 @@ export class PrismaProjectRepository implements IProjectRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(id: string): Promise<ProjectDTO | null> {
-    const project = await this.prisma.project.findUnique({ where: { id } });
-    if (!project) return null;
-    return this.mapToDTO(project);
+    try {
+      const project = await this.prisma.project.findUnique({ where: { id } });
+      if (!project) return null;
+      return this.mapToDTO(project);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('findById', 'Project', error as Error);
+    }
   }
 
   async findAll(options?: {
     orderBy?: 'createdAt' | 'updatedAt';
     order?: 'asc' | 'desc';
   }): Promise<ProjectDTO[]> {
-    const projects = await this.prisma.project.findMany({
-      orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
-      include: {
-        _count: { select: { tasks: true, milestones: true } },
-        workflowRuns: {
-          orderBy: { startedAt: 'desc' },
-          take: 1,
+    try {
+      const projects = await this.prisma.project.findMany({
+        orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
+        include: {
+          _count: { select: { tasks: true, milestones: true } },
+          workflowRuns: {
+            orderBy: { startedAt: 'desc' },
+            take: 1,
+          },
         },
-      },
-    });
-    return projects.map((p) => this.mapToDTO(p));
+      });
+      return projects.map((p) => this.mapToDTO(p));
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('findAll', 'Project', error as Error);
+    }
   }
 
   async findByUserId(userId: string): Promise<ProjectDTO[]> {
-    const projects = await this.prisma.project.findMany({
-      where: { createdById: userId },
-      orderBy: { createdAt: 'desc' },
-    });
-    return projects.map((p) => this.mapToDTO(p));
+    try {
+      const projects = await this.prisma.project.findMany({
+        where: { createdById: userId },
+        orderBy: { createdAt: 'desc' },
+      });
+      return projects.map((p) => this.mapToDTO(p));
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('findByUserId', 'Project', error as Error);
+    }
   }
 
   async create(data: CreateProjectData): Promise<ProjectDTO> {
-    const project = await this.prisma.project.create({
-      data: {
-        name: data.name,
-        description: data.description,
-        goal: data.goal,
-        budget: data.budget,
-        createdById: data.createdById,
-      },
-    });
-    this.logger.log(`Created project ${project.id}`);
-    
-    // Task 10: Publish ProjectCreatedEvent
-    const { DomainEvents } = require('../../domain/events/DomainEvents');
-    const { ProjectCreatedEvent } = require('../../domain/events/ProjectCreatedEvent');
-    DomainEvents.raise(new ProjectCreatedEvent(
-      project.id,
-      project.name,
-      project.createdById,
-      project.budget ? Number(project.budget) : undefined
-    ));
-    
-    return this.mapToDTO(project);
+    try {
+      const project = await this.prisma.project.create({
+        data: {
+          name: data.name,
+          description: data.description,
+          goal: data.goal,
+          budget: data.budget,
+          createdById: data.createdById,
+        },
+      });
+      this.logger.log(`Created project ${project.id}`);
+      
+      // Task 10: Publish ProjectCreatedEvent
+      const { DomainEvents } = require('../../domain/events/DomainEvents');
+      const { ProjectCreatedEvent } = require('../../domain/events/ProjectCreatedEvent');
+      DomainEvents.raise(new ProjectCreatedEvent(
+        project.id,
+        project.name,
+        project.createdById,
+        project.budget ? Number(project.budget) : undefined
+      ));
+      
+      return this.mapToDTO(project);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2002') {
+          throw new UniqueConstraintViolationException('Project', 'name');
+        }
+        if (error.code === 'P2003') {
+          throw new ForeignKeyViolationException('Project', 'User');
+        }
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('create', 'Project', error as Error);
+    }
   }
 
   async update(id: string, data: UpdateProjectData): Promise<ProjectDTO> {
-    const project = await this.prisma.project.update({
-      where: { id },
-      data,
-    });
-    this.logger.log(`Updated project ${id}`);
-    return this.mapToDTO(project);
+    try {
+      const project = await this.prisma.project.update({
+        where: { id },
+        data,
+      });
+      this.logger.log(`Updated project ${id}`);
+      return this.mapToDTO(project);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new EntityNotFoundException('Project', id);
+        }
+        if (error.code === 'P2002') {
+          throw new UniqueConstraintViolationException('Project', 'name');
+        }
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('update', 'Project', error as Error);
+    }
   }
 
   async delete(id: string): Promise<void> {
-    // Delete related records first (referential integrity)
-    await this.prisma.workflowStep.deleteMany({
-      where: { workflowRun: { projectId: id } },
-    });
-    await this.prisma.approval.deleteMany({
-      where: { workflowRun: { projectId: id } },
-    });
-    await this.prisma.workflowRun.deleteMany({ where: { projectId: id } });
-    await this.prisma.task.deleteMany({ where: { projectId: id } });
-    await this.prisma.milestone.deleteMany({ where: { projectId: id } });
-    await this.prisma.agentMessage.deleteMany({ where: { projectId: id } });
-    await this.prisma.apiUsageLog.deleteMany({ where: { projectId: id } });
-    await this.prisma.project.delete({ where: { id } });
-    this.logger.log(`Deleted project ${id}`);
+    try {
+      // Delete related records first (referential integrity)
+      await this.prisma.workflowStep.deleteMany({
+        where: { workflowRun: { projectId: id } },
+      });
+      await this.prisma.approval.deleteMany({
+        where: { workflowRun: { projectId: id } },
+      });
+      await this.prisma.workflowRun.deleteMany({ where: { projectId: id } });
+      await this.prisma.task.deleteMany({ where: { projectId: id } });
+      await this.prisma.milestone.deleteMany({ where: { projectId: id } });
+      await this.prisma.agentMessage.deleteMany({ where: { projectId: id } });
+      await this.prisma.apiUsageLog.deleteMany({ where: { projectId: id } });
+      await this.prisma.project.delete({ where: { id } });
+      this.logger.log(`Deleted project ${id}`);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw new EntityNotFoundException('Project', id);
+        }
+        if (error.code === 'P2003') {
+          throw new ForeignKeyViolationException('Project', 'unknown reference');
+        }
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('delete', 'Project', error as Error);
+    }
   }
 
   async updateCost(id: string, amount: number): Promise<ProjectDTO> {

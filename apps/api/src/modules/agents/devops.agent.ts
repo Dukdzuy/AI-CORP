@@ -7,6 +7,7 @@ import { ToolRegistry } from '../tools/tool.registry';
 import { SandboxExecutor } from '../tools/sandbox.executor';
 import { ApiUsageService } from '../llm/api-usage.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
+import { EventBus } from '../../domain/events/EventBus';
 import { DevOpsThinkingStrategy, DevOpsActionStrategy } from './strategies';
 
 @Injectable()
@@ -18,6 +19,7 @@ export class DevOpsAgent extends BaseAgent {
     sandboxExecutor: SandboxExecutor,
     apiUsageService: ApiUsageService,
     websocketGateway: AppWebSocketGateway,
+    eventBus: EventBus,
     thinkingStrategy: DevOpsThinkingStrategy,
     actionStrategy: DevOpsActionStrategy
   ) {
@@ -49,6 +51,7 @@ Your responsibilities:
       sandboxExecutor,
       apiUsageService,
       websocketGateway,
+      eventBus,
       thinkingStrategy,
       actionStrategy
     );

@@ -30,14 +30,25 @@ export class ProjectStatus {
   }
 
   static fromString(value: string): ProjectStatus {
-    return new ProjectStatus(value.toLowerCase());
+    try {
+      const normalized = value.toLowerCase().trim();
+      if (!ProjectStatus.VALID_STATUSES.includes(normalized as any)) {
+        throw new Error(`Invalid project status: '${value}'. Valid values: ${ProjectStatus.VALID_STATUSES.join(', ')}`);
+      }
+      return new ProjectStatus(normalized);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Invalid project status')) {
+        throw error;
+      }
+      throw new Error(`Failed to create ProjectStatus from value '${value}': ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  // Factory methods
-  static ACTIVE = new ProjectStatus('active');
-  static PAUSED = new ProjectStatus('paused');
-  static COMPLETED = new ProjectStatus('completed');
-  static CANCELLED = new ProjectStatus('cancelled');
+  // Factory methods (using getters to guarantee immutability)
+  static get ACTIVE() { return new ProjectStatus('active'); }
+  static get PAUSED() { return new ProjectStatus('paused'); }
+  static get COMPLETED() { return new ProjectStatus('completed'); }
+  static get CANCELLED() { return new ProjectStatus('cancelled'); }
 
   canTransitionTo(target: ProjectStatus): boolean {
     const allowed = ProjectStatus.VALID_TRANSITIONS[this.value] || [];

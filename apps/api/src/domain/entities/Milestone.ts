@@ -15,6 +15,15 @@
  * Domain Events (commented for Task 10):
  * - MilestoneCreated, MilestoneCompleted, MilestoneOverdue
  * 
+ * TODO (DDD Aggregate Boundary - Issue 12):
+ * - Current design: Milestone is a separate aggregate root with its own repository
+ * - Recommended: Milestone should be part of the Project aggregate
+ * - Rationale: Milestones cannot exist without a Project; they define Project structure
+ * - Impact: Milestone lifecycle should be managed through Project aggregate
+ * - Refactoring: Move Milestone creation/modification to Project.addMilestone(), Project.updateMilestone()
+ * - Repository: Remove MilestoneRepository, access milestones only through ProjectRepository
+ * - Benefits: Enforces consistency between Project and its Milestones in a single transaction
+ * 
  * @pattern Domain Entity (DDD)
  * @principle Business Rule Encapsulation
  */

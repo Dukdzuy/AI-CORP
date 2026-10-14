@@ -31,14 +31,25 @@ export class TaskStatus {
   }
 
   static fromString(value: string): TaskStatus {
-    return new TaskStatus(value.toLowerCase());
+    try {
+      const normalized = value.toLowerCase().trim();
+      if (!TaskStatus.VALID_STATUSES.includes(normalized as any)) {
+        throw new Error(`Invalid task status: '${value}'. Valid values: ${TaskStatus.VALID_STATUSES.join(', ')}`);
+      }
+      return new TaskStatus(normalized);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Invalid task status')) {
+        throw error;
+      }
+      throw new Error(`Failed to create TaskStatus from value '${value}': ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  // Factory methods
-  static TODO = new TaskStatus('todo');
-  static IN_PROGRESS = new TaskStatus('in_progress');
-  static REVIEW = new TaskStatus('review');
-  static DONE = new TaskStatus('done');
+  // Factory methods (using getters to guarantee immutability)
+  static get TODO() { return new TaskStatus('todo'); }
+  static get IN_PROGRESS() { return new TaskStatus('in_progress'); }
+  static get REVIEW() { return new TaskStatus('review'); }
+  static get DONE() { return new TaskStatus('done'); }
 
   canTransitionTo(target: TaskStatus): boolean {
     const allowed = TaskStatus.VALID_TRANSITIONS[this.value] || [];

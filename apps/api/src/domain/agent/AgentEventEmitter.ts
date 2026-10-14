@@ -95,10 +95,24 @@ export class AgentEventEmitter {
   /**
    * Remove all registered observers
    * 
-   * Useful for cleanup or reset scenarios
+   * Useful for cleanup or reset scenarios.
+   * 
+   * TODO: Call this method during agent lifecycle cleanup (e.g., when agent is destroyed or reset)
+   * - Add lifecycle hooks to BaseAgent for proper cleanup
+   * - Call clearObservers() when agent is decommissioned
+   * - Prevent memory leaks from dangling observer references
    */
   removeAllObservers(): void {
     this.observers.clear();
+  }
+
+  /**
+   * Alias for removeAllObservers() for consistency with naming conventions
+   * 
+   * TODO: Call this method during agent lifecycle cleanup
+   */
+  clearObservers(): void {
+    this.removeAllObservers();
   }
 
   /**

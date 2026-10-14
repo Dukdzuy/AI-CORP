@@ -144,20 +144,18 @@ export class Project {
     if (this.budget && this.costAccrued.greaterThanOrEqual(this.budget)) {
       if (this.status.isActive()) {
         this.status = ProjectStatus.PAUSED;
-        // Raise domain event - will trigger workflow pause and notification
-        const { DomainEvents } = require('../events/DomainEvents');
-        const { BudgetExceededEvent } = require('../events/BudgetExceededEvent');
-        DomainEvents.raise(new BudgetExceededEvent(
-          this.id,
-          this.costAccrued.toNumber(),
-          this.budget.toNumber()
-        ));
+        // NOTE: Event-raising moved to Application Service layer (SRP - Single Responsibility Principle)
+        // Application Service will detect this state change and raise BudgetExceededEvent
       }
     }
-    // Business rule: warn at 90% budget (not implemented yet - future task)
-    else if (this.budget && this.costAccrued.greaterThanOrEqual(this.budget.multiply(0.9))) {
-      // Future: DomainEvents.raise(new BudgetWarningEvent(this.id, this.costAccrued, this.budget));
-    }
+  }
+
+  /**
+   * Helper method for Application Service to detect budget exceeded state
+   */
+  isBudgetExceeded(): boolean {
+    if (!this.budget) return false;
+    return this.costAccrued.greaterThanOrEqual(this.budget);
   }
 
   isOverBudget(): boolean {

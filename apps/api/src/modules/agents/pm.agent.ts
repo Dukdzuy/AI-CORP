@@ -7,6 +7,7 @@ import { ToolRegistry } from '../tools/tool.registry';
 import { SandboxExecutor } from '../tools/sandbox.executor';
 import { ApiUsageService } from '../llm/api-usage.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
+import { EventBus } from '../../domain/events/EventBus';
 
 @Injectable()
 export class PmAgent extends BaseAgent {
@@ -16,11 +17,12 @@ export class PmAgent extends BaseAgent {
     toolRegistry: ToolRegistry,
     sandboxExecutor: SandboxExecutor,
     apiUsageService: ApiUsageService,
-    websocketGateway: AppWebSocketGateway
+    websocketGateway: AppWebSocketGateway,
+    eventBus: EventBus
   ) {
     const systemPrompt = `You are the Project Manager. Your objective is to break down milestones into actionable technical tasks for the development team.`;
     const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
-    super(AgentRole.PM, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway);
+    super(AgentRole.PM, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway, eventBus);
   }
 
   async think(context: any): Promise<any> {
