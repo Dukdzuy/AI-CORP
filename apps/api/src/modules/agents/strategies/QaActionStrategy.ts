@@ -5,6 +5,7 @@ import { MemoryService } from '../../memory/memory.service';
 import { LLMProviderFactory } from '../../llm/llm-provider.factory';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { SandboxExecutor } from '../../tools/sandbox.executor';
 
 @Injectable()
 export class QaActionStrategy implements IActionStrategy {
@@ -14,6 +15,7 @@ export class QaActionStrategy implements IActionStrategy {
     private readonly memoryService: MemoryService,
     private readonly llmFactory: LLMProviderFactory,
     private readonly websocketGateway: AppWebSocketGateway,
+    private readonly sandboxExecutor: SandboxExecutor,
     private readonly systemPrompt: string,
     private readonly modelConfig: ModelRouteConfig
   ) {}
@@ -26,6 +28,7 @@ export class QaActionStrategy implements IActionStrategy {
 
     const code = context.code || '';
     const hasCode = code.length > 10 && !code.includes('No code provided');
+    const projectId = context.projectId;
 
     const prompt = `You are a QA engineer reviewing code from an AI developer.
 ${memoryContext}
@@ -60,21 +63,8 @@ VERDICT: FAIL`;
       AgentRole.QA,
       'testing_patterns',
       `Reviewed code for task: ${context.taskId || 'unknown'}`,
-      { importance: 5, projectId: context.projectId }
+      { importance: 5, projectId }
     );
-
-    // Emit action event
-    this.websocketGateway.sendToProject(context.projectId, {
-      type: 'agent:action',
-      payload: {
-        agentId: AgentRole.QA,
-        agentRole: AgentRole.QA,
-        taskId: context.taskId || 'none',
-        actionType: 'review',
-        toolName: 'llm',
-        parameters: { codeLength: code.length }
-      }
-    });
 
     const output = result.content || '';
     const outputUpper = output.toUpperCase();
@@ -100,15 +90,239 @@ VERDICT: FAIL`;
 
     this.logger.log(`QA review result: ${approved ? 'APPROVED' : 'REJECTED'}`);
 
+    // Generate traceability matrix if projectId is available
+    let traceabilityMatrix = '';
+    if (projectId && projectId !== 'unknown') {
+      try {
+        traceabilityMatrix = await this.generateTraceabilityMatrix(projectId);
+        this.logger.log(`Generated traceability matrix for project ${projectId}`);
+      } catch (err: any) {
+        this.logger.warn(`Failed to generate traceability matrix: ${err.message}`);
+      }
+    }
+
+    // Emit action event
+    this.websocketGateway.sendToProject(projectId || 'unknown', {
+      type: 'agent:action',
+      payload: {
+        agentId: AgentRole.QA,
+        agentRole: AgentRole.QA,
+        taskId: context.taskId || 'none',
+        actionType: 'review',
+        toolName: 'llm',
+        parameters: { codeLength: code.length, approved }
+      }
+    });
+
     return {
       success: true,
       output: {
         action: 'review',
         output,
         qa_approved: approved,
-        edgeCondition: approved ? 'onSuccess' : 'onFail'
+        edgeCondition: approved ? 'onSuccess' : 'onFail',
+        traceabilityMatrix: traceabilityMatrix || undefined
       },
       errors: []
     };
+  }
+
+  private async generateTraceabilityMatrix(projectId: string): Promise<string> {
+    const projectPath = `projects/${projectId}`;
+    const docsPath = `${projectPath}/docs`;
+
+    // Read use cases from use-cases.md
+    const readFileCommand = (filename: string) => `cat ${docsPath}/${filename} 2>/dev/null || echo "FILE_NOT_FOUND"`;
+    const useCasesResult = await this.sandboxExecutor.executeInSandbox(
+      'custom_command',
+      readFileCommand('use-cases.md'),
+      { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
+    );
+
+    if (useCasesResult.output.includes('FILE_NOT_FOUND')) {
+      throw new Error('use-cases.md not found - cannot generate traceability matrix');
+    }
+
+    // Parse use cases
+    const useCases = this.parseUseCases(useCasesResult.output);
+
+    // Read domain model
+    const domainModelResult = await this.sandboxExecutor.executeInSandbox(
+      'custom_command',
+      readFileCommand('domain-model.puml'),
+      { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
+    );
+
+    const entities = domainModelResult.output.includes('FILE_NOT_FOUND')
+      ? []
+      : this.parseEntitiesFromPuml(domainModelResult.output);
+
+    // Find test files
+    const findTestsCommand = `find ${projectPath}/src -name '*.test.ts' -o -name '*.spec.ts' 2>/dev/null || echo ""`;
+    const testFilesResult = await this.sandboxExecutor.executeInSandbox(
+      'custom_command',
+      findTestsCommand,
+      { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 10000 }
+    );
+
+    const testFiles = testFilesResult.output.split('\n').filter(f => f.trim() && !f.includes('FILE_NOT_FOUND'));
+
+    // Read test file contents
+    const tests: { ucId: string; testFile: string; testName: string }[] = [];
+    for (const testFile of testFiles) {
+      try {
+        const testContentResult = await this.sandboxExecutor.executeInSandbox(
+          'custom_command',
+          `cat "${testFile}" 2>/dev/null || echo ""`,
+          { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
+        );
+        
+        if (testContentResult.output) {
+          const parsedTests = this.parseTestFile(testContentResult.output, testFile);
+          tests.push(...parsedTests);
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to read test file ${testFile}: ${err.message}`);
+      }
+    }
+
+    // Build traceability matrix
+    let traceabilityMd = '# Traceability Matrix\n\n';
+    traceabilityMd += '| Use Case ID | Use Case Name | Priority | Domain Classes | Test Cases | Coverage |\n';
+    traceabilityMd += '|-------------|---------------|----------|----------------|------------|-----------|\n';
+
+    const matrixRows: any[] = [];
+
+    useCases.forEach(uc => {
+      const relatedEntities = entities.filter(e =>
+        uc.name.toLowerCase().includes(e.toLowerCase())
+      );
+
+      const relatedTests = tests.filter(t => 
+        t.ucId === uc.id || 
+        t.testName.toLowerCase().includes(uc.name.toLowerCase()) ||
+        t.testName.includes(uc.id)
+      );
+
+      const coverage = relatedTests.length > 0 ? 'Covered' : 'Missing';
+
+      matrixRows.push({
+        ucId: uc.id,
+        ucName: uc.name,
+        priority: uc.priority || 'Unknown',
+        entities: relatedEntities,
+        tests: relatedTests,
+        coverage
+      });
+
+      traceabilityMd += `| ${uc.id} | ${uc.name} | ${uc.priority || 'N/A'} | ${relatedEntities.join(', ') || 'N/A'} | ${relatedTests.map(t => t.testName).join(', ') || 'None'} | ${coverage} |\n`;
+    });
+
+    const coveredCount = matrixRows.filter(r => r.coverage === 'Covered').length;
+    const totalCount = matrixRows.length;
+    const coveragePercent = totalCount > 0 ? ((coveredCount / totalCount) * 100).toFixed(1) : '0';
+
+    traceabilityMd += `\n**Summary:**\n`;
+    traceabilityMd += `- Total Use Cases: ${totalCount}\n`;
+    traceabilityMd += `- Covered: ${coveredCount}\n`;
+    traceabilityMd += `- Missing: ${totalCount - coveredCount}\n`;
+    traceabilityMd += `- Coverage: ${coveragePercent}%\n`;
+
+    if (parseFloat(coveragePercent) < 80) {
+      const missingUCs = matrixRows.filter(r => r.coverage === 'Missing').map(r => r.ucId);
+      traceabilityMd += `\n**⚠️ WARNING: Test coverage below 80%**\n`;
+      traceabilityMd += `Missing tests for: ${missingUCs.join(', ')}\n`;
+
+      // Emit warning via WebSocket
+      this.websocketGateway.sendToProject(projectId, {
+        type: 'quality_warning',
+        payload: {
+          message: `Test coverage is ${coveragePercent}% (below 80% threshold)`,
+          missingUseCases: missingUCs,
+          severity: 'warning'
+        }
+      });
+    }
+
+    // Write traceability matrix to file
+    const writeMatrixCmd = `cat > ${docsPath}/traceability-matrix.md << 'HEREDOC_EOF'\n${traceabilityMd}\nHEREDOC_EOF`;
+    await this.sandboxExecutor.executeInSandbox('custom_command', writeMatrixCmd, {
+      maxMemoryMB: 128,
+      maxCPUPercent: 20,
+      maxDiskMB: 50,
+      timeout: 10000
+    });
+
+    return traceabilityMd;
+  }
+
+  private parseUseCases(content: string): Array<{ id: string; name: string; priority?: string }> {
+    const useCases: Array<{ id: string; name: string; priority?: string }> = [];
+    
+    // Match markdown headers with use case pattern
+    const ucPattern = /##\s+Use Case:\s+(.+?)\n[\s\S]*?\|\s*\*\*ID\*\*\s*\|\s*(.+?)\s*\|[\s\S]*?(?:\|\s*\*\*Priority\*\*\s*\|\s*(.+?)\s*\|)?/gi;
+    let match;
+    
+    while ((match = ucPattern.exec(content)) !== null) {
+      useCases.push({
+        name: match[1].trim(),
+        id: match[2].trim(),
+        priority: match[3]?.trim()
+      });
+    }
+
+    return useCases;
+  }
+
+  private parseEntitiesFromPuml(content: string): string[] {
+    const entities: string[] = [];
+    const entityPattern = /class\s+(\w+)\s+<<Entity>>/g;
+    let match;
+
+    while ((match = entityPattern.exec(content)) !== null) {
+      entities.push(match[1]);
+    }
+
+    return entities;
+  }
+
+  private parseTestFile(content: string, filePath: string): Array<{ ucId: string; testFile: string; testName: string }> {
+    const tests: Array<{ ucId: string; testFile: string; testName: string }> = [];
+
+    // Match describe blocks
+    const describePattern = /describe\s*\(\s*['"`](.+?)['"`]/g;
+    let match;
+
+    while ((match = describePattern.exec(content)) !== null) {
+      const testName = match[1];
+      
+      // Try to extract UC-XXX from test name or content
+      const ucMatch = testName.match(/UC-\d{3}/);
+      const ucId = ucMatch ? ucMatch[0] : '';
+
+      tests.push({
+        ucId,
+        testFile: filePath,
+        testName
+      });
+    }
+
+    // Also match it() blocks
+    const itPattern = /it\s*\(\s*['"`](.+?)['"`]/g;
+    while ((match = itPattern.exec(content)) !== null) {
+      const testName = match[1];
+      const ucMatch = testName.match(/UC-\d{3}/);
+      const ucId = ucMatch ? ucMatch[0] : '';
+
+      if (ucId) {
+        tests.push({
+          ucId,
+          testFile: filePath,
+          testName
+        });
+      }
+    }
+
+    return tests;
   }
 }

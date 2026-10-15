@@ -5,6 +5,11 @@ import { MemoryService } from '../../memory/memory.service';
 import { LLMProviderFactory } from '../../llm/llm-provider.factory';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { TemplateService } from '../services/template.service';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { SandboxExecutor } from '../../tools/sandbox.executor';
+import { UseCaseDataSchema, UseCaseData } from '../schemas/ooad.schema';
+import { OOADSchemaValidationError } from '../errors/OOADSchemaValidationError';
 
 @Injectable()
 export class BAActionStrategy implements IActionStrategy {
@@ -13,7 +18,10 @@ export class BAActionStrategy implements IActionStrategy {
   constructor(
     private readonly memoryService: MemoryService,
     private readonly llmFactory: LLMProviderFactory,
-    private readonly websocketGateway: AppWebSocketGateway
+    private readonly websocketGateway: AppWebSocketGateway,
+    private readonly templateService: TemplateService,
+    private readonly prisma: PrismaService,
+    private readonly sandboxExecutor: SandboxExecutor
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -25,30 +33,39 @@ export class BAActionStrategy implements IActionStrategy {
     const goal = context.goal || context.projectContext?.goal || '';
     const description = context.projectContext?.description || '';
 
-    const systemPrompt = `You are a Business Analyst. Analyze the project and create detailed requirements documentation.`;
+    const systemPrompt = `You are a Business Analyst. Generate structured use cases in JSON format following the OOAD methodology.`;
 
-    const prompt = `You are a Business Analyst. Analyze the project and create detailed requirements documentation.
+    const prompt = `You are a Business Analyst. Generate structured use cases in JSON format.
 
 PROJECT GOAL: ${goal}
 PROJECT DESCRIPTION: ${description}
 ${memoryContext}
 
-Create a comprehensive requirements document with:
+Generate a JSON object with this EXACT structure:
+{
+  "actors": ["Actor1", "Actor2", ...],
+  "useCases": [
+    {
+      "id": "UC-001",
+      "name": "Use case name",
+      "actor": "Actor name",
+      "priority": "High" | "Medium" | "Low",
+      "preConditions": ["condition 1", "condition 2"],
+      "postConditions": ["condition 1", "condition 2"],
+      "mainFlow": ["step 1", "step 2", "step 3", "step 4", "step 5", ...],
+      "alternativeFlows": ["alt flow 1", "alt flow 2"],
+      "exceptionFlows": ["exception 1", "exception 2"]
+    }
+  ]
+}
 
-1. USER STORIES (Format: As a [role], I want [feature], so that [benefit])
-   - Write 3-5 user stories covering key functionality
+Requirements:
+- Minimum 5 use cases
+- Each use case must have at least 5 steps in mainFlow
+- IDs must follow format UC-001, UC-002, etc.
+- Priority must be one of: High, Medium, Low
 
-2. FUNCTIONAL REQUIREMENTS
-   - List 5-7 specific functional requirements
-   - Each should be clear, testable, and measurable
-
-3. NON-FUNCTIONAL REQUIREMENTS
-   - Performance (response time, throughput)
-   - Security (authentication, authorization)
-   - Scalability (concurrent users, data volume)
-   - Usability (accessibility, user experience)
-
-Format your response clearly with headings and bullet points.`;
+Output ONLY valid JSON, no additional text.`;
 
     // Fetch latest model config
     const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
@@ -61,8 +78,75 @@ Format your response clearly with headings and bullet points.`;
         { role: 'user', content: prompt }
       ],
       model: actualModelConfig.model,
-      maxTokens: 1500
+      maxTokens: 3000,
+      response_format: { type: 'json_object' } as any
     });
+
+    // Parse and validate JSON
+    let useCaseData: UseCaseData;
+    try {
+      const jsonContent = this.extractJSON(result.content || '');
+      useCaseData = UseCaseDataSchema.parse(jsonContent);
+    } catch (error: any) {
+      this.logger.error(`OOAD Schema validation failed: ${error.message}`);
+      throw new OOADSchemaValidationError('UseCaseData', error.errors || [error.message]);
+    }
+
+    // Generate PlantUML use case diagram
+    const useCaseDiagram = this.generateUseCaseDiagram(useCaseData);
+
+    // Render use cases markdown
+    const useCasesMd = await this.templateService.render('use-case-template.md', useCaseData);
+
+    // Write files to sandbox
+    const projectId = context.projectId || 'unknown';
+    const docsPath = `projects/${projectId}/docs`;
+
+    try {
+      // Create docs directory
+      await this.sandboxExecutor.executeInSandbox('custom_command', `mkdir -p ${docsPath}`, {
+        maxMemoryMB: 64,
+        maxCPUPercent: 10,
+        maxDiskMB: 10,
+        timeout: 5000
+      });
+
+      // Write use-cases.md
+      const writeMdCmd = `cat > ${docsPath}/use-cases.md << 'HEREDOC_EOF'\n${useCasesMd}\nHEREDOC_EOF`;
+      await this.sandboxExecutor.executeInSandbox('custom_command', writeMdCmd, {
+        maxMemoryMB: 128,
+        maxCPUPercent: 20,
+        maxDiskMB: 50,
+        timeout: 10000
+      });
+
+      // Write use-case-diagram.puml
+      const writePumlCmd = `cat > ${docsPath}/use-case-diagram.puml << 'HEREDOC_EOF'\n${useCaseDiagram}\nHEREDOC_EOF`;
+      await this.sandboxExecutor.executeInSandbox('custom_command', writePumlCmd, {
+        maxMemoryMB: 128,
+        maxCPUPercent: 20,
+        maxDiskMB: 50,
+        timeout: 10000
+      });
+
+      this.logger.log(`BA wrote OOAD artifacts to ${docsPath}`);
+    } catch (err: any) {
+      this.logger.warn(`Failed to write OOAD artifacts: ${err.message}`);
+    }
+
+    // Persist to database
+    if (projectId !== 'unknown') {
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: {
+          ooadMetadata: {
+            actors: useCaseData.actors,
+            useCases: useCaseData.useCases
+          }
+        }
+      });
+      this.logger.log(`Saved OOAD metadata to project ${projectId}`);
+    }
 
     // Save memory
     const agentId = await this.memoryService.getAgentIdByRole(AgentRole.BA);
@@ -71,28 +155,83 @@ Format your response clearly with headings and bullet points.`;
         agentId,
         AgentRole.BA,
         'requirements_analysis',
-        `Analyzed requirements for: ${goal}`,
-        { importance: 7, projectId: context.projectId }
+        `Generated ${useCaseData.useCases.length} use cases for: ${goal}`,
+        { importance: 7, projectId }
       );
     }
 
     // Emit action event
-    this.websocketGateway.sendToProject(context.projectId || 'unknown', {
+    this.websocketGateway.sendToProject(projectId, {
       type: 'agent:action',
       payload: {
         agentId: AgentRole.BA,
         agentRole: AgentRole.BA,
         taskId: context.taskId || 'none',
-        actionType: 'analyzeRequirements',
-        toolName: 'llm',
-        parameters: { goal }
+        actionType: 'generateUseCases',
+        toolName: 'llm+template',
+        parameters: { goal, useCaseCount: useCaseData.useCases.length }
       }
     });
 
     return {
       success: true,
-      output: { action: 'analyzeRequirements', output: result.content },
+      output: {
+        action: 'generateUseCases',
+        output: useCasesMd,
+        useCases: useCaseData.useCases,
+        actors: useCaseData.actors,
+        filesWritten: [`${docsPath}/use-cases.md`, `${docsPath}/use-case-diagram.puml`]
+      },
       errors: []
     };
+  }
+
+  private extractJSON(content: string): any {
+    // Try to parse as-is first
+    try {
+      return JSON.parse(content);
+    } catch {
+      // Try to extract JSON from markdown code block
+      const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[1]);
+      }
+      // Try to find JSON object
+      const objMatch = content.match(/\{[\s\S]*\}/);
+      if (objMatch) {
+        return JSON.parse(objMatch[0]);
+      }
+      throw new Error('No valid JSON found in LLM response');
+    }
+  }
+
+  private generateUseCaseDiagram(data: UseCaseData): string {
+    let puml = '@startuml\ntitle Use Case Diagram\nleft to right direction\n\n';
+
+    // Add actors
+    data.actors.forEach(actor => {
+      const actorId = actor.replace(/\s/g, '').replace(/[^a-zA-Z0-9]/g, '');
+      puml += `actor "${actor}" as ${actorId}\n`;
+    });
+
+    puml += '\nrectangle System {\n';
+
+    // Add use cases
+    data.useCases.forEach(uc => {
+      const ucId = uc.id.replace(/-/g, '');
+      puml += `  usecase "${uc.name}" as ${ucId}\n`;
+    });
+
+    puml += '}\n\n';
+
+    // Add relationships
+    data.useCases.forEach(uc => {
+      const ucId = uc.id.replace(/-/g, '');
+      const actorId = uc.actor.replace(/\s/g, '').replace(/[^a-zA-Z0-9]/g, '');
+      puml += `${actorId} --> ${ucId}\n`;
+    });
+
+    puml += '@enduml';
+    return puml;
   }
 }

@@ -11,6 +11,8 @@ import { MemoryModule } from '../memory/memory.module';
 import { LLMModule } from '../llm/llm.module';
 import { ToolsModule } from '../tools/tools.module';
 import { WebSocketModule } from '../websocket/websocket.module';
+import { TemplateService } from './services/template.service';
+import { PrismaModule } from '../../prisma/prisma.module';
 
 // Import all strategy classes
 import {
@@ -33,8 +35,11 @@ import {
 } from './strategies';
 
 @Module({
-  imports: [MemoryModule, LLMModule, ToolsModule, WebSocketModule],
+  imports: [MemoryModule, LLMModule, ToolsModule, WebSocketModule, PrismaModule],
   providers: [
+    // Services
+    TemplateService,
+    
     // Strategy Pattern implementations
     CeoThinkingStrategy,
     CeoActionStrategy,
@@ -64,6 +69,7 @@ import {
     DevOpsAgent,
   ],
   exports: [
+    TemplateService,
     CeoAgent,
     PmAgent,
     DevAgent,

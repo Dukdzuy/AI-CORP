@@ -15,6 +15,7 @@ import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { HealthModule } from './modules/health/health.module';
 import { CostModule } from './modules/cost/cost.module';
 import { EventsModule } from './modules/events/events.module';
+import { OoadMetricsModule } from './modules/ooad-metrics/ooad-metrics.module';
 import { EnvValidator } from './modules/security/env-validator';
 
 @Module({
@@ -38,6 +39,7 @@ import { EnvValidator } from './modules/security/env-validator';
     OrchestratorModule,
     HealthModule,
     CostModule,
+    OoadMetricsModule,
   ],
   providers: [EnvValidator],
 })

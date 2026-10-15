@@ -42,6 +42,7 @@ model Project {
   createdById     String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+  ooadMetadata    Json?     // Stores use cases, domain model, patterns, architecture
 
   createdBy       User      @relation(fields: [createdById], references: [id])
   milestones      Milestone[]
@@ -49,6 +50,7 @@ model Project {
   workflowRuns    WorkflowRun[]
   agentMessages   AgentMessage[]
   apiUsageLogs    ApiUsageLog[]
+  qualityGateLogs QualityGateLog[]
 
   @@index([createdById])
   // Requirement 17.2: budget must be positive when provided
@@ -270,4 +272,21 @@ model LLMGatewayStatus {
   consecutiveFailures Int       @default(0) // Counter for consecutive failures (triggers circuit breaker at threshold 3)
   metadata            Json?     // Additional health metrics (error details, latency, etc.)
   updatedAt           DateTime  @updatedAt // Last status update timestamp
+}
+
+// ============================================================================
+// OOAD Quality Gate Logs
+// ============================================================================
+
+model QualityGateLog {
+  id        String   @id @default(uuid())
+  projectId String
+  gateId    String
+  passed    Boolean
+  checklist Json
+  timestamp DateTime @default(now())
+
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, timestamp])
 }

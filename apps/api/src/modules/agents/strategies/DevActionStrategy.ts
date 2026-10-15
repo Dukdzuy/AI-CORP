@@ -6,6 +6,7 @@ import { LLMProviderFactory } from '../../llm/llm-provider.factory';
 import { SandboxExecutor } from '../../tools/sandbox.executor';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { OOADGateNotPassedError } from '../errors/OOADGateNotPassedError';
 
 @Injectable()
 export class DevActionStrategy implements IActionStrategy {
@@ -30,8 +31,42 @@ export class DevActionStrategy implements IActionStrategy {
     const description = context.projectSummary || context.projectContext?.description || '';
     const projectName = context.projectName || context.projectContext?.name || '';
     const existingCode = context.code || '';
+    const projectId = context.projectId;
 
-    const prompt = `You are implementing a software project. Write REAL, WORKING code.
+    // Load OOAD artifacts
+    let ooadContext = '';
+    if (projectId) {
+      try {
+        const projectPath = `projects/${projectId}/docs`;
+        const readFileCommand = (filename: string) => `cat ${projectPath}/${filename} 2>/dev/null || echo "FILE_NOT_FOUND"`;
+
+        const [useCasesResult, domainModelResult, architectureResult] = await Promise.all([
+          this.sandboxExecutor.executeInSandbox('custom_command', readFileCommand('use-cases.md'), {
+            maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000
+          }),
+          this.sandboxExecutor.executeInSandbox('custom_command', readFileCommand('domain-model.puml'), {
+            maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000
+          }),
+          this.sandboxExecutor.executeInSandbox('custom_command', readFileCommand('architecture-patterns.md'), {
+            maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000
+          })
+        ]);
+
+        const useCases = useCasesResult.output.includes('FILE_NOT_FOUND') ? null : useCasesResult.output;
+        const domainModel = domainModelResult.output.includes('FILE_NOT_FOUND') ? null : domainModelResult.output;
+        const architecture = architectureResult.output.includes('FILE_NOT_FOUND') ? null : architectureResult.output;
+
+        if (useCases && domainModel && architecture) {
+          ooadContext = `\n\n==== OOAD DESIGN (MUST FOLLOW) ====\n\n=== USE CASES ===\n${useCases}\n\n=== DOMAIN MODEL ===\n${domainModel}\n\n=== ARCHITECTURE & PATTERNS ===\n${architecture}\n\n==== IMPLEMENTATION RULES ====\n1. Follow the layered architecture (domain/application/infrastructure)\n2. Implement entities EXACTLY as specified in the domain model\n3. Apply the design patterns listed above\n4. Each class must reference its corresponding use case ID in a comment (e.g., // UC-001: Create Order)\n5. Follow SOLID principles\n6. No deviations from the design without explicit reason\n\n`;
+        } else {
+          this.logger.warn('Some OOAD artifacts missing - proceeding without full design context');
+        }
+      } catch (err: any) {
+        this.logger.warn(`Failed to load OOAD artifacts: ${err.message}`);
+      }
+    }
+
+    const prompt = `You are implementing a software project. Write REAL, WORKING code.${ooadContext.length > 0 ? ' STRICTLY FOLLOW THE OOAD DESIGN PROVIDED BELOW.' : ''}
 
 PROJECT: ${projectName || 'New Project'}
 GOAL: ${goal}
@@ -41,6 +76,7 @@ TASK: ${context.task}
 ${memoryContext}
 
 ${existingCode ? `EXISTING CODE:\n${existingCode}\n` : ''}
+${ooadContext}
 
 INSTRUCTIONS:
 1. Analyze the PROJECT GOAL and DESCRIPTION carefully

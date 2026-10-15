@@ -1,0 +1,31 @@
+@startuml
+title Domain Model
+
+{{#each entities}}
+class {{name}} <<Entity>> {
+  - id: {{idType}}
+  {{#each attributes}}
+  - {{name}}: {{type}}
+  {{/each}}
+  --
+  {{#each methods}}
+  + {{name}}({{params}}): {{returnType}}
+  {{/each}}
+}
+
+{{/each}}
+
+{{#each valueObjects}}
+class {{name}} <<Value Object>> {
+  {{#each attributes}}
+  - {{name}}: {{type}}
+  {{/each}}
+}
+
+{{/each}}
+
+{{#each relationships}}
+{{from}} {{type}} {{to}}{{#if label}} : {{label}}{{/if}}
+{{/each}}
+
+@enduml
