@@ -70,16 +70,8 @@ export class QualityGateHandler {
       }
     ];
 
-    // Check pattern justifications
-    if (metadata.patterns && Array.isArray(metadata.patterns)) {
-      const invalidPatterns = metadata.patterns.filter((p: any) => !p.justification || p.justification.length < 50);
-      checklist.push({
-        name: 'Pattern justifications (min 50 chars)',
-        actual: invalidPatterns.length === 0 ? 'All valid' : `${invalidPatterns.length} invalid`,
-        expected: 'All valid',
-        passed: invalidPatterns.length === 0
-      });
-    }
+    // Note: Pattern justification length is already validated by PatternsSchema at creation time
+    // No need to re-check here unless metadata was manually edited
 
     // Check required artifact files exist
     for (const artifact of criteria.requiredArtifacts) {
@@ -91,18 +83,21 @@ export class QualityGateHandler {
           maxDiskMB: 10,
           timeout: 5000
         });
-        const exists = result.output.trim() === 'exists';
+        const output = result.output.trim();
+        const exists = output === 'exists';
+        const checkFailed = output !== 'exists' && output !== 'missing';
+        
         checklist.push({
           name: `Artifact: ${artifact}`,
-          actual: exists ? 'exists' : 'missing',
+          actual: checkFailed ? 'check failed (sandbox error)' : (exists ? 'exists' : 'missing'),
           expected: 'exists',
           passed: exists
         });
       } catch (err: any) {
-        this.logger.warn(`Failed to check artifact ${artifact}: ${err.message}`);
+        this.logger.warn(`Sandbox command failed for artifact ${artifact}: ${err.message}`);
         checklist.push({
           name: `Artifact: ${artifact}`,
-          actual: 'check failed',
+          actual: `check failed (${err.message})`,
           expected: 'exists',
           passed: false
         });

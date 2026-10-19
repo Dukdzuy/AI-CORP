@@ -52,7 +52,10 @@ export class ArchitectActionStrategy implements IActionStrategy {
     const useCases = (ooadMetadata.useCases || []) as UseCaseData['useCases'];
 
     if (!useCases || useCases.length === 0) {
-      throw new Error('BA Agent has not completed use case analysis. Cannot proceed with architecture design.');
+      const errorMsg = 'BA Agent has not completed use case analysis. Cannot proceed with architecture design. ' +
+                       'This is a workflow dependency - ensure BA agent runs before Architect.';
+      this.logger.error(errorMsg);
+      throw new Error(errorMsg);
     }
 
     const systemPrompt = `You are a Software Architect specializing in OOAD and DDD. Generate structured architecture artifacts in JSON format.`;
@@ -116,19 +119,22 @@ export class ArchitectActionStrategy implements IActionStrategy {
 
       this.logger.log(`Architect wrote OOAD artifacts to ${docsPath}`);
     } catch (err: any) {
-      this.logger.warn(`Failed to write OOAD artifacts: ${err.message}`);
+      this.logger.error(`Failed to write OOAD artifacts: ${err.message}`);
+      throw new Error(`Architect failed to write artifacts: ${err.message}`);
     }
 
-    // Persist to database
+    // Persist to database (serialize to ensure Prisma Json compatibility)
+    const metadataToSave = JSON.parse(JSON.stringify({
+      ...ooadMetadata,
+      domainModel,
+      patterns: patterns.patterns,
+      architecture
+    }));
+    
     await this.prisma.project.update({
       where: { id: projectId },
       data: {
-        ooadMetadata: {
-          ...ooadMetadata,
-          domainModel,
-          patterns: patterns.patterns,
-          architecture
-        }
+        ooadMetadata: metadataToSave
       }
     });
     this.logger.log(`Saved architecture OOAD metadata to project ${projectId}`);

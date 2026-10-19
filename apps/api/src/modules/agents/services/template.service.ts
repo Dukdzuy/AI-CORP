@@ -7,7 +7,20 @@ import * as Handlebars from 'handlebars';
 export class TemplateService {
   private readonly logger = new Logger(TemplateService.name);
   private templateCache = new Map<string, HandlebarsTemplateDelegate>();
-  private readonly templateDir = path.join(__dirname, '../templates/ooad');
+  private readonly templateDir: string;
+
+  constructor() {
+    // Use environment variable or fallback to build output location
+    const customPath = process.env.OOAD_TEMPLATES_PATH;
+    if (customPath) {
+      this.templateDir = path.resolve(customPath);
+      this.logger.log(`Using custom template path: ${this.templateDir}`);
+    } else {
+      // Default: relative to this file's location
+      this.templateDir = path.join(__dirname, '../templates/ooad');
+      this.logger.log(`Using default template path: ${this.templateDir}`);
+    }
+  }
 
   async loadTemplate(name: string): Promise<HandlebarsTemplateDelegate> {
     if (this.templateCache.has(name)) {

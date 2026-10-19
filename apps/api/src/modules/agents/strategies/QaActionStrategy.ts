@@ -6,18 +6,24 @@ import { LLMProviderFactory } from '../../llm/llm-provider.factory';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
 import { SandboxExecutor } from '../../tools/sandbox.executor';
+import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class QaActionStrategy implements IActionStrategy {
   private readonly logger = new Logger(QaActionStrategy.name);
+  private readonly systemPrompt: string = 'You are a QA engineer reviewing code from an AI developer. Be thorough but fair.';
+  private readonly modelConfig: ModelRouteConfig = { 
+    provider: 'opencode', 
+    model: 'openrouter/openrouter/free', 
+    fallbackProvider: 'opencode' 
+  };
 
   constructor(
     private readonly memoryService: MemoryService,
     private readonly llmFactory: LLMProviderFactory,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly sandboxExecutor: SandboxExecutor,
-    private readonly systemPrompt: string,
-    private readonly modelConfig: ModelRouteConfig
+    private readonly prisma: PrismaService
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -252,6 +258,29 @@ VERDICT: FAIL`;
       maxDiskMB: 50,
       timeout: 10000
     });
+
+    // Persist test coverage to ooadMetadata for metrics dashboard
+    try {
+      const project = await this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { ooadMetadata: true }
+      });
+      
+      const existingMetadata = (project?.ooadMetadata as any) || {};
+      const updatedMetadata = JSON.parse(JSON.stringify({
+        ...existingMetadata,
+        testCoverage: parseFloat(coveragePercent)
+      }));
+      
+      await this.prisma.project.update({
+        where: { id: projectId },
+        data: { ooadMetadata: updatedMetadata }
+      });
+      
+      this.logger.log(`Persisted test coverage ${coveragePercent}% to project ${projectId}`);
+    } catch (err: any) {
+      this.logger.warn(`Failed to persist test coverage: ${err.message}`);
+    }
 
     return traceabilityMd;
   }

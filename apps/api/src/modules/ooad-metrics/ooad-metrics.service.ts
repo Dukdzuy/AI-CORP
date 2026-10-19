@@ -60,8 +60,10 @@ export class OoadMetricsService {
       ? this.calculateScore(gateLogs[0].checklist as any)
       : null;
 
-    // Extract test coverage from traceability matrix (if available)
-    const testCoverage = null; // TODO: parse from traceability-matrix.md if needed
+    // Extract test coverage from ooadMetadata (persisted by QA Agent)
+    const testCoverage = metadata.testCoverage !== undefined && metadata.testCoverage !== null
+      ? Math.round(metadata.testCoverage)
+      : null;
 
     return {
       projectId: project.id,
@@ -111,7 +113,9 @@ export class OoadMetricsService {
         patternCount,
         gatePassRate: Math.round(gatePassRate),
         lastGateScore,
-        testCoverage: null
+        testCoverage: metadata.testCoverage !== undefined && metadata.testCoverage !== null
+          ? Math.round(metadata.testCoverage)
+          : null
       };
     });
   }

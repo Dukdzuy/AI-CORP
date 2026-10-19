@@ -131,18 +131,21 @@ Output ONLY valid JSON, no additional text.`;
 
       this.logger.log(`BA wrote OOAD artifacts to ${docsPath}`);
     } catch (err: any) {
-      this.logger.warn(`Failed to write OOAD artifacts: ${err.message}`);
+      this.logger.error(`Failed to write OOAD artifacts: ${err.message}`);
+      throw new Error(`BA Agent failed to write artifacts: ${err.message}`);
     }
 
-    // Persist to database
+    // Persist to database (serialize to ensure Prisma Json compatibility)
     if (projectId !== 'unknown') {
+      const metadataToSave = JSON.parse(JSON.stringify({
+        actors: useCaseData.actors,
+        useCases: useCaseData.useCases
+      }));
+      
       await this.prisma.project.update({
         where: { id: projectId },
         data: {
-          ooadMetadata: {
-            actors: useCaseData.actors,
-            useCases: useCaseData.useCases
-          }
+          ooadMetadata: metadataToSave
         }
       });
       this.logger.log(`Saved OOAD metadata to project ${projectId}`);

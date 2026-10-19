@@ -11,14 +11,18 @@ import { OOADGateNotPassedError } from '../errors/OOADGateNotPassedError';
 @Injectable()
 export class DevActionStrategy implements IActionStrategy {
   private readonly logger = new Logger(DevActionStrategy.name);
+  private readonly systemPrompt: string = 'You are an expert software developer. Write clean, efficient, production-quality code.';
+  private readonly modelConfig: ModelRouteConfig = { 
+    provider: 'opencode', 
+    model: 'openrouter/openrouter/free', 
+    fallbackProvider: 'opencode' 
+  };
 
   constructor(
     private readonly memoryService: MemoryService,
     private readonly llmFactory: LLMProviderFactory,
     private readonly sandboxExecutor: SandboxExecutor,
-    private readonly websocketGateway: AppWebSocketGateway,
-    private readonly systemPrompt: string,
-    private readonly modelConfig: ModelRouteConfig
+    private readonly websocketGateway: AppWebSocketGateway
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -147,6 +151,26 @@ Write ALL files needed for the project to work. Make it production-quality.`;
       `Implemented task: ${context.task}. Files written: ${writtenFiles.join(', ') || 'none'}`,
       { importance: 5, projectId: context.projectId }
     );
+
+    // Check for UC-ID comments in generated code if OOAD context was provided
+    if (ooadContext && codeContent) {
+      const ucIdPattern = /\/\/\s*UC-\d{3}/g;
+      const ucIdMatches = codeContent.match(ucIdPattern);
+      const ucIdCount = ucIdMatches ? ucIdMatches.length : 0;
+      
+      if (ucIdCount === 0 && codeContent.length > 100) {
+        this.logger.warn('Generated code missing UC-ID comments. OOAD traceability may be incomplete.');
+        this.websocketGateway.sendToProject(context.projectId, {
+          type: 'quality_warning',
+          payload: {
+            message: 'Generated code missing use case ID comments (// UC-XXX)',
+            severity: 'warning'
+          }
+        });
+      } else if (ucIdCount > 0) {
+        this.logger.log(`Found ${ucIdCount} UC-ID references in generated code`);
+      }
+    }
 
     // Emit action event
     this.websocketGateway.sendToProject(context.projectId, {
