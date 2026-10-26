@@ -5,6 +5,8 @@ import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { AgentOrchestratorService } from '../orchestrator/agent-orchestrator.service';
 import { EventBus } from '../../domain/events/EventBus';
 import { MILESTONE_REPOSITORY, TASK_REPOSITORY } from '../../domain/repositories';
+import { WORKFLOW_ENGINE_REPOSITORY } from './persistence/workflow-engine.repository';
+import { PrismaWorkflowEngineRepository } from './persistence/prisma-workflow-engine.repository';
 import { WorkflowDefinition, WorkflowNode, WorkflowContext, AgentRole } from '@ai-corp/shared-types';
 
 // Mock BullMQ to prevent Redis connections during tests
@@ -31,6 +33,7 @@ describe('WorkflowEngine - Node Execution Logic', () => {
   let prismaService: any;
   let websocketGateway: any;
   let orchestrator: any;
+  let taskRepository: any;
 
   // Mock workflow run data
   const mockWorkflowRun = {
@@ -106,11 +109,19 @@ describe('WorkflowEngine - Node Execution Logic', () => {
       providers: [
         WorkflowEngine,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: WORKFLOW_ENGINE_REPOSITORY, useClass: PrismaWorkflowEngineRepository },
         { provide: AppWebSocketGateway, useValue: mockWebSocketGateway },
         { provide: AgentOrchestratorService, useValue: mockOrchestrator },
         { provide: EventBus, useValue: { publish: jest.fn().mockResolvedValue(undefined) } },
         { provide: MILESTONE_REPOSITORY, useValue: { create: jest.fn() } },
-        { provide: TASK_REPOSITORY, useValue: { create: jest.fn() } },
+        {
+          provide: TASK_REPOSITORY,
+          useValue: {
+            create: jest.fn(),
+            findByStatus: jest.fn().mockResolvedValue([]),
+            update: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 
@@ -118,6 +129,7 @@ describe('WorkflowEngine - Node Execution Logic', () => {
     prismaService = module.get(PrismaService) as any;
     websocketGateway = module.get(AppWebSocketGateway) as any;
     orchestrator = module.get(AgentOrchestratorService) as any;
+    taskRepository = module.get(TASK_REPOSITORY) as any;
   });
 
   afterEach(() => {
@@ -212,6 +224,57 @@ describe('WorkflowEngine - Node Execution Logic', () => {
 
       // Execute node - should throw error for retry logic
       await expect((engine as any).executeNode(agentNode, mockWorkflowRun)).rejects.toThrow('Agent execution failed');
+    });
+  });
+
+  describe('executeNode - agent_task task status updates', () => {
+    const inProgressTask = {
+      id: 'task-1',
+      projectId: 'project-456',
+      milestoneId: null,
+      title: 'Build login',
+      description: 'Build login',
+      status: 'in_progress',
+      priority: 'medium',
+      assignedAgent: null,
+      estimatedCost: null,
+      actualCost: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const runAgent = async (agentRole: AgentRole) => {
+      const agentNode: WorkflowNode = { id: 'agent-node-1', type: 'agent_task', agentRole };
+      engine.createWorkflow({
+        id: 'def-789',
+        name: 'Test Workflow',
+        version: '1.0.0',
+        nodes: [agentNode],
+        edges: [],
+        startNode: 'agent-node-1',
+        endNode: 'agent-node-1',
+      });
+      orchestrator.invokeAgent.mockResolvedValue({ success: true });
+      taskRepository.findByStatus.mockResolvedValue([inProgressTask]);
+      return (engine as any).executeNode(agentNode, mockWorkflowRun);
+    };
+
+    it('moves the latest in_progress task to review when the DEV agent finishes', async () => {
+      await runAgent(AgentRole.DEV);
+
+      expect(taskRepository.findByStatus).toHaveBeenCalledWith('project-456', 'in_progress');
+      expect(taskRepository.update).toHaveBeenCalledWith('task-1', { status: 'review' });
+      expect(websocketGateway.sendToProject).toHaveBeenCalledWith(
+        'project-456',
+        expect.objectContaining({ type: 'task:updated', data: expect.objectContaining({ status: 'review' }) })
+      );
+    });
+
+    it('does not let QA skip review: an in_progress task is left unchanged', async () => {
+      const result = await runAgent(AgentRole.QA);
+
+      expect(result.status).toBe('success');
+      expect(taskRepository.update).not.toHaveBeenCalled();
     });
   });
 
