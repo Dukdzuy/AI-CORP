@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { AgentRole } from '@ai-corp/shared-types';
+import { QC_PROFILE } from '../profiles';
 
 @Injectable()
 export class QcThinkingStrategy implements IThinkingStrategy {
@@ -10,8 +10,8 @@ export class QcThinkingStrategy implements IThinkingStrategy {
 
   async think(context: AgentContext): Promise<AgentThought> {
     const memories = await this.memoryService.searchMemories(
-      AgentRole.QC,
-      'test_design',
+      QC_PROFILE.role,
+      QC_PROFILE.primaryNamespace,
       context.goal || context.task || '',
       5
     );

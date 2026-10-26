@@ -4,14 +4,15 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { BaOutput } from '../../../domain/agent/AgentOutputs';
+import { BA_PROFILE } from '../profiles';
 import { OOADArtifactService } from '../services/ooad-artifact.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { UseCaseDataSchema, UseCaseData } from '../schemas/ooad.schema';
 import { OOADSchemaValidationError } from '../errors/OOADSchemaValidationError';
 
 @Injectable()
-export class BAActionStrategy implements IActionStrategy {
+export class BAActionStrategy implements IActionStrategy<BaOutput> {
   private readonly logger = new Logger(BAActionStrategy.name);
 
   constructor(
@@ -22,7 +23,7 @@ export class BAActionStrategy implements IActionStrategy {
     private readonly prisma: PrismaService
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<BaOutput>> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
       ? `\n\nRelevant requirements patterns:\n${memories.join('\n')}`
@@ -30,8 +31,6 @@ export class BAActionStrategy implements IActionStrategy {
 
     const goal = context.goal || context.projectContext?.goal || '';
     const description = context.projectContext?.description || '';
-
-    const systemPrompt = `You are a Business Analyst. Generate structured use cases in JSON format following the OOAD methodology.`;
 
     const prompt = `You are a Business Analyst. Generate structured use cases in JSON format.
 
@@ -65,9 +64,7 @@ Requirements:
 
 Output ONLY valid JSON, no additional text.`;
 
-    // Fetch latest model config
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.BA, modelConfig, context.projectId);
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(BA_PROFILE, context.projectId);
 
     const result = await provider.chat({
       messages: [
@@ -120,12 +117,12 @@ Output ONLY valid JSON, no additional text.`;
     }
 
     // Save memory
-    const agentId = await this.memoryService.getAgentIdByRole(AgentRole.BA);
+    const agentId = await this.memoryService.getAgentIdByRole(BA_PROFILE.role);
     if (agentId) {
       await this.memoryService.saveMemory(
         agentId,
-        AgentRole.BA,
-        'requirements_analysis',
+        BA_PROFILE.role,
+        BA_PROFILE.primaryNamespace,
         `Generated ${useCaseData.useCases.length} use cases for: ${goal}`,
         { importance: 7, projectId }
       );
@@ -135,8 +132,8 @@ Output ONLY valid JSON, no additional text.`;
     this.websocketGateway.sendToProject(projectId, {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.BA,
-        agentRole: AgentRole.BA,
+        agentId: BA_PROFILE.role,
+        agentRole: BA_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'generateUseCases',
         toolName: 'llm+template',

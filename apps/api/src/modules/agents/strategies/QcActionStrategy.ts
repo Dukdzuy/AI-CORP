@@ -5,7 +5,8 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { QcOutput } from '../../../domain/agent/AgentOutputs';
+import { QC_PROFILE } from '../profiles';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import { SourceFile, TraceabilityService, TraceUseCase } from '../services/traceability.service';
@@ -21,15 +22,8 @@ import { SourceFile, TraceabilityService, TraceUseCase } from '../services/trace
  * QA (process-side) then reviews the implementation against the design using this report.
  */
 @Injectable()
-export class QcActionStrategy implements IActionStrategy {
+export class QcActionStrategy implements IActionStrategy<QcOutput> {
   private readonly logger = new Logger(QcActionStrategy.name);
-  private readonly systemPrompt =
-    'You are a QC (Quality Control) engineer. You derive executable acceptance tests from use cases and verify that the implementation covers every use case.';
-  private readonly modelConfig: ModelRouteConfig = {
-    provider: 'opencode',
-    model: 'openrouter/openrouter/free',
-    fallbackProvider: 'opencode',
-  };
 
   constructor(
     private readonly memoryService: MemoryService,
@@ -40,7 +34,7 @@ export class QcActionStrategy implements IActionStrategy {
     private readonly traceability: TraceabilityService
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<QcOutput>> {
     const projectId = context.projectId;
     if (!projectId || projectId === 'unknown') {
       return { success: false, output: null, error: 'QC needs a project to verify' };
@@ -96,12 +90,12 @@ export class QcActionStrategy implements IActionStrategy {
       });
     }
 
-    const agentId = await this.memoryService.getAgentIdByRole(AgentRole.QC);
+    const agentId = await this.memoryService.getAgentIdByRole(QC_PROFILE.role);
     if (agentId) {
       await this.memoryService.saveMemory(
         agentId,
-        AgentRole.QC,
-        'test_design',
+        QC_PROFILE.role,
+        QC_PROFILE.primaryNamespace,
         `Verified ${report.totalCount} use cases, coverage ${report.coveragePercent}%, wrote ${testsWritten.length} test file(s)`,
         { importance: 6, projectId }
       );
@@ -110,8 +104,8 @@ export class QcActionStrategy implements IActionStrategy {
     this.websocketGateway.sendToProject(projectId, {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.QC,
-        agentRole: AgentRole.QC,
+        agentId: QC_PROFILE.role,
+        agentRole: QC_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'verify',
         toolName: 'llm+traceability',
@@ -188,10 +182,10 @@ RULES:
 // test code
 </CODE>`;
 
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.QC, this.modelConfig, projectId);
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(QC_PROFILE, projectId);
     const result = await provider.chat({
       messages: [
-        { role: 'system', content: this.systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
       model,

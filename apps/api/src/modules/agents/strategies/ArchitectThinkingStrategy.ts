@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { AgentRole } from '@ai-corp/shared-types';
+import { ARCHITECT_PROFILE } from '../profiles';
 
 @Injectable()
 export class ArchitectThinkingStrategy implements IThinkingStrategy {
@@ -11,8 +11,8 @@ export class ArchitectThinkingStrategy implements IThinkingStrategy {
   async think(context: AgentContext): Promise<AgentThought> {
     // Load architecture patterns memories
     const memories = await this.memoryService.searchMemories(
-      AgentRole.ARCHITECT,
-      'architecture_patterns',
+      ARCHITECT_PROFILE.role,
+      ARCHITECT_PROFILE.primaryNamespace,
       JSON.stringify(context),
       5
     );

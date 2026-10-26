@@ -4,7 +4,8 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { ArchitectOutput } from '../../../domain/agent/AgentOutputs';
+import { ARCHITECT_PROFILE } from '../profiles';
 import { OOADArtifactService } from '../services/ooad-artifact.service';
 import { defaultSequenceDiagram } from '../services/ooad-view-model';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -23,7 +24,7 @@ import {
 import { OOADSchemaValidationError } from '../errors/OOADSchemaValidationError';
 
 @Injectable()
-export class ArchitectActionStrategy implements IActionStrategy {
+export class ArchitectActionStrategy implements IActionStrategy<ArchitectOutput> {
   private readonly logger = new Logger(ArchitectActionStrategy.name);
 
   constructor(
@@ -34,7 +35,7 @@ export class ArchitectActionStrategy implements IActionStrategy {
     private readonly prisma: PrismaService
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<ArchitectOutput>> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
       ? `\n\nRelevant architecture patterns:\n${memories.join('\n')}`
@@ -60,11 +61,8 @@ export class ArchitectActionStrategy implements IActionStrategy {
       throw new Error(errorMsg);
     }
 
-    const systemPrompt = `You are a Software Architect specializing in OOAD and DDD. Generate structured architecture artifacts in JSON format.`;
-
-    // Fetch model config once
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', fallbackProvider: 'opencode' };
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.ARCHITECT, modelConfig, context.projectId);
+    // Resolve the model once for all design calls
+    const { provider, model } = await this.agentLLM.providerFor(ARCHITECT_PROFILE, context.projectId);
 
     // Call 1: Domain Model
     const domainModel = await this.generateDomainModel(provider, model, goal, description, useCases, memoryContext);
@@ -119,12 +117,12 @@ export class ArchitectActionStrategy implements IActionStrategy {
     this.logger.log(`Saved architecture OOAD metadata to project ${projectId}`);
 
     // Save memory
-    const agentId = await this.memoryService.getAgentIdByRole(AgentRole.ARCHITECT);
+    const agentId = await this.memoryService.getAgentIdByRole(ARCHITECT_PROFILE.role);
     if (agentId) {
       await this.memoryService.saveMemory(
         agentId,
-        AgentRole.ARCHITECT,
-        'architecture_patterns',
+        ARCHITECT_PROFILE.role,
+        ARCHITECT_PROFILE.primaryNamespace,
         `Designed architecture: ${domainModel.entities.length} entities, ${patterns.patterns.length} patterns`,
         { importance: 9, projectId }
       );
@@ -134,8 +132,8 @@ export class ArchitectActionStrategy implements IActionStrategy {
     this.websocketGateway.sendToProject(projectId, {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.ARCHITECT,
-        agentRole: AgentRole.ARCHITECT,
+        agentId: ARCHITECT_PROFILE.role,
+        agentRole: ARCHITECT_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'designArchitecture',
         toolName: 'llm+template',

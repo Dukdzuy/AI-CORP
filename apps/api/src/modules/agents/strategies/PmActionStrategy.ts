@@ -4,14 +4,13 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { PmOutput } from '../../../domain/agent/AgentOutputs';
+import { PM_PROFILE } from '../profiles';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
-export class PmActionStrategy implements IActionStrategy {
+export class PmActionStrategy implements IActionStrategy<PmOutput> {
   private readonly logger = new Logger(PmActionStrategy.name);
-  private readonly systemPrompt = 'You are the Project Manager. Your objective is to break down milestones into actionable technical tasks for the development team.';
-  private readonly modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
 
   constructor(
     private readonly memoryService: MemoryService,
@@ -20,7 +19,7 @@ export class PmActionStrategy implements IActionStrategy {
     private readonly prisma: PrismaService
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<PmOutput>> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
       ? `\n\nRelevant past learnings:\n${memories.join('\n')}`
@@ -61,12 +60,11 @@ Format your response as a numbered list:
 
 Each task should be specific, measurable, and achievable.`;
 
-    // Fetch latest model config
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.PM, this.modelConfig, context.projectId);
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(PM_PROFILE, context.projectId);
 
     const result = await provider.chat({
       messages: [
-        { role: 'system', content: this.systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ],
       model,
@@ -75,9 +73,9 @@ Each task should be specific, measurable, and achievable.`;
 
     // Save memory
     await this.memoryService.saveMemory(
-      await this.memoryService.getAgentIdByRole(AgentRole.PM) || 'pm',
-      AgentRole.PM,
-      'task_breakdown',
+      await this.memoryService.getAgentIdByRole(PM_PROFILE.role) || 'pm',
+      PM_PROFILE.role,
+      PM_PROFILE.primaryNamespace,
       useCases.length > 0 ? `Planned ${useCases.length} use case tasks for: ${goal}` : `Broke down milestone: ${milestone}`,
       { importance: 6, projectId: context.projectId }
     );
@@ -86,8 +84,8 @@ Each task should be specific, measurable, and achievable.`;
     this.websocketGateway.sendToProject(context.projectId, {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.PM,
-        agentRole: AgentRole.PM,
+        agentId: PM_PROFILE.role,
+        agentRole: PM_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'breakdownTasks',
         toolName: 'llm',
@@ -97,7 +95,7 @@ Each task should be specific, measurable, and achievable.`;
 
     return {
       success: true,
-      output: { action: 'breakdownTasks', output: result.content },
+      output: { action: 'breakdownTasks', output: result.content || '' },
     };
   }
 

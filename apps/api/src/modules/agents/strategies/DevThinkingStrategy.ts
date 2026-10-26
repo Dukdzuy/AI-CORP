@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { AgentRole } from '@ai-corp/shared-types';
+import { DEV_PROFILE } from '../profiles';
 
 @Injectable()
 export class DevThinkingStrategy implements IThinkingStrategy {
@@ -11,8 +11,8 @@ export class DevThinkingStrategy implements IThinkingStrategy {
   async think(context: AgentContext): Promise<AgentThought> {
     // Load coding conventions memories
     const memories = await this.memoryService.searchMemories(
-      AgentRole.DEV,
-      'coding_conventions',
+      DEV_PROFILE.role,
+      DEV_PROFILE.primaryNamespace,
       JSON.stringify(context),
       5
     );
