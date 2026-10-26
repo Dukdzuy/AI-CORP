@@ -3,9 +3,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { inflateRawSync } from 'zlib';
 import { CanActivate, ExecutionContext, INestApplication, UnauthorizedException } from '@nestjs/common';
-import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { APP_GUARD } from '@nestjs/core';
+import { Permission } from '@ai-corp/shared-types';
 import { Test } from '@nestjs/testing';
-import { JwtAuthGuard } from '../../../src/modules/auth/guards/jwt-auth.guard';
+import { PERMISSIONS_KEY } from '../../../src/modules/access/access.decorators';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { ProjectWorkspace } from '../../../src/modules/workspace/project-workspace.service';
 import { ProjectArtifactsController } from '../../../src/modules/project-artifacts/project-artifacts.controller';
@@ -104,11 +105,10 @@ describe('ProjectArtifactsController', () => {
         ProjectArtifactsService,
         { provide: PrismaService, useValue: prisma },
         { provide: ProjectWorkspace, useValue: workspace },
+        // stands in for the global AuthenticationGuard (Phase 5)
+        { provide: APP_GUARD, useClass: HeaderAuthGuard },
       ],
-    })
-      .overrideGuard(JwtAuthGuard)
-      .useClass(HeaderAuthGuard)
-      .compile();
+    }).compile();
 
     app = moduleRef.createNestApplication({ logger: false });
     app.setGlobalPrefix('api');
@@ -121,8 +121,8 @@ describe('ProjectArtifactsController', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('is protected by the JWT guard', async () => {
-    expect(Reflect.getMetadata(GUARDS_METADATA, ProjectArtifactsController)).toContain(JwtAuthGuard);
+  it('needs an authenticated caller with project:read', async () => {
+    expect(Reflect.getMetadata(PERMISSIONS_KEY, ProjectArtifactsController)).toEqual([Permission.PROJECT_READ]);
     expect((await get(`/projects/${projectId}/files`, false)).status).toBe(401);
     expect((await get(`/projects/${projectId}/archive`, false)).status).toBe(401);
   });

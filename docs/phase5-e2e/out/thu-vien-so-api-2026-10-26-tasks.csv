@@ -1,0 +1,6 @@
+﻿task_id,title,status,priority,assigned_agent,milestone,actual_cost_usd,created_at,updated_at
+15adf565-f370-4c94-a21d-23e2eb888e32,UC-001: implement Place Order,done,medium,,,0,2026-10-26T07:19:30.581Z,2026-10-26T07:19:32.740Z
+76aae2a5-3d9d-4f19-81ed-76433d1d72d0,UC-002: implement Cancel Order,done,medium,,,0,2026-10-26T07:19:30.585Z,2026-10-26T07:19:32.738Z
+d4b17ba2-1181-41d2-808c-b74e44dddd6b,UC-003: implement Add Product,done,medium,,,0,2026-10-26T07:19:30.588Z,2026-10-26T07:19:32.735Z
+32e19686-e7c5-4473-b6d2-8a023d61f504,UC-004: implement Pay Invoice,done,medium,,,0,2026-10-26T07:19:30.593Z,2026-10-26T07:19:32.733Z
+b96e08b2-13c0-4da4-bb62-d515407cb4f8,UC-005: implement Browse Catalog,done,medium,,,0,2026-10-26T07:19:30.595Z,2026-10-26T07:19:32.729Z

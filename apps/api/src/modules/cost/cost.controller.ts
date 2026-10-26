@@ -1,8 +1,9 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
+import { Permission } from '@ai-corp/shared-types';
+import { RequirePermission } from '../access/access.decorators';
 import { CostService } from './cost.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@UseGuards(JwtAuthGuard)
+@RequirePermission(Permission.REPORT_VIEW)
 @Controller('cost')
 export class CostController {
   constructor(private readonly costService: CostService) {}

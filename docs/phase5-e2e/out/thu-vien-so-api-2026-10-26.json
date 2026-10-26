@@ -1,0 +1,352 @@
+{
+  "exportedAt": "2026-10-26T07:19:37.267Z",
+  "exportedBy": "alice@aicorp.com",
+  "project": {
+    "id": "a702570c-ea63-462d-952e-7e98cf979202",
+    "name": "Thư viện số (API)",
+    "description": "Mượn và trả sách",
+    "goal": "Hệ thống quản lý thư viện số cho trường học",
+    "status": "completed",
+    "budget": 12,
+    "costAccrued": 0,
+    "createdAt": "2026-10-26T07:19:30.090Z",
+    "owner": "alice@aicorp.com"
+  },
+  "milestones": [
+    {
+      "id": "8d194af2-c8d0-4bb5-8681-d3f61412f1ee",
+      "title": "MVP: customers can browse, order and pay",
+      "status": "pending",
+      "dueDate": null
+    },
+    {
+      "id": "6f283c16-cd52-42d5-aa3b-4eaa836c676e",
+      "title": "Operations: admins manage the catalog",
+      "status": "pending",
+      "dueDate": null
+    },
+    {
+      "id": "9000d1e6-14ce-40a1-8a31-92d07a622ae4",
+      "title": "Launch: announcement and feedback",
+      "status": "pending",
+      "dueDate": null
+    }
+  ],
+  "tasks": [
+    {
+      "id": "15adf565-f370-4c94-a21d-23e2eb888e32",
+      "title": "UC-001: implement Place Order",
+      "status": "done",
+      "priority": "medium",
+      "assignedAgent": null,
+      "milestone": null,
+      "actualCost": 0,
+      "createdAt": "2026-10-26T07:19:30.581Z",
+      "updatedAt": "2026-10-26T07:19:32.740Z"
+    },
+    {
+      "id": "76aae2a5-3d9d-4f19-81ed-76433d1d72d0",
+      "title": "UC-002: implement Cancel Order",
+      "status": "done",
+      "priority": "medium",
+      "assignedAgent": null,
+      "milestone": null,
+      "actualCost": 0,
+      "createdAt": "2026-10-26T07:19:30.585Z",
+      "updatedAt": "2026-10-26T07:19:32.738Z"
+    },
+    {
+      "id": "d4b17ba2-1181-41d2-808c-b74e44dddd6b",
+      "title": "UC-003: implement Add Product",
+      "status": "done",
+      "priority": "medium",
+      "assignedAgent": null,
+      "milestone": null,
+      "actualCost": 0,
+      "createdAt": "2026-10-26T07:19:30.588Z",
+      "updatedAt": "2026-10-26T07:19:32.735Z"
+    },
+    {
+      "id": "32e19686-e7c5-4473-b6d2-8a023d61f504",
+      "title": "UC-004: implement Pay Invoice",
+      "status": "done",
+      "priority": "medium",
+      "assignedAgent": null,
+      "milestone": null,
+      "actualCost": 0,
+      "createdAt": "2026-10-26T07:19:30.593Z",
+      "updatedAt": "2026-10-26T07:19:32.733Z"
+    },
+    {
+      "id": "b96e08b2-13c0-4da4-bb62-d515407cb4f8",
+      "title": "UC-005: implement Browse Catalog",
+      "status": "done",
+      "priority": "medium",
+      "assignedAgent": null,
+      "milestone": null,
+      "actualCost": 0,
+      "createdAt": "2026-10-26T07:19:30.595Z",
+      "updatedAt": "2026-10-26T07:19:32.729Z"
+    }
+  ],
+  "workflowRuns": [
+    {
+      "id": "0323612c-10dd-419c-96e4-8de17d01b925",
+      "definition": "ooad-software-project@1.0.0+0c1681ca",
+      "status": "completed",
+      "startedAt": "2026-10-26T07:19:30.119Z",
+      "completedAt": "2026-10-26T07:19:33.385Z",
+      "steps": 7
+    }
+  ],
+  "qualityGates": [
+    {
+      "gateId": "ooad_gate",
+      "passed": true,
+      "at": "2026-10-26T07:19:30.482Z"
+    }
+  ],
+  "ooad": {
+    "useCases": 5,
+    "traceabilityCoverage": 80,
+    "artifacts": 34
+  },
+  "cost": {
+    "projectId": "a702570c-ea63-462d-952e-7e98cf979202",
+    "generatedAt": "2026-10-26T07:19:37.267Z",
+    "currency": "USD",
+    "total": 0,
+    "totalTokens": 9890,
+    "calls": 14,
+    "fallbackCalls": 0,
+    "avgResponseTimeMs": 4,
+    "budget": 12,
+    "budgetUsed": 0,
+    "byAgent": [
+      {
+        "key": "ARCHITECT",
+        "cost": 0,
+        "tokens": 2849,
+        "calls": 6,
+        "share": 0
+      },
+      {
+        "key": "BA",
+        "cost": 0,
+        "tokens": 634,
+        "calls": 1,
+        "share": 0
+      },
+      {
+        "key": "CEO",
+        "cost": 0,
+        "tokens": 298,
+        "calls": 2,
+        "share": 0
+      },
+      {
+        "key": "DEV",
+        "cost": 0,
+        "tokens": 3059,
+        "calls": 1,
+        "share": 0
+      },
+      {
+        "key": "MARKETING",
+        "cost": 0,
+        "tokens": 129,
+        "calls": 1,
+        "share": 0
+      },
+      {
+        "key": "PM",
+        "cost": 0,
+        "tokens": 223,
+        "calls": 1,
+        "share": 0
+      },
+      {
+        "key": "QA",
+        "cost": 0,
+        "tokens": 1151,
+        "calls": 1,
+        "share": 0
+      },
+      {
+        "key": "QC",
+        "cost": 0,
+        "tokens": 1547,
+        "calls": 1,
+        "share": 0
+      }
+    ],
+    "byModel": [
+      {
+        "key": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+        "cost": 0,
+        "tokens": 7059,
+        "calls": 8,
+        "share": 0
+      },
+      {
+        "key": "openrouter/openrouter/free",
+        "cost": 0,
+        "tokens": 2702,
+        "calls": 5,
+        "share": 0
+      },
+      {
+        "key": "openrouter/openrouter/owl-alpha",
+        "cost": 0,
+        "tokens": 129,
+        "calls": 1,
+        "share": 0
+      }
+    ],
+    "byDay": [
+      {
+        "date": "2026-10-26",
+        "cost": 0,
+        "calls": 14
+      }
+    ]
+  },
+  "performance": {
+    "projectId": "a702570c-ea63-462d-952e-7e98cf979202",
+    "generatedAt": "2026-10-26T07:19:37.266Z",
+    "totalSteps": 14,
+    "overallSuccessRate": 1,
+    "byRole": [
+      {
+        "role": "CEO",
+        "executions": 2,
+        "completed": 2,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 49,
+        "p95DurationMs": 58,
+        "retries": 0
+      },
+      {
+        "role": "(analysis_design)",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 275,
+        "p95DurationMs": 275,
+        "retries": 0
+      },
+      {
+        "role": "(approval)",
+        "executions": 1,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 19,
+        "p95DurationMs": 19,
+        "retries": 0
+      },
+      {
+        "role": "(build)",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 2141,
+        "p95DurationMs": 2141,
+        "retries": 0
+      },
+      {
+        "role": "(ooad_gate)",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 23,
+        "p95DurationMs": 23,
+        "retries": 0
+      },
+      {
+        "role": "(qa_condition)",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 3,
+        "p95DurationMs": 3,
+        "retries": 0
+      },
+      {
+        "role": "ARCHITECT",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 149,
+        "p95DurationMs": 149,
+        "retries": 0
+      },
+      {
+        "role": "BA",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 64,
+        "p95DurationMs": 64,
+        "retries": 0
+      },
+      {
+        "role": "DEV",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 58,
+        "p95DurationMs": 58,
+        "retries": 0
+      },
+      {
+        "role": "MARKETING",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 31,
+        "p95DurationMs": 31,
+        "retries": 0
+      },
+      {
+        "role": "PM",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 58,
+        "p95DurationMs": 58,
+        "retries": 0
+      },
+      {
+        "role": "QA",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 60,
+        "p95DurationMs": 60,
+        "retries": 0
+      },
+      {
+        "role": "QC",
+        "executions": 1,
+        "completed": 1,
+        "failed": 0,
+        "successRate": 1,
+        "avgDurationMs": 1976,
+        "p95DurationMs": 1976,
+        "retries": 0
+      }
+    ]
+  }
+}

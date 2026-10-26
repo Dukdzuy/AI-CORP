@@ -16,6 +16,9 @@ import {
   PlayCircleOutlined,
 } from '@ant-design/icons';
 import { useProjects, useCreateProject, useDeleteProject, useUpdateProject } from '../lib/api/hooks/projects';
+import { Permission } from '@ai-corp/shared-types';
+import { hasPermission, usePermission } from '../lib/permissions';
+import { useAuthStore } from '../stores/authStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useNavigate } from 'react-router-dom';
 import { Project, ProjectStatus } from '@ai-corp/shared-types';
@@ -40,8 +43,11 @@ const ProjectCard: React.FC<{
   onResume?: (id: string) => void;
 }> = ({ project, onClick, onDelete, onPause, onResume }) => {
   const statusCfg = STATUS_CONFIG[project.status] ?? { color: 'default', icon: null, label: project.status };
+  // Phase 5: only the owner (or an admin) may change a project; the API enforces the same rule
+  const user = useAuthStore(s => s.user);
+  const canModify = hasPermission(user, Permission.PROJECT_UPDATE) && (user?.role === 'admin' || (project as any).createdById === user?.id);
 
-  const menuItems = [
+  const menuItems = !canModify ? [] : [
     project.status === 'active' && {
       key: 'pause',
       icon: <PauseCircleOutlined />,
@@ -116,9 +122,11 @@ const ProjectCard: React.FC<{
             <Tag color={statusCfg.color} icon={statusCfg.icon}>
               {statusCfg.label}
             </Tag>
-            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
-              <Button type="text" size="small" icon={<MoreOutlined />} onClick={(e) => e.stopPropagation()} />
-            </Dropdown>
+            {canModify && (
+              <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+                <Button type="text" size="small" icon={<MoreOutlined />} onClick={(e) => e.stopPropagation()} />
+              </Dropdown>
+            )}
           </Space>
         </Flex>
 
@@ -166,6 +174,7 @@ export const Dashboard: React.FC = () => {
   const [form] = Form.useForm();
   const { data: projects, isLoading } = useProjects();
   const createProject = useCreateProject();
+  const canCreate = usePermission(Permission.PROJECT_CREATE);
   const deleteProject = useDeleteProject();
   const updateProject = useUpdateProject();
   const { setSelectedProject } = useProjectStore();
@@ -252,7 +261,7 @@ export const Dashboard: React.FC = () => {
             Manage your AI-powered projects and agents.
           </Text>
         </div>
-        <Button
+        {canCreate && <Button
           type="primary"
           icon={<PlusOutlined />}
           size="large"
@@ -264,7 +273,7 @@ export const Dashboard: React.FC = () => {
           }}
         >
           New Project
-        </Button>
+        </Button>}
       </Flex>
 
       {/* Create Project Modal */}

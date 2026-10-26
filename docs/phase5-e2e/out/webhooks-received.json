@@ -1,0 +1,103 @@
+[
+  {
+    "event": "webhook.test",
+    "valid": true,
+    "data": {
+      "message": "Test delivery from AI Corp",
+      "subscribedEvents": [
+        "project.created",
+        "workflow.started",
+        "quality.gate.evaluated",
+        "approval.requested",
+        "workflow.completed",
+        "report.generated"
+      ]
+    }
+  },
+  {
+    "event": "project.created",
+    "valid": true,
+    "data": {
+      "name": "Thư viện số (API)",
+      "budget": 5
+    }
+  },
+  {
+    "event": "workflow.started",
+    "valid": true,
+    "data": {
+      "runId": "0323612c-10dd-419c-96e4-8de17d01b925",
+      "definition": "ooad-software-project"
+    }
+  },
+  {
+    "event": "quality.gate.evaluated",
+    "valid": true,
+    "data": {
+      "gateId": "ooad_gate",
+      "passed": true,
+      "score": 100,
+      "failedChecks": []
+    }
+  },
+  {
+    "event": "approval.requested",
+    "valid": true,
+    "data": {
+      "approvalId": "f0d198f4-173a-4514-b906-0c68dd6a3ea1",
+      "runId": "0323612c-10dd-419c-96e4-8de17d01b925",
+      "approvalType": "project_completion"
+    }
+  },
+  {
+    "event": "workflow.completed",
+    "valid": true,
+    "data": {
+      "runId": "0323612c-10dd-419c-96e4-8de17d01b925"
+    }
+  },
+  {
+    "event": "project.created",
+    "valid": true,
+    "data": {
+      "name": "Weekly report demo",
+      "budget": null
+    }
+  },
+  {
+    "event": "workflow.started",
+    "valid": true,
+    "data": {
+      "runId": "b48c402c-26f5-422a-89a1-9a6986f07e34",
+      "definition": "default-project-workflow"
+    }
+  },
+  {
+    "event": "quality.gate.evaluated",
+    "valid": true,
+    "data": {
+      "gateId": "ooad_gate",
+      "passed": true,
+      "score": 100,
+      "failedChecks": []
+    }
+  },
+  {
+    "event": "report.generated",
+    "valid": true,
+    "data": {
+      "period": "2026-W44",
+      "path": "reports/weekly-2026-W44.md",
+      "totalCost": 0
+    }
+  },
+  {
+    "event": "approval.requested",
+    "valid": true,
+    "data": {
+      "approvalId": "6b47f169-2918-4cd7-a3ea-91fed1c9e73b",
+      "runId": "b48c402c-26f5-422a-89a1-9a6986f07e34",
+      "approvalType": "project_completion"
+    }
+  }
+]

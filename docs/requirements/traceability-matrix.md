@@ -22,7 +22,7 @@ The RTM ensures every requirement is implemented, tested, and verifiable, satisf
 
 ## 2. Subsystem Organization
 
-Requirements are organized into 7 subsystems:
+Requirements are organized into 8 subsystems:
 
 1. **Authentication & Authorization (AUTH)** - User login, JWT tokens, RBAC
 2. **Project Management (PROJ)** - Projects, milestones, tasks, Kanban
@@ -31,6 +31,7 @@ Requirements are organized into 7 subsystems:
 5. **Approval System (APPR)** - Human-in-the-loop, approval state machine
 6. **Cost Tracking (COST)** - API usage logging, budget monitoring, cost analytics
 7. **Memory & Learning (MEM)** - Vector embeddings, semantic search, memory management
+8. **Audit, Integration & Reporting (AUD, INT, REP)** - Audit trail, API keys, webhooks, exports and reports (Phase 5)
 
 ---
 
@@ -42,7 +43,8 @@ Requirements are organized into 7 subsystems:
 |--------|------------------|-------------|--------------|------------------|---------------------|----------|--------|
 | FR-AUTH-001 | User Authentication | System shall authenticate users via email/password and issue JWT tokens | UC-001 | Class: AuthService, JwtStrategy | apps/api/src/modules/auth/auth.service.ts, apps/api/src/modules/auth/jwt.strategy.ts | TEST-AUTH-001, TEST-AUTH-002 | Implemented |
 | FR-AUTH-002 | Password Security | System shall hash passwords using bcrypt with salt rounds ≥12 | UC-001 | Class: AuthService (register method) | apps/api/src/modules/auth/auth.service.ts | TEST-AUTH-003 | Implemented |
-| FR-AUTH-003 | Role-Based Access Control | System shall enforce RBAC with roles: admin, board_member | UC-003, UC-008 | Guard: RolesGuard, Decorator: @Roles() | apps/api/src/modules/auth/roles.guard.ts | TEST-AUTH-004, TEST-AUTH-005 | Implemented |
+| FR-AUTH-003 | Role-Based Access Control | System shall enforce permissions per role (admin, board_member, viewer) on every request, plus project ownership for changes | UC-003, UC-008, UC-029 | RolePolicy, Principal, PermissionGuard, AuthorizationService, @RequirePermission; class diagram enterprise-phase5 | apps/api/src/domain/security/, apps/api/src/modules/access/ | tests/unit/enterprise/security-domain.spec.ts, access-http.spec.ts | Implemented |
+| FR-AUTH-005 | Account Deactivation | Admin shall change roles and deactivate accounts; changes apply on the next request; the last active admin is protected | UC-029 | UserAdminService, JwtStrategy reload, User.isActive | apps/api/src/modules/users/ | tests/unit/enterprise/services.spec.ts, access-http.spec.ts | Implemented |
 | FR-AUTH-004 | JWT Token Expiry | System shall expire JWT tokens after 24 hours | UC-001 | JwtModule configuration | apps/api/src/modules/auth/auth.module.ts | TEST-AUTH-006 | Implemented |
 
 ### 3.2 Project Management Subsystem
@@ -88,7 +90,7 @@ Requirements are organized into 7 subsystems:
 | FR-WF-005 | Loop Protection | System shall prevent infinite loops by limiting node visits to 3 per node | UC-004 | Class: WorkflowEngine (checkLoopLimit method) | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-006 | Implemented |
 | FR-WF-006 | Parallel Execution | System shall execute parallel branches using BullMQ jobs and merge results | UC-004 | Class: WorkflowEngine (executeParallelNode method) | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-007 | Implemented |
 | FR-WF-007 | Workflow Recovery | System shall recover running workflows on restart and resume from last checkpoint | UC-015 | Class: WorkflowEngine (recoverWorkflows method) | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-008 | Implemented |
-| FR-WF-008 | Workflow Rollback | System shall rollback workflow to previous checkpoint with rollback handlers | UC-019 | Class: WorkflowEngine (rollback method), Memento pattern | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-009 | Planned |
+| FR-WF-008 | Workflow Rollback | System shall roll a paused or failed run back to a snapshot taken before a node | UC-019 | Class: WorkflowEngine.rollbackWorkflow, WorkflowRunMemento, WorkflowSnapshotCaretaker (Memento); SD-006 | apps/api/src/modules/workflow/workflow.engine.ts, apps/api/src/domain/workflow/WorkflowRunMemento.ts | tests/unit/workflow/parallel-and-rollback.spec.ts | Implemented |
 | FR-WF-009 | Workflow Pause/Resume | Board Member shall pause and resume workflows manually | UC-004 | Class: WorkflowEngine (pauseWorkflow, resumeWorkflow methods) | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-010 | Implemented |
 | FR-WF-010 | Workflow Status Tracking | System shall track workflow status: running, paused, completed, failed, cancelled | UC-004, UC-007 | Enum: WorkflowStatus in schema.prisma | apps/api/prisma/schema.prisma | TEST-WF-011 | Implemented |
 | FR-WF-011 | Agent Collaboration Nodes | An agent_collaboration node shall run a named collaboration pattern: pair_develop (Architect reviews DEV's plan and code), review_chain (QC → QA, more reviewers by metadata), clarification_loop (DEV/QC ask BA, BA updates the use case); WORKFLOW_COLLABORATION=pair starts projects on the collaborative workflow | UC-004, UC-012, UC-016 | Strategy: AgentCollaborationStrategy, CollaborationStrategy; Registry: CollaborationRegistry; Chain of Responsibility: ReviewHandler; SD-007 | apps/api/src/modules/workflow/collaboration/, apps/api/src/modules/workflow/default-workflow.ts | apps/api/tests/unit/collaboration/collaboration.spec.ts, apps/api/tests/unit/agents/agent-strategies.spec.ts | Implemented |
@@ -126,6 +128,20 @@ Requirements are organized into 7 subsystems:
 | FR-MEM-006 | Agent Learning from Outcomes | Agents shall learn from the workflow's quality signals: OOAD gate (BA, Architect), QC tests (DEV) and QA verdict (DEV, QC) are stored as graded outcomes and refined every N outcomes into lessons_learned that thinking strategies recall first; Agent Detail shows success rate over time and top lessons | UC-017 | Class: AgentLearningHandler, OutcomeSignalPolicy, LearningService, ExecutionOutcome, QualityGateEvaluatedEvent, MemoryService.refineMemory/recall; Web: LearningPanel | apps/api/src/modules/learning/, apps/api/src/modules/memory/memory.service.ts | apps/api/tests/unit/learning/learning.spec.ts | Implemented |
 | FR-MEM-007 | Memory Search without Embeddings | Memory search shall fall back to keyword/recency ranking when no embedding provider is configured | UC-017 | Class: MemoryService.keywordSearch, EmbeddingService.isEnabled | apps/api/src/modules/memory/memory.service.ts | apps/api/tests/unit/learning/learning.spec.ts | Implemented |
 
+### 3.8 Audit, Integration & Reporting Subsystem (Phase 5)
+
+| Req ID | Requirement Name | Description | Use Case IDs | Design Artifacts | Implementation Files | Test IDs | Status |
+|--------|------------------|-------------|--------------|------------------|---------------------|----------|--------|
+| FR-AUD-001 | Audit Trail | System shall record user, agent and system actions in an append-only log with actor, resource, result, IP and field-level before/after | UC-030 | AuditEntry, ChangeSet, IAuditLogRepository, AuditInterceptor (@Audited), AuditLogHandler (Observer) | apps/api/src/domain/audit/, apps/api/src/modules/audit/, apps/api/src/events/handlers/AuditLogHandler.ts | tests/unit/enterprise/audit-domain.spec.ts, services.spec.ts | Implemented |
+| FR-AUD-002 | Audit Search & Export | Admin shall filter the log and export it to CSV | UC-030 | AuditLogService.query / exportCsv | apps/api/src/modules/audit/audit.controller.ts, apps/web/src/pages/AuditLogPage.tsx | tests/unit/enterprise/services.spec.ts | Implemented |
+| FR-AUD-003 | Anomaly Detection | System shall flag repeated failed logins and bursts of denied requests | UC-030 | AnomalyDetector, IAnomalyRule (Strategy) | apps/api/src/domain/audit/AnomalyDetector.ts | tests/unit/enterprise/audit-domain.spec.ts | Implemented |
+| FR-INT-001 | API Keys | Users shall create scoped, expiring, revocable API keys; only a hash is stored | UC-031, UC-032 | ApiKey, ApiKeyAuthenticator; SD-009 | apps/api/src/domain/integration/ApiKey.ts, apps/api/src/modules/access/api-key-authenticator.service.ts | tests/unit/enterprise/integration-domain.spec.ts, access-http.spec.ts | Implemented |
+| FR-INT-002 | Webhooks | System shall send signed, retried notifications for 8 event types to registered URLs and record deliveries | UC-031 | Webhook, WebhookUrl, WebhookSignature, WebhookDispatcher (Observer); SD-010 | apps/api/src/domain/integration/, apps/api/src/modules/integrations/ | tests/unit/enterprise/webhooks.spec.ts, tests/unit/workflow/workflow-events.spec.ts | Implemented |
+| FR-INT-003 | Versioned Integration API | System shall expose `/api/v1` for external tools, documented with OpenAPI, with a per-key rate limit | UC-032 | IntegrationV1Controller, RateLimitGuard, IRateLimiter | apps/api/src/modules/integrations/integration-v1.controller.ts, openapi.ts | tests/unit/enterprise/access-http.spec.ts, reporting.spec.ts | Implemented |
+| FR-REP-001 | Cost & Performance Reports | System shall report cost by agent, model and day against budget, and success rate / duration / retries per role | UC-008, UC-022 | CostReportBuilder, PerformanceReportBuilder | apps/api/src/domain/reporting/, apps/api/src/modules/reporting/ | tests/unit/enterprise/reporting-domain.spec.ts | Implemented |
+| FR-REP-002 | Project Export | System shall export a project as PDF, CSV (tasks) or JSON | UC-022 | IProjectExporter (Strategy), PROJECT_EXPORTERS; SD-011 | apps/api/src/infrastructure/export/ | tests/unit/enterprise/reporting.spec.ts | Implemented |
+| FR-REP-003 | Weekly Report | System shall write a weekly Markdown report per active project once per ISO week and announce it | UC-022 | WeeklyReportScheduler, ReportGeneratedEvent | apps/api/src/modules/reporting/weekly-report.scheduler.ts | tests/unit/enterprise/reporting.spec.ts | Implemented |
+
 ---
 
 ## 4. Non-Functional Requirements Traceability
@@ -150,6 +166,10 @@ Requirements are organized into 7 subsystems:
 | NFR-SEC-004 | Tool Authorization | Agents must only execute authorized tools per role | UC-028 | ToolRegistry with role-based ACL | ToolRegistry.isToolAuthorizedForRole() | TEST-SEC-006 | Implemented |
 | NFR-SEC-005 | JWT Token Security | JWT tokens must expire after 24 hours, use HS256 algorithm | UC-001 | NestJS @nestjs/jwt with expiresIn: '24h' | AuthModule JwtModule.register() | TEST-SEC-007 | Implemented |
 | NFR-SEC-006 | Environment Variable Validation | System must validate all required environment variables on startup | All | EnvValidator class with Joi schema | security/env-validator.ts | TEST-SEC-008 | Implemented |
+| NFR-SEC-007 | Least Privilege | API keys can only hold scopes their owner's role allows; a key's permissions are its scopes ∩ the owner's current role | UC-029, UC-031, UC-032 | Principal.forApiKey | apps/api/src/domain/security/Principal.ts | tests/unit/enterprise/security-domain.spec.ts | Implemented |
+| NFR-SEC-008 | Secret Redaction | Audit entries never store passwords, tokens, secrets or keys | UC-030 | ChangeSet.redact | apps/api/src/domain/audit/ChangeSet.ts | tests/unit/enterprise/audit-domain.spec.ts | Implemented |
+| NFR-SEC-009 | Webhook Safety | Webhook URLs to private networks are refused (also after DNS); payloads are HMAC-signed with a timestamp | UC-031 | WebhookUrl, WebhookSignature | apps/api/src/domain/integration/ | tests/unit/enterprise/integration-domain.spec.ts, webhooks.spec.ts | Implemented |
+| NFR-SEC-010 | Export Safety | CSV exports escape formula cells; login and register are rate limited | UC-022, UC-001 | csvCell, @RateLimit | apps/api/src/domain/reporting/Csv.ts, apps/api/src/modules/auth/auth.controller.ts | tests/unit/enterprise/reporting-domain.spec.ts, access-http.spec.ts | Implemented |
 
 ### 4.3 Reliability Requirements
 
@@ -245,6 +265,7 @@ Requirements are organized into 7 subsystems:
 | Approval System | 10 tests | 5 tests | 2 tests | 93% | Complete |
 | Cost Tracking | 12 tests | 4 tests | 2 tests | 90% | Complete |
 | Memory & Learning | 15 tests | 6 tests | 1 test | 89% | Complete |
+| Security, Audit, Integration & Reporting (Phase 5) | 91 tests (9 suites) | 2 suites over real HTTP (guards, webhook receiver) | 44 checks (docs/phase5-e2e) | – | Complete |
 | **TOTAL** | **105 tests** | **43 tests** | **19 tests** | **90%** | **In Progress** |
 
 ---
@@ -297,20 +318,19 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Implemented | 80 | 88.9% |
-| Partial | 1 | 1.1% |
-| Planned | 9 | 10.0% |
-| **TOTAL** | **90** | **100%** |
+| Implemented | 95 | 91.3% |
+| Partial | 1 | 1.0% |
+| Planned | 8 | 7.7% |
+| **TOTAL** | **104** | **100%** |
 
-_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above._
+_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above. Recounted again 2026-10-26 after Phase 5: FR-AUTH-005, FR-AUD-001–003, FR-INT-001–003, FR-REP-001–003 and NFR-SEC-007–010 added; FR-WF-008 implemented in Phase 4._
 
 ### Planned Requirements (Priority for Next Sprint)
-1. FR-WF-008 (Workflow Rollback)
-2. FR-MEM-005 (Memory Pruning)
-3. NFR-PERF-004 (Cost Dashboard Caching)
-4. NFR-PERF-005 (Concurrent Workflow Load Testing)
-5. NFR-REL-005 (Idempotency Key Implementation)
-6. NFR-SCALE-001 (Horizontal Scaling Validation)
+1. FR-MEM-005 (Memory Pruning)
+2. NFR-PERF-004 (Cost Dashboard Caching)
+3. NFR-PERF-005 (Concurrent Workflow Load Testing)
+4. NFR-REL-005 (Idempotency Key Implementation)
+5. NFR-SCALE-001 (Horizontal Scaling Validation)
 
 ---
 

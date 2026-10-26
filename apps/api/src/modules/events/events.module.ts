@@ -79,12 +79,15 @@ export class EventsModule implements OnModuleInit {
       'workflow.paused'
     ];
 
-    // NotificationHandler, AuditLogHandler, and MetricsHandler listen to all events
+    // NotificationHandler and MetricsHandler listen to all events
     allEventTypes.forEach(eventType => {
       this.eventBus.subscribe(eventType, this.notificationHandler);
-      this.eventBus.subscribe(eventType, this.auditLogHandler);
       this.eventBus.subscribe(eventType, this.metricsHandler);
     });
+
+    // Phase 5: the audit trail records the events it has a mapping for (incl. workflow.failed,
+    // quality.gate.evaluated, agent.error, report.generated, which nothing listened to before)
+    AuditLogHandler.eventTypes().forEach(eventType => this.eventBus.subscribe(eventType, this.auditLogHandler));
 
     console.log('EventsModule initialized: DomainEvents facade wired, handlers subscribed');
     console.log(`Total event types registered: ${allEventTypes.length}`);

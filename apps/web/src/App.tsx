@@ -10,11 +10,23 @@ import { ProjectDetail } from './pages/ProjectDetail';
 import { AgentDetail } from './pages/AgentDetail';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AgentSettings } from './pages/AgentSettings';
+import { UsersPage } from './pages/UsersPage';
+import { AuditLogPage } from './pages/AuditLogPage';
+import { IntegrationsPage } from './pages/IntegrationsPage';
+import { RequirePermission } from './components/auth/RequirePermission';
+import { Permission } from '@ai-corp/shared-types';
+import { apiClient } from './lib/api/client';
 import socketClient from './lib/websocket/socket-client';
 import { useAuthStore } from './stores/authStore';
 
 export function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, setUser } = useAuthStore();
+
+  // Phase 5: pick up role changes made by an admin since the last login
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    apiClient.get('/auth/me').then(res => setUser(res.data)).catch(() => undefined);
+  }, [isAuthenticated, setUser]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -65,6 +77,9 @@ export function App() {
             <Route path="/agents/:id" element={<AgentDetail />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/agents" element={<AgentSettings />} />
+            <Route path="/users" element={<RequirePermission permission={Permission.USER_MANAGE}><UsersPage /></RequirePermission>} />
+            <Route path="/audit" element={<RequirePermission permission={Permission.AUDIT_VIEW}><AuditLogPage /></RequirePermission>} />
+            <Route path="/integrations" element={<RequirePermission permission={Permission.INTEGRATION_MANAGE}><IntegrationsPage /></RequirePermission>} />
           </Route>
         </Routes>
       </Router>

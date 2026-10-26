@@ -1,5 +1,6 @@
-import { Controller, Get, Param, Query, StreamableFile, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Controller, Get, Param, Query, StreamableFile } from '@nestjs/common';
+import { Permission } from '@ai-corp/shared-types';
+import { RequirePermission } from '../access/access.decorators';
 import { ProjectArtifactsService } from './project-artifacts.service';
 
 /**
@@ -7,7 +8,7 @@ import { ProjectArtifactsService } from './project-artifacts.service';
  * browsable and downloadable. Everything is read through ProjectWorkspace.
  */
 @Controller('projects')
-@UseGuards(JwtAuthGuard)
+@RequirePermission(Permission.PROJECT_READ)
 export class ProjectArtifactsController {
   constructor(private readonly artifacts: ProjectArtifactsService) {}
 

@@ -39,3 +39,9 @@ export * from './entities';
 
 // Repository Interfaces (Task 6)
 export * from './repositories';
+
+// Enterprise features (Phase 5)
+export * from './security';
+export * from './audit';
+export * from './integration';
+export * from './reporting';

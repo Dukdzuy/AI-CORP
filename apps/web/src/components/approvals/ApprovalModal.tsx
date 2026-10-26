@@ -1,5 +1,7 @@
 import React from 'react';
 import { Modal, Typography, Space, Tag, Button, Input, Descriptions } from 'antd';
+import { Permission } from '@ai-corp/shared-types';
+import { usePermission } from '../../lib/permissions';
 import { CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { PendingApproval } from './ApprovalNotification';
 
@@ -28,6 +30,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
   onApprove,
   onReject,
 }) => {
+  const canAnswer = usePermission(Permission.APPROVAL_GRANT);
   const [comment, setComment] = React.useState('');
 
   if (!approval) return null;
@@ -54,7 +57,7 @@ export const ApprovalModal: React.FC<ApprovalModalProps> = ({
       }
       open={open}
       onCancel={onClose}
-      footer={
+      footer={!canAnswer ? <Text type="secondary">Your role cannot answer approvals</Text> :
         <Space>
           <Button
             icon={<CloseCircleOutlined />}

@@ -19,11 +19,15 @@ rectangle "Administrative Capabilities" {
   }
   
   package "User Management (RBAC)" #FFD8E1 {
-    usecase "UC-008\nManage User Roles" as UC008
-    usecase "UC-008-1\nAssign Role to User" as UC008_1
-    usecase "UC-008-2\nRevoke User Access" as UC008_2
+    usecase "UC-029\nManage Users\n& Roles" as UC029
+    usecase "UC-029-1\nAssign Role to User" as UC029_1
+    usecase "UC-029-2\nDeactivate / Reactivate\nUser" as UC029_2
   }
   
+  package "Integrations" #FFE0EB {
+    usecase "UC-031\nManage API Keys\n& Webhooks" as UC031
+  }
+
   package "System Monitoring" #FFCCD5 {
     usecase "UC-025\nMonitor System\nHealth" as UC025
     usecase "UC-025-1\nView Database Status" as UC025_1
@@ -40,9 +44,9 @@ rectangle "Administrative Capabilities" {
   }
   
   package "Audit & Logging" #FFB4C8 {
-    usecase "UC-026\nView Audit Logs" as UC026
-    usecase "UC-026-1\nView API Usage Logs" as UC026_1
-    usecase "UC-026-2\nView Security Events" as UC026_2
+    usecase "UC-030\nReview Audit Log" as UC030
+    usecase "UC-030-1\nExport Audit CSV" as UC030_1
+    usecase "UC-030-2\nView Security\nAnomalies" as UC030_2
   }
   
   package "System Maintenance" #FFA8BC {
@@ -56,11 +60,12 @@ rectangle "Administrative Capabilities" {
 ' ====== ADMIN ASSOCIATIONS ======
 Admin --> UC001
 Admin --> UC003
-Admin --> UC008
+Admin --> UC029
 Admin --> UC025
 Admin --> UC007
-Admin --> UC026
+Admin --> UC030
 Admin --> UC027
+Admin --> UC031
 
 ' ====== SYSTEM BACKGROUND JOBS ======
 System --> UC027_1 : <<scheduled>>\nDaily at 2 AM
@@ -69,11 +74,12 @@ System --> UC027_2 : <<scheduled>>\nWeekly
 ' ====== INCLUDE RELATIONSHIPS ======
 ' All admin actions require authentication
 UC003 .> UC001 : <<include>>
-UC008 .> UC001 : <<include>>
+UC029 .> UC001 : <<include>>
 UC025 .> UC001 : <<include>>
 UC007 .> UC001 : <<include>>
-UC026 .> UC001 : <<include>>
+UC030 .> UC001 : <<include>>
 UC027 .> UC001 : <<include>>
+UC031 .> UC001 : <<include>>
 
 ' Agent configuration sub-use cases
 UC003 .> UC003_1 : <<include>>
@@ -81,7 +87,7 @@ UC003 .> UC003_2 : <<include>>
 UC003 .> UC003_3 : <<include>>
 
 ' User management sub-use cases
-UC008 .> UC008_1 : <<include>>
+UC029 .> UC029_1 : <<include>>
 
 ' System health monitoring sub-use cases
 UC025 .> UC025_1 : <<include>>
@@ -95,11 +101,11 @@ UC007 .> UC007_2 : <<include>>
 UC007 .> UC007_3 : <<include>>
 
 ' Audit logs sub-use cases
-UC026 .> UC026_1 : <<include>>
+UC030 .> UC030_1 : <<include>>
 
 ' ====== EXTEND RELATIONSHIPS ======
-UC008_2 .> UC008 : <<extend>>\nRevoke is optional
-UC026_2 .> UC026 : <<extend>>\nSecurity events filter
+UC029_2 .> UC029 : <<extend>>\nRevoke is optional
+UC030_2 .> UC030 : <<extend>>\nSecurity events filter
 UC027_2 .> UC027 : <<extend>>\nBackup is optional
 UC027_3 .> UC027 : <<extend>>\nWorkflow restart is recovery action
 
@@ -124,23 +130,24 @@ note right of UC003
   Agent.modelRouteConfig (JSON field)
 end note
 
-note bottom of UC008
-  **RBAC Implementation:**
-  
-  **Roles:**
-  - admin: Full system access
-  - board_member: Project management,
-    workflow approval, cost monitoring
-  
-  **Use Cases:**
-  1. Admin assigns "admin" role to user
-     → User gains access to UC-003, UC-025, UC-008
-  2. Admin assigns "board_member" role
-     → User gains access to UC-002, UC-005, UC-008
-  
+note bottom of UC029
+  **RBAC (Phase 5, Task 20):**
+
+  **Roles:** admin, board_member, viewer
+  (RolePolicy: 13 permissions, see Users & Roles page)
+
+  **Rules:**
+  - Changing project data also requires owning
+    the project (or being admin)
+  - Admin cannot change their own role or access;
+    the last active admin cannot be demoted
+  - Role change / deactivation applies on the
+    next request (JwtStrategy reloads the user)
+
   **Enforcement:**
-  @Roles() decorator on controllers
-  RolesGuard checks JWT token role claim
+  AuthenticationGuard → RateLimitGuard →
+  PermissionGuard (@RequirePermission), then
+  AuthorizationService for ownership
 end note
 
 note right of UC025
@@ -197,32 +204,20 @@ note bottom of UC007
   ApiUsageLog table with Prisma aggregations
 end note
 
-note top of UC026
-  **Audit Log Categories:**
-  
-  1. **API Usage Logs** (UC-026-1)
-     - Every LLM call with token counts
-     - Model used, provider, response time
-     - Cost calculation
-     - Stored in ApiUsageLog table
-  
-  2. **Security Events** (UC-026-2)
-     - Failed login attempts
-     - Unauthorized API access (403)
-     - Prompt injection detected
-     - Sandbox violations
-     - Stored in SecurityEvent table (planned)
-  
-  3. **User Actions**
-     - Project created/deleted
-     - Approval approved/rejected
-     - Agent config changed
-     - Stored via audit interceptor
-  
-  **Retention Policy:**
-  - API usage: 90 days
-  - Security events: 365 days
-  - User actions: 365 days
+note top of UC030
+  **Audit log (Phase 5, Task 21):**
+
+  Append-only AuditLog table. Sources:
+  - @Audited controller actions with before/after
+    and a field diff (AuditInterceptor)
+  - domain events (workflow, approval, agent,
+    quality gate, report) via AuditLogHandler
+  - access.denied from the guards
+  - failed and successful logins
+
+  Filters: actor, action, resource, result, dates.
+  Anomalies: 5 failed logins / 15 min,
+  10 denials / 10 min. Secrets are redacted.
 end note
 
 note right of UC027

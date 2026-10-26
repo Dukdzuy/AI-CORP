@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { QualityGateChecklistItem } from '@ai-corp/shared-types';
 import { apiClient } from '../client';
+import { downloadFile } from '../download';
 
 export type ArtifactKind = 'markdown' | 'plantuml' | 'code' | 'json' | 'text';
 
@@ -90,13 +91,5 @@ export const useOoadMetrics = (projectId: string | null) =>
 
 /** Download the project zip (the request needs the JWT header, so a plain link would not work) */
 export const downloadProjectArchive = async (projectId: string, fallbackName = 'project.zip'): Promise<void> => {
-  const response = await apiClient.get<Blob>(`/projects/${projectId}/archive`, { responseType: 'blob' });
-  const disposition = String(response.headers['content-disposition'] || '');
-  const fileName = /filename="([^"]+)"/.exec(disposition)?.[1] || fallbackName;
-  const url = URL.createObjectURL(response.data);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
+  await downloadFile(`/projects/${projectId}/archive`, {}, fallbackName);
 };

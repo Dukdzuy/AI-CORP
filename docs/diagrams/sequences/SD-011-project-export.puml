@@ -1,0 +1,29 @@
+@startuml SD-011: Project export
+!theme plain
+skinparam sequenceMessageAlign center
+
+title SD-011: Project export (Strategy, Task 23)
+
+actor "Board Member" as User
+participant "ReportsController" as Ctl #LightGreen
+participant "AuthorizationService" as Owner #LightBlue
+participant "ProjectExportService" as Svc #LightGreen
+participant "ProjectReportingService" as Read #LightGreen
+participant "CostReportBuilder /\nPerformanceReportBuilder" as Build #White
+participant "IProjectExporter\n(json | csv | pdf)" as Exp #Pink
+
+User -> Ctl: GET /api/projects/:id/export?format=pdf
+Ctl -> Owner: assertProjectOwner(principal, id)
+Ctl -> Svc: export(id, 'pdf')
+Svc -> Svc: exporter = exporters.find(format)\n(400 if unknown)
+Svc -> Read: snapshot(id)
+Read -> Read: load project, milestones, tasks,\nusage logs, workflow steps
+Read -> Build: build cost and performance reports
+Build --> Read: CostReport, PerformanceReport
+Read --> Svc: ProjectExportSnapshot
+Svc -> Exp: export(snapshot)
+Exp --> Svc: ExportedFile { fileName, mimeType, content }
+Svc --> Ctl: file
+Ctl --> User: 200 attachment
+note over Ctl: @Audited: project.export
+@enduml

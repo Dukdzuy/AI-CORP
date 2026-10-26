@@ -1,0 +1,144 @@
+@startuml Enterprise Features - Phase 5
+!theme plain
+title Security, audit, integration and reporting after Phase 5 (Tasks 20-23)
+skinparam classAttributeIconSize 0
+
+package "domain/security" {
+  class UserRole <<value object>> {
+    + fromString(value): UserRole
+    + isAdmin(): boolean
+  }
+  class RolePolicy <<policy>> {
+    + permissionsOf(role): Permission[]
+    + allows(role, permission): boolean
+    + matrix()
+  }
+  class Principal <<value object>> {
+    + kind: user | api_key
+    + forUser(user): Principal
+    + forApiKey(owner, key): Principal
+    + can(permission): boolean
+    + owns(ownerId): boolean
+  }
+  class AccessDeniedError
+  Principal --> UserRole
+  Principal ..> RolePolicy : permissions = role\n(∩ key scopes)
+}
+
+package "domain/audit" {
+  class AuditEntry <<entity, append-only>> {
+    + record(input): AuditEntry
+    + toPrimitives()
+  }
+  class ChangeSet <<value object>> {
+    + between(before, after): ChangeSet
+    + redact(value)
+  }
+  interface IAuditLogRepository {
+    + append(entry)
+    + query(filter, page, size)
+    + list(filter, limit)
+  }
+  interface IAnomalyRule {
+    + detect(entries): SecurityAnomaly[]
+  }
+  abstract class ThresholdRule
+  class RepeatedFailedLoginRule
+  class AccessDeniedBurstRule
+  class AnomalyDetector
+  AuditEntry *-- ChangeSet
+  ThresholdRule ..|> IAnomalyRule
+  RepeatedFailedLoginRule --|> ThresholdRule
+  AccessDeniedBurstRule --|> ThresholdRule
+  AnomalyDetector o-- "*" IAnomalyRule
+}
+
+package "domain/integration" {
+  class ApiKey <<entity>> {
+    + issue(params): {key, token}
+    + parse(token)
+    + matches(secret): boolean
+    + isUsable(now): boolean
+    + revoke()
+  }
+  class Webhook <<entity>> {
+    + register(params)
+    + subscribesTo(event, projectId): boolean
+  }
+  class WebhookUrl <<value object>> {
+    + parse(raw, options)
+    + isPrivateAddress(ip): boolean
+  }
+  class WebhookSignature {
+    + sign(secret, ts, body)
+    + verify(...)
+  }
+  interface IRateLimiter {
+    + hit(key, limit, windowMs)
+  }
+  class FixedWindowRateLimiter
+  interface IApiKeyRepository
+  interface IWebhookRepository
+  Webhook *-- WebhookUrl
+  FixedWindowRateLimiter ..|> IRateLimiter
+}
+
+package "domain/reporting" {
+  class CostReportBuilder { + build(projectId, usage, budget) }
+  class PerformanceReportBuilder { + build(projectId, steps) }
+  interface IProjectExporter <<strategy>> {
+    + format
+    + export(snapshot): ExportedFile
+  }
+}
+
+package "infrastructure" {
+  class PrismaAuditLogRepository
+  class PrismaApiKeyRepository
+  class PrismaWebhookRepository
+  class JsonProjectExporter
+  class CsvProjectExporter
+  class PdfProjectExporter
+}
+PrismaAuditLogRepository ..|> IAuditLogRepository
+PrismaApiKeyRepository ..|> IApiKeyRepository
+PrismaWebhookRepository ..|> IWebhookRepository
+JsonProjectExporter ..|> IProjectExporter
+CsvProjectExporter ..|> IProjectExporter
+PdfProjectExporter ..|> IProjectExporter
+
+package "modules (application)" {
+  class AuthenticationGuard <<APP_GUARD 1>>
+  class RateLimitGuard <<APP_GUARD 2>>
+  class PermissionGuard <<APP_GUARD 3>>
+  class AuthorizationService { + assertProjectOwner()\n+ assertRunOwner()\n+ assertApprovalAssignee() }
+  class ApiKeyAuthenticator
+  class AuditLogService { + record()\n+ recordDenied()\n+ query()\n+ exportCsv()\n+ detectAnomalies() }
+  class AuditInterceptor <<APP_INTERCEPTOR>>
+  class AuditSnapshotRegistry
+  class AuditLogHandler <<observer>>
+  class WebhookDispatcher <<observer>>
+  class ProjectExportService
+  class ProjectReportingService
+  class WeeklyReportScheduler
+}
+AuthenticationGuard --> ApiKeyAuthenticator
+ApiKeyAuthenticator --> IApiKeyRepository
+AuthenticationGuard ..> Principal : creates
+RateLimitGuard --> IRateLimiter
+PermissionGuard ..> Principal : can()
+PermissionGuard --> AuditLogService : access.denied
+AuthorizationService ..> Principal : owns()
+AuditInterceptor --> AuditSnapshotRegistry : before / after
+AuditInterceptor --> AuditLogService
+AuditLogHandler --> AuditLogService : domain events
+AuditLogService --> IAuditLogRepository
+AuditLogService --> AnomalyDetector
+WebhookDispatcher --> IWebhookRepository
+WebhookDispatcher ..> WebhookSignature
+ProjectExportService o-- "*" IProjectExporter : PROJECT_EXPORTERS
+ProjectExportService --> ProjectReportingService
+ProjectReportingService ..> CostReportBuilder
+ProjectReportingService ..> PerformanceReportBuilder
+WeeklyReportScheduler --> ProjectReportingService
+@enduml

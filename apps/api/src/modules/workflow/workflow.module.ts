@@ -1,3 +1,4 @@
+import { WorkflowAuditSnapshots } from './workflow-audit-snapshots';
 import { Module } from '@nestjs/common';
 import { WorkflowValidator } from './workflow-validator';
 import { WorkflowEngine } from './workflow.engine';
@@ -23,6 +24,7 @@ import { WorkflowsController } from './workflows.controller';
   imports: [WebSocketModule, OrchestratorModule, InfrastructureModule, WorkspaceModule, PrismaModule],
   controllers: [WorkflowsController],
   providers: [
+    WorkflowAuditSnapshots,
     WorkflowValidator,
     WorkflowEngine,
     WorkflowDefinitionService,

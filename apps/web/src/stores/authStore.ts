@@ -1,11 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-interface UserInfo {
+export interface UserInfo {
   id: string;
   email: string;
   name: string;
   role: string;
+  /** resolved by the API from the role (Phase 5); refreshed from /auth/me on start-up */
+  permissions?: string[];
 }
 
 interface AuthState {
@@ -13,6 +15,7 @@ interface AuthState {
   user: UserInfo | null;
   isAuthenticated: boolean;
   setAuth: (token: string, user: UserInfo) => void;
+  setUser: (user: UserInfo) => void;
   logout: () => void;
 }
 
@@ -32,6 +35,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       setAuth: (token, user) => set({ token, user, isAuthenticated: true }),
+      setUser: (user) => set({ user }),
       logout: () => set({ token: null, user: null, isAuthenticated: false }),
     }),
     {

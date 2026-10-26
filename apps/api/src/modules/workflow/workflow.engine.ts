@@ -10,6 +10,7 @@ import { AgentOrchestratorService } from '../orchestrator/agent-orchestrator.ser
 import { Queue, Worker, Job, ConnectionOptions } from 'bullmq';
 import { EventBus } from '../../domain/events/EventBus';
 import { WorkflowStartedEvent } from '../../domain/events/WorkflowStartedEvent';
+import { WorkflowFailedEvent } from '../../domain/events/WorkflowFailedEvent';
 import { WorkflowCompletedEvent } from '../../domain/events/WorkflowCompletedEvent';
 import {
   IMilestoneRepository,
@@ -74,7 +75,7 @@ export class WorkflowEngine {
       this.milestoneRepository,
       this.taskRepository
     ));
-    this.registerStrategy(new HumanApprovalStrategy(this.repository, this.websocketGateway));
+    this.registerStrategy(new HumanApprovalStrategy(this.repository, this.websocketGateway, this.eventBus));
     this.registerStrategy(new ConditionStrategy(this.websocketGateway));
     this.registerStrategy(new ParallelStrategy(this.websocketGateway));
 
@@ -308,6 +309,7 @@ export class WorkflowEngine {
     if (transition.kind === 'dead_end') {
       await this.repository.updateRun(runId, { status: 'failed', completedAt: new Date() });
       this.logger.error(`Failed to transition run ${runId}: ${transition.reason}`);
+      await this.publishFailure(run.projectId, run.id, currentNodeId, transition.reason);
       
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,
@@ -330,6 +332,7 @@ export class WorkflowEngine {
     if (visitCount > MAX_NODE_VISITS) {
       this.logger.error(`Loop detected: Node ${nextNodeId} visited ${visitCount} times in run ${runId}. Failing workflow.`);
       await this.repository.updateRun(runId, { status: 'failed', completedAt: new Date(), context: context as any });
+      await this.publishFailure(run.projectId, run.id, nextNodeId, `Loop limit: node ${nextNodeId} visited ${visitCount} times`);
 
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,
@@ -480,6 +483,13 @@ export class WorkflowEngine {
   /**
    * Save workflow state for recovery
    */
+  /** Phase 5: a run that stopped in `failed` is audited and reaches webhooks */
+  private async publishFailure(projectId: string, runId: string, nodeId: string | null, reason: string): Promise<void> {
+    await this.eventBus
+      .publish(new WorkflowFailedEvent(projectId, runId, nodeId, reason))
+      .catch(err => this.logger.error(`Failed to publish WorkflowFailedEvent: ${err.message}`));
+  }
+
   private async saveWorkflowState(runId: string): Promise<void> {
     const run = await this.repository.findRunById(runId);
     if (!run) return;
