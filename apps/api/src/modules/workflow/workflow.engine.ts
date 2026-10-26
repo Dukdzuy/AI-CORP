@@ -1,6 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { WorkflowDefinition, WorkflowNode, WorkflowContext, NodeResult } from '@ai-corp/shared-types';
-import { PrismaService } from '../../prisma/prisma.service';
+import { WorkflowDefinition, WorkflowNode, WorkflowContext, NodeResult, NodeType } from '@ai-corp/shared-types';
 import { WorkflowValidator } from './workflow-validator';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { WorkflowStateChangedEvent } from '@ai-corp/shared-types';
@@ -9,14 +8,25 @@ import { Queue, Worker, Job, ConnectionOptions } from 'bullmq';
 import { EventBus } from '../../domain/events/EventBus';
 import { WorkflowStartedEvent } from '../../domain/events/WorkflowStartedEvent';
 import { WorkflowCompletedEvent } from '../../domain/events/WorkflowCompletedEvent';
-import { Milestone } from '../../domain/entities/Milestone';
-import { Task } from '../../domain/entities/Task';
 import {
   IMilestoneRepository,
   ITaskRepository,
   MILESTONE_REPOSITORY,
   TASK_REPOSITORY,
 } from '../../domain/repositories';
+import {
+  WORKFLOW_ENGINE_REPOSITORY,
+  IWorkflowEngineRepository,
+  WorkflowRunRecord,
+} from './persistence/workflow-engine.repository';
+import {
+  NodeExecutionStrategy,
+  NodeExecutionContext,
+  AgentTaskStrategy,
+  HumanApprovalStrategy,
+  ConditionStrategy,
+  ParallelStrategy,
+} from './strategies';
 
 interface WorkflowJobData {
   runId: string;
@@ -40,15 +50,28 @@ export class WorkflowEngine {
   private contextCache = new Map<string, CacheEntry<any>>();
   private readonly CACHE_TTL_MS = 30000; // 30 seconds
   private redisAvailable = false;
+  private readonly strategies = new Map<NodeType, NodeExecutionStrategy>();
 
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(WORKFLOW_ENGINE_REPOSITORY) private readonly repository: IWorkflowEngineRepository,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly orchestrator: AgentOrchestratorService,
     private readonly eventBus: EventBus,
     @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: IMilestoneRepository,
     @Inject(TASK_REPOSITORY) private readonly taskRepository: ITaskRepository
   ) {
+    // One strategy per node type (Strategy pattern)
+    this.registerStrategy(new AgentTaskStrategy(
+      this.repository,
+      this.websocketGateway,
+      this.orchestrator,
+      this.milestoneRepository,
+      this.taskRepository
+    ));
+    this.registerStrategy(new HumanApprovalStrategy(this.repository, this.websocketGateway));
+    this.registerStrategy(new ConditionStrategy(this.websocketGateway));
+    this.registerStrategy(new ParallelStrategy(this.websocketGateway));
+
     // Initialize Redis connection options
     this.redisConnection = {
       host: process.env.REDIS_HOST || 'localhost',
@@ -112,6 +135,14 @@ export class WorkflowEngine {
   }
 
   /**
+   * Registers the strategy that executes nodes of `strategy.type`.
+   * New node types are added here without changing executeNode (Open/Closed Principle).
+   */
+  registerStrategy(strategy: NodeExecutionStrategy): void {
+    this.strategies.set(strategy.type, strategy);
+  }
+
+  /**
    * Registers a workflow definition into memory.
    */
   createWorkflow(def: WorkflowDefinition): void {
@@ -129,14 +160,12 @@ export class WorkflowEngine {
       throw new Error(`Workflow definition ${workflowDefId} not found.`);
     }
 
-    const run = await this.prisma.workflowRun.create({
-      data: {
-        projectId,
-        workflowDefId,
-        status: 'running',
-        currentNodeId: def.startNode,
-        context: context as any,
-      },
+    const run = await this.repository.createRun({
+      projectId,
+      workflowDefId,
+      status: 'running',
+      currentNodeId: def.startNode,
+      context: context as any,
     });
 
     this.logger.log(`Started workflow run ${run.id} for project ${projectId}`);
@@ -175,7 +204,7 @@ export class WorkflowEngine {
     const cached = this.getFromCache<WorkflowNode | null>(cacheKey);
     if (cached !== undefined) return cached;
 
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run || !run.currentNodeId) {
       this.setCache(cacheKey, null);
       return null;
@@ -203,7 +232,7 @@ export class WorkflowEngine {
    * Transitions a running workflow to the next node based on conditions.
    */
   async transitionToNextNode(runId: string, edgeCondition?: string): Promise<void> {
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run) throw new Error('Run not found');
 
     const def = this.definitions.get(run.workflowDefId);
@@ -218,16 +247,10 @@ export class WorkflowEngine {
 
     if (currentNodeId === def.endNode) {
       // Reached the end
-      await this.prisma.workflowRun.update({
-        where: { id: runId },
-        data: { status: 'completed', completedAt: new Date() }
-      });
+      await this.repository.updateRun(runId, { status: 'completed', completedAt: new Date() });
 
       // Update the project status to completed
-      await this.prisma.project.update({
-        where: { id: run.projectId },
-        data: { status: 'completed' }
-      });
+      await this.repository.updateProjectStatus(run.projectId, 'completed');
 
       this.logger.log(`Workflow run ${runId} completed. Project ${run.projectId} marked as completed.`);
       
@@ -263,10 +286,7 @@ export class WorkflowEngine {
     }
 
     if (!nextNodeId) {
-      await this.prisma.workflowRun.update({
-        where: { id: runId },
-        data: { status: 'failed', completedAt: new Date() }
-      });
+      await this.repository.updateRun(runId, { status: 'failed', completedAt: new Date() });
       this.logger.error(`Failed to transition run ${runId}: No valid next node found for condition '${edgeCondition}'`);
       
       const event: WorkflowStateChangedEvent = {
@@ -288,10 +308,7 @@ export class WorkflowEngine {
 
     if (visitCount > MAX_NODE_VISITS) {
       this.logger.error(`Loop detected: Node ${nextNodeId} visited ${visitCount} times in run ${runId}. Failing workflow.`);
-      await this.prisma.workflowRun.update({
-        where: { id: runId },
-        data: { status: 'failed', completedAt: new Date(), context: context as any }
-      });
+      await this.repository.updateRun(runId, { status: 'failed', completedAt: new Date(), context: context as any });
 
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,
@@ -306,10 +323,7 @@ export class WorkflowEngine {
 
     context._visitedNodes[nextNodeId] = visitCount;
 
-    await this.prisma.workflowRun.update({
-      where: { id: runId },
-      data: { currentNodeId: nextNodeId, context: context as any }
-    });
+    await this.repository.updateRun(runId, { currentNodeId: nextNodeId, context: context as any });
 
     // Invalidate cache after state change (Task 33.2)
     this.invalidateRunCache(runId);
@@ -331,7 +345,7 @@ export class WorkflowEngine {
    * Pause a workflow execution
    */
   async pauseWorkflow(runId: string): Promise<void> {
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run) throw new Error(`Workflow run ${runId} not found`);
     
     if (run.status !== 'running') {
@@ -340,10 +354,7 @@ export class WorkflowEngine {
 
     await this.saveWorkflowState(runId);
     
-    await this.prisma.workflowRun.update({
-      where: { id: runId },
-      data: { status: 'paused' }
-    });
+    await this.repository.updateRun(runId, { status: 'paused' });
 
     this.logger.log(`Workflow run ${runId} paused`);
     
@@ -363,17 +374,14 @@ export class WorkflowEngine {
    * @param skipProcessNode If true, don't auto-process the current node (used when approval transitions to next node)
    */
   async resumeWorkflow(runId: string, skipProcessNode = false): Promise<void> {
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run) throw new Error(`Workflow run ${runId} not found`);
     
     if (run.status !== 'paused') {
       throw new Error(`Cannot resume workflow ${runId} with status ${run.status}`);
     }
 
-    await this.prisma.workflowRun.update({
-      where: { id: runId },
-      data: { status: 'running' }
-    });
+    await this.repository.updateRun(runId, { status: 'running' });
 
     this.logger.log(`Workflow run ${runId} resumed`);
     
@@ -397,7 +405,7 @@ export class WorkflowEngine {
    * Save workflow state for recovery
    */
   private async saveWorkflowState(runId: string): Promise<void> {
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run) return;
 
     // State is persisted in database through currentNodeId and context
@@ -410,11 +418,7 @@ export class WorkflowEngine {
    */
   async recoverWorkflows(): Promise<void> {
     try {
-      const runningWorkflows = await this.prisma.workflowRun.findMany({
-        where: {
-          status: 'running'
-        }
-      });
+      const runningWorkflows = await this.repository.findRunsByStatus('running');
 
       this.logger.log(`Recovering ${runningWorkflows.length} running workflows`);
 
@@ -445,7 +449,7 @@ export class WorkflowEngine {
   private async executeNodeJob(jobData: WorkflowJobData): Promise<NodeResult> {
     const { runId, nodeId, retryCount } = jobData;
 
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run || run.status !== 'running') {
       throw new Error(`Workflow run ${runId} is not running`);
     }
@@ -512,18 +516,16 @@ export class WorkflowEngine {
    * - Req 9: WebSocket events for state changes
    * - Req 19: Error handling and retry logic
    */
-  private async executeNode(node: WorkflowNode, run: any): Promise<NodeResult> {
+  private async executeNode(node: WorkflowNode, run: WorkflowRunRecord): Promise<NodeResult> {
     this.logger.log(`Executing node ${node.id} of type ${node.type}`);
 
-    const step = await this.prisma.workflowStep.create({
-      data: {
-        workflowRunId: run.id,
-        nodeId: node.id,
-        agentRole: node.agentRole,
-        status: 'running',
-        startedAt: new Date(),
-        retryCount: 0,
-      }
+    const step = await this.repository.createStep({
+      workflowRunId: run.id,
+      nodeId: node.id,
+      agentRole: node.agentRole,
+      status: 'running',
+      startedAt: new Date(),
+      retryCount: 0,
     });
 
     // Emit WebSocket event for node execution start (Req 9)
@@ -542,39 +544,23 @@ export class WorkflowEngine {
     });
 
     try {
-      let result: NodeResult;
-
-      switch (node.type) {
-        case 'agent_task':
-          result = await this.executeAgentTask(node, run);
-          break;
-        case 'human_approval':
-          result = await this.executeHumanApproval(node, run);
-          break;
-        case 'condition':
-          result = await this.executeCondition(node, run);
-          break;
-        case 'parallel':
-          result = await this.executeParallel(node, run);
-          break;
-        default:
-          throw new Error(`Unsupported node type: ${node.type}`);
+      const strategy = this.strategies.get(node.type);
+      if (!strategy) {
+        throw new Error(`Unsupported node type: ${node.type}`);
       }
+      const result = await strategy.execute(node, run, this.nodeExecutionContext);
 
       // Calculate execution duration
       const completedAt = new Date();
       const durationMs = step.startedAt ? completedAt.getTime() - step.startedAt.getTime() : 0;
 
       // Update step with result
-      await this.prisma.workflowStep.update({
-        where: { id: step.id },
-        data: {
-          status: result.status === 'success' ? 'completed' : result.status === 'failure' ? 'failed' : 'pending',
-          output: result.output ? JSON.stringify(result.output) : undefined,
-          error: result.error,
-          completedAt,
-          durationMs,
-        }
+      await this.repository.updateStep(step.id, {
+        status: result.status === 'success' ? 'completed' : result.status === 'failure' ? 'failed' : 'pending',
+        output: result.output ? JSON.stringify(result.output) : undefined,
+        error: result.error,
+        completedAt,
+        durationMs,
       });
 
       // Structured logging for workflow step
@@ -612,13 +598,10 @@ export class WorkflowEngine {
 
       return result;
     } catch (error) {
-      await this.prisma.workflowStep.update({
-        where: { id: step.id },
-        data: {
-          status: 'failed',
-          error: (error as Error).message,
-          completedAt: new Date()
-        }
+      await this.repository.updateStep(step.id, {
+        status: 'failed',
+        error: (error as Error).message,
+        completedAt: new Date()
       });
 
       // Emit WebSocket event for node failure (Req 9)
@@ -641,510 +624,13 @@ export class WorkflowEngine {
   }
 
   /**
-   * Execute an agent task node
-   * Implements Requirement 2: Workflow orchestration with agent task execution
-   * Implements Requirement 9: WebSocket events for agent thinking and actions
+   * Engine services a node strategy may call back into
    */
-  private async executeAgentTask(node: WorkflowNode, run: any): Promise<NodeResult> {
-    if (!node.agentRole) {
-      throw new Error(`Agent task node ${node.id} missing agentRole`);
-    }
-
-    // Emit thinking event (Req 9)
-    this.websocketGateway.sendToProject(run.projectId, {
-      type: 'agent:thinking',
-      data: {
-        agentId: node.agentRole,
-        agentRole: node.agentRole,
-        taskId: node.id,
-        message: `Analyzing task: ${node.taskType || node.id}...`
-      },
-      timestamp: new Date()
-    });
-
-    try {
-      const workflowCtx = run.context as Record<string, unknown> || {};
-      const vars = (workflowCtx.variables as Record<string, unknown>) || {};
-      const agentInput: any = {
-        projectId: run.projectId,
-        taskId: node.id,
-        task: (node as any).promptTemplate || node.taskType || 'Please proceed with the assigned task.',
-        workflowRunId: run.id,
-        projectContext: workflowCtx,
-        relevantMemories: [],
-        availableTools: [],
-        goal: workflowCtx.goal || '',
-        milestone: workflowCtx.milestone || '',
-        code: workflowCtx.code || '',
-        projectSummary: workflowCtx.projectSummary || workflowCtx.goal || '',
-        ...vars,
-      };
-      const result = await this.orchestrator.invokeAgent(node.agentRole, agentInput);
-
-      // Merge agent output back into workflow context variables
-      // This allows condition nodes to check agent results (e.g., qa_approved)
-      if (result?.action) {
-        const action = result.action;
-        // Merge all output fields into variables
-        if (action.output && typeof action.output === 'object') {
-          Object.assign(vars, action.output);
-        } else if (typeof action.output === 'string' && action.output) {
-          // String output: store as 'output' key and also parse structured data
-          vars.output = action.output;
-          // Auto-create milestones from CEO agent output
-          if (action.action === 'planMilestones') {
-            await this.createMilestonesFromOutput(run.projectId, action.output);
-          }
-          // Auto-create tasks from PM agent output
-          if (action.action === 'breakdownTasks') {
-            await this.createTasksFromOutput(run.projectId, action.output);
-          }
-        }
-        // Merge top-level action fields (like qa_approved, edgeCondition)
-        for (const [key, value] of Object.entries(action)) {
-          if (key !== 'output' && key !== 'action') {
-            vars[key] = value;
-          }
-        }
-        workflowCtx.variables = vars;
-        // Persist updated context to database
-        await this.prisma.workflowRun.update({
-          where: { id: run.id },
-          data: { context: workflowCtx as any }
-        });
-      }
-
-      // Wire agent actions to task updates (Task 32.2)
-      await this.updateTaskStatusForAgent(node.agentRole, run.projectId, result);
-
-      // Emit action completion event (Req 9)
-      this.websocketGateway.sendToProject(run.projectId, {
-        type: 'agent:action',
-        data: {
-          agentId: node.agentRole,
-          agentRole: node.agentRole,
-          taskId: node.id,
-          actionType: 'task_complete',
-          toolName: node.taskType || 'general_task',
-          parameters: result
-        },
-        timestamp: new Date()
-      });
-
-      return {
-        status: 'success',
-        output: result
-      };
-    } catch (error) {
-      this.logger.error(`Agent task execution failed for node ${node.id}: ${(error as Error).message}`);
-      return {
-        status: 'failure',
-        error: (error as Error).message
-      };
-    }
-  }
-
-  /**
-   * Create milestones from CEO agent output text
-   */
-  private async createMilestonesFromOutput(projectId: string, output: string): Promise<void> {
-    try {
-      // Parse bullet points or numbered items from CEO output
-      const lines = output.split('\n').filter(l => l.trim().length > 0);
-      const milestoneLines = lines.filter(l => 
-        l.match(/^[\s]*[-*•]\s/) || l.match(/^[\s]*\d+[.)]\s/) || l.match(/^milestone/i)
-      );
-
-      if (milestoneLines.length === 0) {
-        // Fallback: create a single milestone from the first meaningful line
-        const firstMeaningful = lines.find(l => l.length > 10) || lines[0] || 'Project Planning';
-        await this.addMilestone(
-          projectId,
-          firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 100),
-          firstMeaningful.trim(),
-        );
-      } else {
-        for (const line of milestoneLines.slice(0, 10)) {
-          const name = line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^milestone[:\s]*/i, '').trim();
-          if (name.length > 2) {
-            await this.addMilestone(projectId, name.slice(0, 100), name);
-          }
-        }
-      }
-      this.logger.log(`Created milestones from CEO output for project ${projectId}`);
-    } catch (error) {
-      this.logger.warn(`Failed to create milestones from output: ${(error as Error).message}`);
-    }
-  }
-
-  /**
-   * Create tasks from PM agent output text
-   */
-  private async createTasksFromOutput(projectId: string, output: string): Promise<void> {
-    try {
-      // Parse task items from PM output
-      const lines = output.split('\n').filter(l => l.trim().length > 0);
-      const taskLines = lines.filter(l => 
-        l.match(/^[\s]*[-*•]\s/) || l.match(/^[\s]*\d+[.)]\s/) || l.match(/^task/i)
-      );
-
-      if (taskLines.length === 0) {
-        // Fallback: create a single task
-        const firstMeaningful = lines.find(l => l.length > 5) || 'Implement feature';
-        await this.addTask(
-          projectId,
-          firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 200),
-          firstMeaningful.trim(),
-        );
-      } else {
-        for (const line of taskLines.slice(0, 20)) {
-          const title = line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^task[:\s]*/i, '').trim();
-          if (title.length > 2) {
-            await this.addTask(projectId, title.slice(0, 200), title);
-          }
-        }
-      }
-      this.logger.log(`Created tasks from PM output for project ${projectId}`);
-    } catch (error) {
-      this.logger.warn(`Failed to create tasks from output: ${(error as Error).message}`);
-    }
-  }
-
-  /**
-   * Create an agent-planned milestone through the Milestone entity (starts pending)
-   */
-  private async addMilestone(projectId: string, name: string, description: string): Promise<void> {
-    const state = Milestone.create({ projectId, name, description }).toPrimitives();
-    await this.milestoneRepository.create({
-      id: state.id,
-      projectId: state.projectId,
-      name: state.name,
-      description: state.description,
-      status: state.status,
-      dueDate: state.dueDate,
-    });
-  }
-
-  /**
-   * Create an agent-planned task through the Task entity (starts in TODO)
-   */
-  private async addTask(projectId: string, title: string, description: string): Promise<void> {
-    const state = Task.create({ projectId, title, description }).toPrimitives();
-    await this.taskRepository.create({
-      id: state.id,
-      projectId: state.projectId,
-      title: state.title,
-      description: state.description,
-      status: state.status,
-      priority: state.priority,
-    });
-  }
-
-  /**
-   * Update task status based on agent role after successful execution
-   * Implements Task 32.2: Wire agent actions to task updates
-   */
-  private async updateTaskStatusForAgent(agentRole: string, projectId: string, result: any): Promise<void> {
-    try {
-      // Find the most recent task for this project that is in_progress
-      const task = await this.prisma.task.findFirst({
-        where: {
-          projectId,
-          status: 'in_progress',
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (!task) {
-        this.logger.log(`No in_progress task found for project ${projectId}, skipping task status update`);
-        return;
-      }
-
-      let newStatus: string | null = null;
-
-      // When Dev agent completes → task goes to review
-      if (agentRole === 'DEV') {
-        newStatus = 'review';
-      }
-      // When QA agent approves → task goes to done
-      else if (agentRole === 'QA') {
-        // Check if QA result indicates approval
-        const isApproved = result?.output?.approved !== false && result?.status !== 'failure';
-        if (isApproved) {
-          newStatus = 'done';
-        }
-      }
-
-      if (newStatus) {
-        await this.prisma.task.update({
-          where: { id: task.id },
-          data: { status: newStatus },
-        });
-        this.logger.log(`Updated task ${task.id} status to ${newStatus} after ${agentRole} agent completion`);
-
-        // Emit WebSocket event for task status change
-        this.websocketGateway.sendToProject(projectId, {
-          type: 'task:updated',
-          data: { taskId: task.id, status: newStatus, agentRole },
-          timestamp: new Date(),
-        });
-      }
-    } catch (error) {
-      this.logger.error(`Failed to update task status for agent ${agentRole}: ${(error as Error).message}`);
-    }
-  }
-
-  /**
-   * Execute a human approval node
-   * Implements Requirement 10: Human-in-the-loop approvals
-   * Implements Requirement 9: WebSocket events for approval requests
-   */
-  private async executeHumanApproval(node: WorkflowNode, run: any): Promise<NodeResult> {
-    this.logger.log(`Reached human approval node ${node.id} for workflow run ${run.id}`);
-
-    // Get project owner for approval
-    const project = await this.prisma.project.findUnique({
-      where: { id: run.projectId },
-      include: { createdBy: true }
-    });
-
-    if (!project) {
-      throw new Error(`Project ${run.projectId} not found`);
-    }
-
-    // Create approval request
-    const approvalType = (node.metadata as any)?.approvalType || node.taskType || 'workflow_approval';
-    const requestData = {
-      nodeId: node.id,
-      workflowRunId: run.id,
-      context: run.context,
-      message: (node.metadata as any)?.message || 'Approval required to continue workflow execution',
-      ...((node.metadata as any)?.requestData || {})
-    };
-
-    const approval = await this.prisma.approval.create({
-      data: {
-        workflowRunId: run.id,
-        userId: project.createdById,
-        approvalType,
-        requestData: requestData as any,
-        status: 'pending',
-      },
-    });
-
-    // Emit approval required event (Req 9, Req 10) — send to both project and user
-    const approvalEvent = {
-      type: 'human:approval_required',
-      data: {
-        approvalId: approval.id,
-        workflowRunId: run.id,
-        projectId: run.projectId,
-        approvalType,
-        requestData,
-        requestedAt: new Date()
-      },
-      timestamp: new Date()
-    };
-    this.websocketGateway.sendToProjectAndUser(run.projectId, project.createdById, approvalEvent);
-
-    this.logger.log(`Approval request ${approval.id} created and notification sent to user ${project.createdById}`);
-
-    // Return pending_approval status to pause workflow
+  private get nodeExecutionContext(): NodeExecutionContext {
     return {
-      status: 'pending_approval',
-      output: {
-        approvalId: approval.id,
-        approvalType,
-        requestData
-      }
-    };
-  }
-
-  /**
-   * Execute a condition node - evaluates conditions from context
-   * Implements Requirement 2: DAG-based workflow with conditional branching
-   * Implements Requirement 9: WebSocket events for state changes
-   */
-  private async executeCondition(node: WorkflowNode, run: any): Promise<NodeResult> {
-    this.logger.log(`Evaluating condition node ${node.id}`);
-
-    // Simple condition evaluation (can be extended with a proper expression evaluator)
-    const context = run.context as WorkflowContext;
-    let conditionResult = false;
-
-    try {
-      // Example: Check if a variable in context meets condition
-      // This is a simplified implementation - production should use a safe expression evaluator
-      const variable = (node.metadata as any)?.variable;
-      const operator = (node.metadata as any)?.operator;
-      const value = (node.metadata as any)?.value;
-
-      if (!variable || !operator) {
-        throw new Error(`Condition node ${node.id} missing required metadata: variable, operator`);
-      }
-
-      const contextValue = context.variables[variable];
-      
-      this.logger.log(`Evaluating condition: ${variable} ${operator} ${value}, context value: ${contextValue}`);
-      
-      switch (operator) {
-        case 'equals':
-          conditionResult = contextValue === value;
-          break;
-        case 'not_equals':
-          conditionResult = contextValue !== value;
-          break;
-        case 'greater_than':
-          conditionResult = Number(contextValue) > Number(value);
-          break;
-        case 'less_than':
-          conditionResult = Number(contextValue) < Number(value);
-          break;
-        case 'exists':
-          conditionResult = contextValue !== undefined && contextValue !== null;
-          break;
-        case 'not_exists':
-          conditionResult = contextValue === undefined || contextValue === null;
-          break;
-        default:
-          throw new Error(`Unknown operator: ${operator}`);
-      }
-
-      this.logger.log(`Condition evaluated to: ${conditionResult}`);
-
-      // Emit condition evaluation event (Req 9)
-      this.websocketGateway.sendToProject(run.projectId, {
-        type: 'workflow:state_changed',
-        data: {
-          workflowRunId: run.id,
-          projectId: run.projectId,
-          previousState: 'running',
-          currentState: 'condition_evaluated',
-          currentNodeId: node.id,
-          timestamp: new Date()
-        } as WorkflowStateChangedEvent,
-        timestamp: new Date()
-      });
-
-      return {
-        status: 'success',
-        output: { 
-          conditionResult, 
-          edgeCondition: conditionResult ? 'onSuccess' : 'onFail',
-          variable,
-          operator,
-          value,
-          contextValue
-        }
-      };
-    } catch (error) {
-      this.logger.error(`Error evaluating condition for node ${node.id}: ${(error as Error).message}`);
-      return { 
-        status: 'failure', 
-        error: (error as Error).message 
-      };
-    }
-  }
-
-  /**
-   * Execute parallel nodes concurrently
-   * Implements Requirement 2: Parallel node execution in workflow
-   * Implements Requirement 9: WebSocket events for parallel execution
-   * Implements Requirement 26: Performance optimization with parallel execution
-   */
-  private async executeParallel(node: WorkflowNode, run: any): Promise<NodeResult> {
-    this.logger.log(`Executing parallel node ${node.id}`);
-
-    const parallelNodeIds = (node.metadata as any)?.parallelNodes as string[];
-    if (!parallelNodeIds || parallelNodeIds.length === 0) {
-      throw new Error(`Parallel node ${node.id} missing parallelNodes in metadata`);
-    }
-
-    const def = this.definitions.get(run.workflowDefId);
-    if (!def) throw new Error(`Workflow definition ${run.workflowDefId} not found`);
-
-    const parallelNodes = parallelNodeIds
-      .map(id => def.nodes.find(n => n.id === id))
-      .filter(Boolean) as WorkflowNode[];
-
-    if (parallelNodes.length === 0) {
-      throw new Error(`No valid parallel nodes found for node ${node.id}`);
-    }
-
-    this.logger.log(`Executing ${parallelNodes.length} nodes in parallel: ${parallelNodeIds.join(', ')}`);
-
-    // Emit parallel execution start event (Req 9)
-    this.websocketGateway.sendToProject(run.projectId, {
-      type: 'workflow:state_changed',
-      data: {
-        workflowRunId: run.id,
-        projectId: run.projectId,
-        previousState: 'running',
-        currentState: 'parallel_execution',
-        currentNodeId: node.id,
-        timestamp: new Date()
-      } as WorkflowStateChangedEvent,
-      timestamp: new Date()
-    });
-
-    // Execute all parallel nodes concurrently (Req 26)
-    const results = await Promise.allSettled(
-      parallelNodes.map(parallelNode => {
-        this.logger.log(`Starting parallel execution of node ${parallelNode.id}`);
-        return this.executeNode(parallelNode, run);
-      })
-    );
-
-    // Analyze results
-    const successfulResults = results.filter(
-      r => r.status === 'fulfilled' && r.value.status === 'success'
-    );
-    const failedResults = results.filter(
-      r => r.status === 'rejected' || (r.status === 'fulfilled' && r.value.status === 'failure')
-    );
-
-    const allSucceeded = failedResults.length === 0;
-    const errors = failedResults.map((r: any) => {
-      if (r.status === 'rejected') {
-        return r.reason?.message || 'Unknown error';
-      } else {
-        return r.value?.error || 'Unknown error';
-      }
-    });
-
-    this.logger.log(
-      `Parallel execution complete: ${successfulResults.length}/${parallelNodes.length} succeeded, ${failedResults.length} failed`
-    );
-
-    // Emit parallel execution complete event (Req 9)
-    this.websocketGateway.sendToProject(run.projectId, {
-      type: 'workflow:state_changed',
-      data: {
-        workflowRunId: run.id,
-        projectId: run.projectId,
-        previousState: 'parallel_execution',
-        currentState: allSucceeded ? 'parallel_success' : 'parallel_partial_failure',
-        currentNodeId: node.id,
-        timestamp: new Date()
-      } as WorkflowStateChangedEvent,
-      timestamp: new Date()
-    });
-
-    return {
-      status: allSucceeded ? 'success' : 'failure',
-      output: { 
-        results: results.map((r: any, index) => ({
-          nodeId: parallelNodes[index].id,
-          status: r.status,
-          value: r.status === 'fulfilled' ? r.value : undefined,
-          reason: r.status === 'rejected' ? r.reason?.message : undefined
-        })),
-        allSucceeded,
-        successCount: successfulResults.length,
-        failureCount: failedResults.length,
-        totalCount: parallelNodes.length
-      },
-      error: errors.length > 0 ? errors.join('; ') : undefined
+      logger: this.logger,
+      getDefinition: (workflowDefId) => this.definitions.get(workflowDefId),
+      executeNode: (node, run) => this.executeNode(node, run),
     };
   }
 
@@ -1171,7 +657,7 @@ export class WorkflowEngine {
    * - Req 26: Performance optimization with job queuing and concurrency control
    */
   async processCurrentNode(runId: string) {
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run || run.status !== 'running') return;
 
     const node = await this.getCurrentNode(runId);
@@ -1218,7 +704,7 @@ export class WorkflowEngine {
    * Called by BullMQ worker after job completion
    */
   private async handleJobCompletion(runId: string, nodeId: string, result: NodeResult): Promise<void> {
-    const run = await this.prisma.workflowRun.findUnique({ where: { id: runId } });
+    const run = await this.repository.findRunById(runId);
     if (!run || run.status !== 'running') return;
 
     try {
@@ -1247,10 +733,7 @@ export class WorkflowEngine {
       await this.processCurrentNode(runId);
     } catch (error) {
       this.logger.error(`Error handling job completion for node ${nodeId}: ${(error as Error).message}`);
-      await this.prisma.workflowRun.update({
-        where: { id: runId },
-        data: { status: 'failed', completedAt: new Date() }
-      });
+      await this.repository.updateRun(runId, { status: 'failed', completedAt: new Date() });
       
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,

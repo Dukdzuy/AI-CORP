@@ -5,6 +5,8 @@ import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { AgentOrchestratorService } from '../orchestrator/agent-orchestrator.service';
 import { EventBus } from '../../domain/events/EventBus';
 import { MILESTONE_REPOSITORY, TASK_REPOSITORY } from '../../domain/repositories';
+import { WORKFLOW_ENGINE_REPOSITORY } from './persistence/workflow-engine.repository';
+import { PrismaWorkflowEngineRepository } from './persistence/prisma-workflow-engine.repository';
 import { WorkflowDefinition, WorkflowNode, WorkflowContext, AgentRole } from '@ai-corp/shared-types';
 
 // Mock BullMQ to prevent Redis connections during tests
@@ -106,6 +108,7 @@ describe('WorkflowEngine - Node Execution Logic', () => {
       providers: [
         WorkflowEngine,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: WORKFLOW_ENGINE_REPOSITORY, useClass: PrismaWorkflowEngineRepository },
         { provide: AppWebSocketGateway, useValue: mockWebSocketGateway },
         { provide: AgentOrchestratorService, useValue: mockOrchestrator },
         { provide: EventBus, useValue: { publish: jest.fn().mockResolvedValue(undefined) } },
