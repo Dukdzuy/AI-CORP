@@ -1,0 +1,62 @@
+{
+  "verdict": "CHANGES_REQUESTED",
+  "findings": [
+    {
+      "severity": "HIGH",
+      "title": "Prisma ooadMetadata type mismatch",
+      "description": "Project.ooadMetadata is typed as Json? in the schema but updated as a nested object in BAActionStrategy and ArchitectActionStrategy. Prisma expects a serializable JSON value, not a plain object. Wrap updates in Prisma.JsonNull or ensure the object is serialized. Otherwise runtime errors occur on database writes.",
+      "confidence": "confirmed",
+      "location": "apps/api/src/modules/agents/strategies/BAActionStrategy.ts, ArchitectActionStrategy.ts"
+    },
+    {
+      "severity": "HIGH",
+      "title": "QA constructor dependency injection breaks NestJS pattern",
+      "description": "QaActionStrategy constructor takes systemPrompt and modelConfig as positional parameters after injectable services. NestJS cannot auto-inject these; they must come from factory providers or be passed explicitly. Either move to factory pattern or inject via tokens (e.g., @Inject('QA_SYSTEM_PROMPT')).",
+      "confidence": "confirmed",
+      "location": "apps/api/src/modules/agents/strategies/QaActionStrategy.ts, apps/api/src/modules/agents/agents.module.ts"
+    },
+    {
+      "severity": "HIGH",
+      "title": "Sandbox file check ignores command failures",
+      "description": "QualityGateHandler wraps sandbox file checks in try-catch and sets passed: false on error, but the error could be a sandbox failure (timeout, permission issue) rather than a missing file. The gate would fail incorrectly. Return exists: false only when output is \"missing\", not on exception.",
+      "confidence": "confirmed",
+      "location": "apps/api/src/modules/workflow/handlers/quality-gate.handler.ts"
+    },
+    {
+      "severity": "MEDIUM",
+      "title": "UC-ID comment enforcement missing",
+      "description": "DEV prompt includes \"Each class must reference its use case ID in a comment (e.g., // UC-001)\" but there's no validation or post-generation check. QA's traceability matrix parses test files for UC-XXX but not implementation files. Add a post-generation scan in DevActionStrategy or a QA check that parses generated code for UC references.",
+      "confidence": "confirmed",
+      "location": "apps/api/src/modules/agents/strategies/DevActionStrategy.ts, QaActionStrategy.ts"
+    },
+    {
+      "severity": "MEDIUM",
+      "title": "Test coverage calculation returns null always",
+      "description": "OoadMetricsService.getProjectMetrics sets testCoverage to null with a TODO comment. QA writes traceability-matrix.md with coverage percentage, but metrics don't parse it. Either parse the markdown file from sandbox or extract coverage from the traceability matrix generation logic and persist it to ooadMetadata.",
+      "confidence": "likely",
+      "location": "apps/api/src/modules/ooad-metrics/ooad-metrics.service.ts, apps/api/src/modules/agents/strategies/QaActionStrategy.ts"
+    },
+    {
+      "severity": "MEDIUM",
+      "title": "TemplateService path resolution fragile",
+      "description": "template.service.ts constructs templateDir with `path.join(__dirname, '../templates/ooad')` which depends on build output structure. If NestJS bundles differently or files are relocated, templates fail to load. Use a configurable path or resolve relative to project root.",
+      "confidence": "possible",
+      "location": "apps/api/src/modules/agents/services/template.service.ts"
+    },
+    {
+      "severity": "LOW",
+      "title": "Pattern justification length validated twice",
+      "description": "PatternsSchema enforces min(50) on justification field; QualityGateHandler also checks patterns where justification.length < 50. The schema validation would already throw OOADSchemaValidationError before the gate runs, making the gate's check redundant. Remove duplicate check from gate or document that it's defensive (e.g., if metadata is manually edited).",
+      "confidence": "confirmed",
+      "location": "apps/api/src/modules/agents/schemas/ooad.schema.ts, apps/api/src/modules/workflow/handlers/quality-gate.handler.ts"
+    },
+    {
+      "severity": "LOW",
+      "title": "Architect fails if BA hasn't run",
+      "description": "ArchitectActionStrategy throws error \"BA Agent has not completed use case analysis\" if ooadMetadata.useCases is empty. This is correct for sequential workflow but would break if Architect is invoked independently (e.g., during debugging, retry, or workflow modification). Consider adding a workflow constraint rather than runtime error, or allow Architect to generate a basic domain model without use cases.",
+      "confidence": "confirmed",
+      "location": "apps/api/src/modules/agents/strategies/ArchitectActionStrategy.ts"
+    }
+  ],
+  "reviewDoc": "d:\\AI_CORP\\AI-CORP\\.agents\\tasks\\2025-01-15-032500-phase2.5-review.md"
+}
