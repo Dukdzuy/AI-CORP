@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { WorkflowDefinition, WorkflowNode, WorkflowContext, NodeResult } from '@ai-corp/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WorkflowValidator } from './workflow-validator';
@@ -9,6 +9,14 @@ import { Queue, Worker, Job, ConnectionOptions } from 'bullmq';
 import { EventBus } from '../../domain/events/EventBus';
 import { WorkflowStartedEvent } from '../../domain/events/WorkflowStartedEvent';
 import { WorkflowCompletedEvent } from '../../domain/events/WorkflowCompletedEvent';
+import { Milestone } from '../../domain/entities/Milestone';
+import { Task } from '../../domain/entities/Task';
+import {
+  IMilestoneRepository,
+  ITaskRepository,
+  MILESTONE_REPOSITORY,
+  TASK_REPOSITORY,
+} from '../../domain/repositories';
 
 interface WorkflowJobData {
   runId: string;
@@ -37,7 +45,9 @@ export class WorkflowEngine {
     private readonly prisma: PrismaService,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly orchestrator: AgentOrchestratorService,
-    private readonly eventBus: EventBus
+    private readonly eventBus: EventBus,
+    @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: IMilestoneRepository,
+    @Inject(TASK_REPOSITORY) private readonly taskRepository: ITaskRepository
   ) {
     // Initialize Redis connection options
     this.redisConnection = {
@@ -136,7 +146,7 @@ export class WorkflowEngine {
       run.id,
       projectId,
       workflowDefId,
-      context.startedBy as string | undefined
+      context.variables?.startedBy as string | undefined
     )).catch(err => this.logger.error(`Failed to publish WorkflowStartedEvent: ${err.message}`));
     
     // Emit state changed event
@@ -223,9 +233,8 @@ export class WorkflowEngine {
       
       // Publish WorkflowCompletedEvent via injected EventBus (satisfies DIP)
       await this.eventBus.publish(new WorkflowCompletedEvent(
-        run.id,
         run.projectId,
-        run.workflowDefId
+        run.id
       )).catch(err => this.logger.error(`Failed to publish WorkflowCompletedEvent: ${err.message}`));
       
       const event: WorkflowStateChangedEvent = {
@@ -749,26 +758,16 @@ export class WorkflowEngine {
       if (milestoneLines.length === 0) {
         // Fallback: create a single milestone from the first meaningful line
         const firstMeaningful = lines.find(l => l.length > 10) || lines[0] || 'Project Planning';
-        await this.prisma.milestone.create({
-          data: {
-            projectId,
-            name: firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 100),
-            description: firstMeaningful.trim(),
-            status: 'pending',
-          },
-        });
+        await this.addMilestone(
+          projectId,
+          firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 100),
+          firstMeaningful.trim(),
+        );
       } else {
         for (const line of milestoneLines.slice(0, 10)) {
           const name = line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^milestone[:\s]*/i, '').trim();
           if (name.length > 2) {
-            await this.prisma.milestone.create({
-              data: {
-                projectId,
-                name: name.slice(0, 100),
-                description: name,
-                status: 'pending',
-              },
-            });
+            await this.addMilestone(projectId, name.slice(0, 100), name);
           }
         }
       }
@@ -792,26 +791,16 @@ export class WorkflowEngine {
       if (taskLines.length === 0) {
         // Fallback: create a single task
         const firstMeaningful = lines.find(l => l.length > 5) || 'Implement feature';
-        await this.prisma.task.create({
-          data: {
-            projectId,
-            title: firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 200),
-            description: firstMeaningful.trim(),
-            status: 'todo',
-          },
-        });
+        await this.addTask(
+          projectId,
+          firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 200),
+          firstMeaningful.trim(),
+        );
       } else {
         for (const line of taskLines.slice(0, 20)) {
           const title = line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^task[:\s]*/i, '').trim();
           if (title.length > 2) {
-            await this.prisma.task.create({
-              data: {
-                projectId,
-                title: title.slice(0, 200),
-                description: title,
-                status: 'todo',
-              },
-            });
+            await this.addTask(projectId, title.slice(0, 200), title);
           }
         }
       }
@@ -819,6 +808,36 @@ export class WorkflowEngine {
     } catch (error) {
       this.logger.warn(`Failed to create tasks from output: ${(error as Error).message}`);
     }
+  }
+
+  /**
+   * Create an agent-planned milestone through the Milestone entity (starts pending)
+   */
+  private async addMilestone(projectId: string, name: string, description: string): Promise<void> {
+    const state = Milestone.create({ projectId, name, description }).toPrimitives();
+    await this.milestoneRepository.create({
+      id: state.id,
+      projectId: state.projectId,
+      name: state.name,
+      description: state.description,
+      status: state.status,
+      dueDate: state.dueDate,
+    });
+  }
+
+  /**
+   * Create an agent-planned task through the Task entity (starts in TODO)
+   */
+  private async addTask(projectId: string, title: string, description: string): Promise<void> {
+    const state = Task.create({ projectId, title, description }).toPrimitives();
+    await this.taskRepository.create({
+      id: state.id,
+      projectId: state.projectId,
+      title: state.title,
+      description: state.description,
+      status: state.status,
+      priority: state.priority,
+    });
   }
 
   /**

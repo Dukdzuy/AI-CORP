@@ -156,6 +156,24 @@ export class Milestone {
     this.updatedAt = new Date();
   }
 
+  /**
+   * Move to a target status, delegating to the intention-revealing transition
+   */
+  transitionTo(target: string, overrideOverdue: boolean = false): void {
+    if (this.status === target) return;
+
+    switch (target) {
+      case 'in_progress':
+        return this.start();
+      case 'completed':
+        return this.complete(overrideOverdue);
+      case 'pending':
+        return this.moveBackToPending();
+      default:
+        throw new Error(`Invalid milestone status: '${target}'. Valid values: pending, in_progress, completed`);
+    }
+  }
+
   // Business logic
   isOverdue(): boolean {
     if (!this.dueDate || this.status === 'completed') {

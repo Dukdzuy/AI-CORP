@@ -210,6 +210,18 @@ export class Project {
     this.updatedAt = new Date();
   }
 
+  /**
+   * Move to a target status, delegating to the intention-revealing transition
+   */
+  transitionTo(target: ProjectStatus): void {
+    if (this.status.equals(target)) return;
+
+    if (target.equals(ProjectStatus.PAUSED)) return this.pause();
+    if (target.equals(ProjectStatus.ACTIVE)) return this.resume();
+    if (target.equals(ProjectStatus.COMPLETED)) return this.complete();
+    return this.cancel();
+  }
+
   // Update methods
   updateDetails(name?: string, description?: string, goal?: string): void {
     if (name !== undefined) {

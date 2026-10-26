@@ -1,7 +1,14 @@
 /**
  * Agent Repository Interface
+ *
+ * The single persistence contract for agents (Repository Pattern).
+ * Abstracts data access so the domain does not depend on Prisma,
+ * and can be swapped for an in-memory implementation in tests.
+ *
  * Follows Dependency Inversion Principle (SOLID)
  */
+
+import { AgentRole } from '@ai-corp/shared-types';
 
 export interface AgentDTO {
   id: string;
@@ -41,7 +48,7 @@ export interface IAgentRepository {
   /**
    * Find agent by role (role is unique)
    */
-  findByRole(role: string): Promise<AgentDTO | null>;
+  findByRole(role: AgentRole | string): Promise<AgentDTO | null>;
 
   /**
    * Find all agents
@@ -62,4 +69,9 @@ export interface IAgentRepository {
    * Delete an agent
    */
   delete(id: string): Promise<void>;
+
+  /**
+   * Check whether an agent exists
+   */
+  exists(id: string): Promise<boolean>;
 }
