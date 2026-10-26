@@ -2,17 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { AgentRole } from '@ai-corp/shared-types';
+import { ARCHITECT_PROFILE } from '../profiles';
 
 @Injectable()
 export class ArchitectThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load architecture patterns memories
-    const memories = await this.memoryService.searchMemories(
-      AgentRole.ARCHITECT,
-      'architecture_patterns',
+    // Load lessons_learned, then architecture patterns memories
+    const memories = await this.memoryService.recall(
+      ARCHITECT_PROFILE.role,
+      ARCHITECT_PROFILE.primaryNamespace,
       JSON.stringify(context),
       5
     );
@@ -29,7 +29,7 @@ export class ArchitectThinkingStrategy implements IThinkingStrategy {
         }
       ],
       confidence: 0.92,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

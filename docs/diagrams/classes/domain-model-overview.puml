@@ -70,65 +70,40 @@ package "Agent Domain" <<domain>> {
     + transitionState(newState: AgentState): void
   }
   
-  abstract class BaseAgent {
-    # role: AgentRole
-    # systemPrompt: string
-    # modelConfig: ModelRouteConfig
-    # memoryService: MemoryService
-    # llmFactory: LLMProviderFactory
-    # toolRegistry: ToolRegistry
-    # sandboxExecutor: SandboxExecutor
+  abstract class BaseAgent<TOutput> {
+    # profile: RoleProfile
+    # thinkingStrategy: IThinkingStrategy
+    # actionStrategy: IActionStrategy<TOutput>
+    # websocketGateway: AppWebSocketGateway
+    # eventBus: EventBus
     --
-    + {abstract} think(context: AgentContext): Promise<AgentThought>
-    + {abstract} act(context: AgentContext): Promise<AgentActionResult>
-    + execute(context: AgentContext): Promise<AgentResult>
-    # callLLM(params: ChatParams): Promise<ChatResult>
-    # executeTool(toolName: string, command: string, params: object): Promise<ToolResult>
-    # loadMemory(namespace: string, query: string): Promise<MemorySearchResult[]>
-    # saveMemory(namespace: string, content: string): Promise<string>
-    # emitThinking(projectId: string, thought: string): void
-    # emitAction(projectId: string, taskId: string, actionType: string, toolName: string): void
+    + getId(): string
+    + getRole(): AgentRole
+    + getProfile(): RoleProfile
+    + execute(context: AgentContext): Promise<AgentResult<TOutput>>
+    # emitThinking(projectId: string, taskId: string, thought: string): void
+    # emitStateChanged(from: AgentState, to: AgentState, projectId: string): void
   }
-  
-  class CEOAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
+
+  class RoleProfile <<value-object>> {
+    + role: AgentRole
+    + displayName: string
+    + systemPrompt: string
+    + defaultModel: ModelRouteConfig
+    + memoryNamespaces: string[]
+    + taskTypes: string[]
+    --
+    + resolveTaskType(taskType): string
   }
-  
-  class PMAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class DevAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class QAAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class MarketingAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class BAAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class ArchitectAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class DevOpsAgent {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
+
+  class CeoAgent
+  class BaAgent
+  class ArchitectAgent
+  class PmAgent
+  class DevAgent
+  class QcAgent
+  class QaAgent
+  class MarketingAgent
   
   class AgentStateMachine {
     - currentState: AgentState
@@ -205,7 +180,7 @@ package "Agent Domain" <<domain>> {
     MARKETING
     BA
     ARCHITECT
-    DEVOPS
+    QC
   }
   
   class ModelRouteConfig <<value-object>> {
@@ -218,24 +193,12 @@ package "Agent Domain" <<domain>> {
     + validate(): boolean
   }
   
-  class CEOThinkingStrategy {
+  class "Ceo/BA/Architect/Pm/Dev/Qc/Qa/Marketing\nThinkingStrategy" as ThinkingStrategies {
     + think(context: AgentContext): Promise<AgentThought>
   }
-  
-  class PMThinkingStrategy {
-    + think(context: AgentContext): Promise<AgentThought>
-  }
-  
-  class DEVThinkingStrategy {
-    + think(context: AgentContext): Promise<AgentThought>
-  }
-  
-  class QAThinkingStrategy {
-    + think(context: AgentContext): Promise<AgentThought>
-  }
-  
-  class MarketingThinkingStrategy {
-    + think(context: AgentContext): Promise<AgentThought>
+
+  class "Ceo/BA/Architect/Pm/Dev/Qc/Qa/Marketing\nActionStrategy" as ActionStrategies {
+    + act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<XxxOutput>>
   }
   
 }
@@ -565,23 +528,34 @@ package "New Enterprise Features" <<domain>> {
     + validate(): boolean
   }
   
-  class DeploymentJob <<aggregate-root>> {
-    - id: string
-    - projectId: string
-    - environment: string
-    - deploymentType: string
-    - status: JobStatus
-    - triggeredBy: string
-    - artifacts: Artifact[]
-    - logs: string
-    - startedAt: DateTime
-    - completedAt: DateTime | null
-    - rollbackJobId: string | null
+  class TraceabilityReport <<value-object>> {
+    - rows: TraceRow[]
+    - executed: boolean
+    - coveredCount: number
+    - failingCount: number
+    - totalCount: number
+    - coveragePercent: number
+    - missingUseCases: string[]
+    - failingUseCases: string[]
+    - failingTests: string[]
     --
-    + start(): void
-    + complete(): void
-    + fail(error: Error): void
-    + rollback(): Promise<DeploymentJob>
+    + markdown(): string
+    + {static} qcPassed(report): boolean
+  }
+
+  enum UseCaseTestStatus <<value-object>> {
+    Passing
+    Failing
+    Missing
+    Covered (not executed)
+  }
+
+  class TestExecutionSummary <<value-object>> {
+    - executed: boolean
+    - passed: number
+    - failed: number
+    - byUseCase: Map<UseCaseId, UseCaseExecution>
+    - reason?: string
   }
   
   enum DocumentStatus <<value-object>> {
@@ -591,12 +565,6 @@ package "New Enterprise Features" <<domain>> {
     obsolete
   }
   
-  enum JobStatus <<value-object>> {
-    pending
-    running
-    success
-    failed
-  }
 }
 
 ' ========================================
@@ -606,14 +574,17 @@ package "New Enterprise Features" <<domain>> {
 ' Agent relationships
 IAgent <|.. Agent : implements
 IAgent <|.. BaseAgent : implements
-BaseAgent <|-- CEOAgent : extends
-BaseAgent <|-- PMAgent : extends
-BaseAgent <|-- DevAgent : extends
-BaseAgent <|-- QAAgent : extends
-BaseAgent <|-- MarketingAgent : extends
-BaseAgent <|-- BAAgent : extends
-BaseAgent <|-- ArchitectAgent : extends
-BaseAgent <|-- DevOpsAgent : extends
+BaseAgent <|-- CeoAgent
+BaseAgent <|-- BaAgent
+BaseAgent <|-- ArchitectAgent
+BaseAgent <|-- PmAgent
+BaseAgent <|-- DevAgent
+BaseAgent <|-- QcAgent
+BaseAgent <|-- QaAgent
+BaseAgent <|-- MarketingAgent
+BaseAgent --> RoleProfile : identity & defaults
+RoleProfile --> AgentRole
+RoleProfile --> ModelRouteConfig : default model
 
 Agent *-- AgentStateMachine : contains
 Agent *-- AgentEventEmitter : contains
@@ -626,14 +597,11 @@ Agent "1" *-- "0..*" AgentMessage : sends
 
 AgentEventEmitter o-- "0..*" IAgentObserver : notifies
 
-IThinkingStrategy <|.. CEOThinkingStrategy : implements
-IThinkingStrategy <|.. PMThinkingStrategy : implements
-IThinkingStrategy <|.. DEVThinkingStrategy : implements
-IThinkingStrategy <|.. QAThinkingStrategy : implements
-IThinkingStrategy <|.. MarketingThinkingStrategy : implements
+IThinkingStrategy <|.. ThinkingStrategies
+IActionStrategy <|.. ActionStrategies
 
-BaseAgent ..> IThinkingStrategy : uses
-BaseAgent ..> IActionStrategy : uses
+BaseAgent o-- IThinkingStrategy : thinkingStrategy
+BaseAgent o-- IActionStrategy : actionStrategy
 
 ' Project relationships
 Project "1" *-- "0..*" Milestone : contains
@@ -664,8 +632,7 @@ ITool <|.. ReadFileTool : implements
 ITool <|.. RunTestsTool : implements
 IToolExecutor <|.. SandboxExecutor : implements
 ToolRegistry o-- "0..*" ITool : registers
-BaseAgent ..> ToolRegistry : uses
-BaseAgent ..> SandboxExecutor : uses
+ActionStrategies ..> SandboxExecutor : runs commands (Task 12)
 
 ' API Usage relationships
 ApiUsageLog --> Project : tracks for
@@ -675,10 +642,13 @@ ApiUsageLog --> Money : records cost
 ' New enterprise feature relationships
 BARequirementSpec --> Project : documents
 ArchitectureDocument --> Project : designs
-DeploymentJob --> Project : deploys
-BAAgent ..> BARequirementSpec : creates
+TraceabilityReport --> Project : verifies
+BaAgent ..> BARequirementSpec : creates
 ArchitectAgent ..> ArchitectureDocument : creates
-DevOpsAgent ..> DeploymentJob : triggers
+QcAgent ..> TraceabilityReport : builds
+QcAgent ..> TestExecutionSummary : runs tests (ProjectTestRunner)
+TraceabilityReport ..> TestExecutionSummary : statuses from
+TraceabilityReport ..> UseCaseTestStatus
 
 note top of Agent
   **Aggregate Root**: Agent

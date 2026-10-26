@@ -2,16 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { AgentRole } from '@ai-corp/shared-types';
+import { QC_PROFILE } from '../profiles';
 
 @Injectable()
 export class QcThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    const memories = await this.memoryService.searchMemories(
-      AgentRole.QC,
-      'test_design',
+    const memories = await this.memoryService.recall(
+      QC_PROFILE.role,
+      QC_PROFILE.primaryNamespace,
       context.goal || context.task || '',
       5
     );
@@ -31,7 +31,7 @@ export class QcThinkingStrategy implements IThinkingStrategy {
         },
       ],
       confidence: 0.85,
-      memories: memories.map(m => m.content),
+      memories,
     };
   }
 }

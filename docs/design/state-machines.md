@@ -133,7 +133,7 @@ This approach provides:
 
 ### 3.1 Overview
 
-The Agent State Machine manages the lifecycle of individual agents (CEO, PM, DEV, QA, DevOps, etc.) as they process tasks. It implements the **State Pattern** to encapsulate state-specific behavior.
+The Agent State Machine manages the lifecycle of individual agents (CEO, BA, Architect, PM, DEV, QC, QA, Marketing) as they process tasks. It implements the **State Pattern** to encapsulate state-specific behavior.
 
 **Diagram:** `docs/diagrams/state-machines/SM-001-agent-states.puml`
 
@@ -248,7 +248,7 @@ The RUNNING state is a **composite state** containing three sub-states that repr
 **PARALLEL_EXECUTION:**
 - Multiple nodes executing concurrently
 - Synchronization at join points
-- Used when multiple agents work independently (DEV + QA + DevOps)
+- Used when multiple agents work independently (e.g. QC test design + Marketing draft)
 
 **APPROVAL_WAITING:**
 - Nested waiting state within active execution

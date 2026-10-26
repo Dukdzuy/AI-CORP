@@ -1,8 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
+import { EventBus } from '../../../domain/events/EventBus';
+import { QualityGateEvaluatedEvent } from '../../../domain/events/QualityGateEvaluatedEvent';
 
 export interface ChecklistItem {
   name: string;
@@ -39,7 +41,8 @@ export class QualityGateHandler {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspace: ProjectWorkspace,
-    private readonly websocketGateway: AppWebSocketGateway
+    private readonly websocketGateway: AppWebSocketGateway,
+    @Optional() private readonly eventBus?: EventBus
   ) {}
 
   async executeGate(
@@ -125,6 +128,14 @@ export class QualityGateHandler {
     });
 
     this.logger.log(`Quality gate ${gateId} for project ${projectId}: ${allPassed ? 'PASSED' : 'FAILED'} (score: ${score}%)`);
+
+    // Domain event: the learning handler grades the BA / Architect executions with it (Task 14)
+    const failedChecks = checklist
+      .filter(item => !item.passed)
+      .map(item => `${item.name}: ${item.actual} (expected ${item.expected})`);
+    await this.eventBus
+      ?.publish(new QualityGateEvaluatedEvent(projectId, gateId, allPassed, score, failedChecks))
+      .catch(err => this.logger.warn(`Failed to publish gate event: ${err?.message || err}`));
 
     return {
       passed: allPassed,

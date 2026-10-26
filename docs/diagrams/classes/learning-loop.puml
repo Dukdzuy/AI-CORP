@@ -1,0 +1,70 @@
+@startuml learning-loop
+!theme plain
+title Agent Learning Loop (Phase 3, Task 14)
+
+package "domain" {
+  class QualityGateEvaluatedEvent <<event>> {
+    projectId, gateId, passed, score, failedChecks
+  }
+  class AgentCompletedTaskEvent <<event>>
+  class ExecutionOutcome <<value-object>> {
+    role, projectId, signal, success, score?, details, source
+  }
+  enum OutcomeSignal {
+    ooad_gate
+    qc_verification
+    qa_review
+  }
+  ExecutionOutcome --> OutcomeSignal
+}
+
+package "modules/learning" {
+  class AgentLearningHandler <<Observer>> {
+    + handle(event)
+    - refineInBackground(role)
+  }
+  class OutcomeSignalPolicy {
+    + fromGate(e): ExecutionOutcome[]
+    + fromAgentCompleted(e): ExecutionOutcome[]
+  }
+  class LearningService {
+    + recordOutcome(o): {shouldRefine}
+    + refine(role): lessonId
+    + stats(role): LearningStats
+  }
+  class LearningController {
+    GET /agents/:role/learning
+  }
+}
+
+package "modules/memory" {
+  class MemoryService {
+    + recall(role, ns, query): string[]
+    + refineMemory(role, ns, summarize): id
+    + keywordSearch(...)
+  }
+}
+
+class AgentLLMService <<Facade>>
+class "ThinkingStrategies (8)" as Thinking <<Strategy>>
+class EventBus <<Mediator>>
+
+EventBus --> AgentLearningHandler : quality.gate.evaluated\nagent.task.completed
+AgentLearningHandler --> OutcomeSignalPolicy
+AgentLearningHandler --> LearningService
+OutcomeSignalPolicy ..> ExecutionOutcome : creates
+LearningService --> MemoryService : execution_outcomes,\nlessons_learned
+LearningService --> AgentLLMService : summarise (costed)
+LearningController --> LearningService
+Thinking --> MemoryService : recall() → lessons first
+
+note bottom of OutcomeSignalPolicy
+  gate → BA, ARCHITECT
+  QC (qc_passed) → DEV
+  QA (qa_approved) → DEV, QC
+end note
+note right of LearningService
+  every LEARNING_REFINE_EVERY (3)
+  outcomes of a role → one lesson
+end note
+@enduml

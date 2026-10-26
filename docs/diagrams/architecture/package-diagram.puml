@@ -71,16 +71,16 @@ package "Domain Layer\n(Core Business Logic)" as DOMAIN_LAYER #FEF9E7 {
 package "Application Layer\n(Use Cases / Services)" as APP_LAYER #E8F8F5 {
 
   package "agents (application)" as PKG_AGENT_APP {
-    class "AgentService" as AgentSvc
-    class "AgentRegistryService" as RegSvc
-    class "CEOAgent" as CEOAgent
-    class "PMAgent" as PMAgent
-    class "DEVAgent" as DEVAgent
-    class "QAAgent" as QAAgent
+    class "AGENTS token / agentsProvider" as RegSvc
+    class "RoleProfile (profiles/*.ts)" as AgentSvc
+    class "CeoAgent" as CEOAgent
+    class "PmAgent" as PMAgent
+    class "DevAgent" as DEVAgent
+    class "QaAgent" as QAAgent
     class "MarketingAgent" as MktgAgent
-    class "BAAgent" as BAAgent
+    class "BaAgent" as BAAgent
     class "ArchitectAgent" as ArchAgent
-    class "DevOpsAgent" as DevOpsAgent
+    class "QcAgent" as QcAgent
   }
 
   package "workflow (application)" as PKG_WF_APP {
@@ -176,6 +176,7 @@ package "Presentation Layer\n(REST Controllers + WebSocket)" as PRES_LAYER #FDED
   package "rest (presentation)" as PKG_REST {
     class "AuthController" as AuthCtrl
     class "ProjectsController" as ProjCtrl
+    class "ProjectArtifactsController" as ArtCtrl
     class "AgentsController" as AgentCtrl
     class "WorkflowController" as WFCtrl
     class "ApprovalsController" as ApprCtrl

@@ -7,101 +7,64 @@ scale 1.0
 ' FACTORY METHOD PATTERN
 ' ========================================
 
-package "Factory Method Pattern" <<Factory Method>> {
+package "Agent Registry (DI factory provider)" <<Factory Method>> {
   
   note as N1
-    **Factory Method Pattern**
+    **Factory provider + Registry (Task 11)**
     
-    **Intent**: Define an interface for creating objects,
-    but let subclasses decide which class to instantiate.
-    
-    **Benefits**:
-    - Eliminates need to bind application-specific classes
-    - Provides hooks for subclasses
-    - Connects parallel class hierarchies
+    **Intent**: let the DI container create every agent and hand
+    the whole roster to clients as one abstraction (IAgent[]).
     
     **Structure**:
-    - Creator: AgentFactory (abstract)
-    - ConcreteCreator: Specific agent factories
-    - Product: IAgent interface
-    - ConcreteProduct: CEOAgent, DevAgent, etc.
+    - Creator: agentsProvider() → { provide: AGENTS, useFactory, inject: AGENT_CLASSES }
+    - Product: IAgent
+    - ConcreteProduct: CeoAgent, BaAgent, ..., MarketingAgent
+    - Configuration: one RoleProfile per role (profiles/*.ts)
+    
+    **Before**: AgentOrchestratorService(ceo: CeoAgent, pm: PmAgent, ... 8 params)
+    **After**:  AgentOrchestratorService(@Inject(AGENTS) agents: IAgent[])
   end note
   
-  abstract class AgentFactory <<Factory Method>> {
-    # memoryService: MemoryService
-    # llmFactory: LLMProviderFactory
-    # toolRegistry: ToolRegistry
-    # sandboxExecutor: SandboxExecutor
-    # apiUsageService: ApiUsageService
-    # websocketGateway: AppWebSocketGateway
-    --
-    **Factory Method (abstract)**
-    + {abstract} createAgent(role: AgentRole): IAgent
-    + {abstract} getSystemPrompt(role: AgentRole): string
-    + {abstract} getModelConfig(role: AgentRole): ModelRouteConfig
-    --
-    **Template Method**
-    + createAgentWithConfig(role: AgentRole, config: AgentConfig): IAgent
-    --
-    **Utility Methods**
-    # loadAgentConfig(role: AgentRole): AgentConfig
-    # validateConfig(config: AgentConfig): boolean
+  class "agentsProvider(classes = AGENT_CLASSES)" as AgentFactory <<Factory Method>> {
+    + provide: AGENTS
+    + inject: Type<IAgent>[]
+    + useFactory(...agents: IAgent[]): IAgent[]
   }
-  
-  class ConcreteAgentFactory {
-    **Factory Method Implementation**
-    + createAgent(role: AgentRole): IAgent
-    + getSystemPrompt(role: AgentRole): string
-    + getModelConfig(role: AgentRole): ModelRouteConfig
-    --
-    **Role-specific Creation**
-    - createCEOAgent(): CEOAgent
-    - createPMAgent(): PMAgent
-    - createDevAgent(): DevAgent
-    - createQAAgent(): QAAgent
-    - createMarketingAgent(): MarketingAgent
-    - createBAAgent(): BAAgent
-    - createArchitectAgent(): ArchitectAgent
-    - createDevOpsAgent(): DevOpsAgent
+
+  class AGENT_CLASSES <<const>> {
+    CeoAgent, BaAgent, ArchitectAgent, PmAgent,
+    DevAgent, QcAgent, QaAgent, MarketingAgent
   }
   
   interface IAgent <<Product>> {
     + getId(): string
     + getRole(): AgentRole
+    + getState(): AgentState
     + execute(context: AgentContext): Promise<AgentResult>
   }
   
   abstract class BaseAgent <<ConcreteProduct>> {
+    # profile: RoleProfile
     + execute(context: AgentContext): Promise<AgentResult>
-    # {abstract} think(context: AgentContext): Promise<AgentThought>
-    # {abstract} act(context: AgentContext): Promise<AgentActionResult>
+  }
+
+  class RoleProfile <<value-object>> {
+    role, displayName, systemPrompt,
+    defaultModel, memoryNamespaces, taskTypes
   }
   
-  class CEOAgent <<ConcreteProduct>> {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class DevAgent <<ConcreteProduct>> {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
-  
-  class QAAgent <<ConcreteProduct>> {
-    + think(context: AgentContext): Promise<AgentThought>
-    + act(context: AgentContext): Promise<AgentActionResult>
-  }
+  class CeoAgent <<ConcreteProduct>>
+  class DevAgent <<ConcreteProduct>>
+  class QcAgent <<ConcreteProduct>>
   
   ' Relationships
-  AgentFactory <|-- ConcreteAgentFactory : extends
-  AgentFactory ..> IAgent : creates
+  AgentFactory --> AGENT_CLASSES : inject
+  AgentFactory ..> IAgent : provides IAgent[]
   IAgent <|.. BaseAgent : implements
-  BaseAgent <|-- CEOAgent : extends
+  BaseAgent <|-- CeoAgent : extends
   BaseAgent <|-- DevAgent : extends
-  BaseAgent <|-- QAAgent : extends
-  ConcreteAgentFactory ..> CEOAgent : instantiates
-  ConcreteAgentFactory ..> DevAgent : instantiates
-  ConcreteAgentFactory ..> QAAgent : instantiates
+  BaseAgent <|-- QcAgent : extends
+  BaseAgent --> RoleProfile
 }
 
 ' ========================================
@@ -217,29 +180,31 @@ package "Abstract Factory Pattern" <<Abstract Factory>> {
 
 package "Client Code" <<client>> {
   
-  class AgentService {
-    - agentFactory: AgentFactory
-    - llmFactory: LLMProviderFactory
+  class AgentOrchestratorService {
+    - agentRegistry: Map<string, IAgent>
     --
-    + createAndExecuteAgent(role: AgentRole, context: AgentContext): Promise<AgentResult>
-    + getAgent(role: AgentRole): IAgent
+    + constructor(@Inject(AGENTS) agents: IAgent[], messages: AgentMessageService)
+    + invokeAgent(role: string, context: AgentContext): Promise<AgentResult>
+    + getAvailableRoles(): string[]
+  }
+
+  class AgentLLMService {
+    + providerFor(profile: RoleProfile, projectId?): {provider, model, systemPrompt}
   }
   
   ' Usage relationships
-  AgentService --> AgentFactory : uses
-  AgentService --> IAgent : receives
-  AgentService --> LLMProviderFactory : uses
-  AgentService --> ILLMProvider : receives
+  AgentOrchestratorService --> IAgent : looks up by role
+  AgentLLMService --> LLMProviderFactory : uses
+  AgentLLMService --> ILLMProvider : wraps in UsageTrackingLLMProvider
 }
 
-note bottom of AgentService
+note bottom of AgentOrchestratorService
   **Client Code Example**:
   
   ```typescript
-  // Factory Method usage
-  const agentFactory = new ConcreteAgentFactory(dependencies);
-  const devAgent: IAgent = agentFactory.createAgent(AgentRole.DEV);
-  const result = await devAgent.execute(context);
+  // Registry usage (agents created by Nest DI via agentsProvider())
+  const result = await orchestrator.invokeAgent('DEV', context);
+  // Adding a role: new profile + 2 strategies + 1 entry in AGENT_CLASSES
   
   // Abstract Factory usage
   const llmFactory = new LLMProviderFactory();
@@ -268,22 +233,12 @@ end note
 ' PARALLEL CLASS HIERARCHIES
 ' ========================================
 
-note right of ConcreteAgentFactory
-  **Parallel Hierarchies**:
-  
-  Creator Hierarchy:
-  - AgentFactory (abstract)
-  - ConcreteAgentFactory
-  
-  Product Hierarchy:
-  - IAgent (interface)
-  - BaseAgent (abstract)
-  - CEOAgent, DevAgent, etc. (concrete)
-  
-  Factory Method connects these hierarchies:
-  - Factory creates products
-  - Products implement common interface
-  - Easy to extend both hierarchies
+note right of AGENT_CLASSES
+  **Open/Closed**:
+  the only list of concrete agent classes.
+  The orchestrator and workflow engine
+  depend on IAgent, so a 9th role does not
+  touch them (covered by agent-registry.spec.ts).
 end note
 
 note right of LLMProviderFactory
@@ -312,13 +267,13 @@ end note
 ' ========================================
 
 note top of AgentFactory
-  **Factory Method Benefits in AI-CORP**:
+  **Registry / factory provider benefits in AI-CORP**:
   
-  1. **Decoupling**: Client code doesn't know concrete agent classes
-  2. **Extensibility**: Add new agents without modifying existing code
-  3. **Configuration**: Centralized agent configuration
-  4. **Testing**: Easy to mock/stub factories for testing
-  5. **Consistency**: All agents created with proper dependencies
+  1. **Decoupling**: the orchestrator does not know concrete agent classes
+  2. **Extensibility**: add a role without modifying the orchestrator
+  3. **Configuration**: per-role defaults in one RoleProfile (also used by the seed)
+  4. **Testing**: the token can be built with fake agents (TestAgent)
+  5. **Consistency**: all agents get their dependencies from the container
 end note
 
 note top of ILLMProviderFactory

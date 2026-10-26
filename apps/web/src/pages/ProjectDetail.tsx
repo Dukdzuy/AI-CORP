@@ -11,6 +11,8 @@ import { KanbanBoard } from '../components/kanban/KanbanBoard';
 import { TaskDetailModal } from '../components/kanban/TaskDetailModal';
 import socketClient from '../lib/websocket/socket-client';
 import { useQueryClient } from '@tanstack/react-query';
+import { ArtifactsTab } from '../components/artifacts/ArtifactsTab';
+import { useQualityEvents } from '../components/artifacts/useQualityEvents';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -40,6 +42,7 @@ export const ProjectDetail: React.FC = () => {
   const { data: apiApprovals = [] } = usePendingApprovals(id ?? undefined);
   const [wsApprovals, setWsApprovals] = useState<ApprovalRequiredEvent[]>([]);
   const queryClient = useQueryClient();
+  const { gates: liveGates, warnings: liveWarnings } = useQualityEvents(id);
 
   // Merge REST API approvals + WebSocket approvals, dedupe by approvalId
   const pendingApprovals = [...apiApprovals.map((a: any) => ({
@@ -293,6 +296,11 @@ export const ProjectDetail: React.FC = () => {
           )}
         </div>
       ),
+    },
+    {
+      key: 'artifacts',
+      label: 'Artifacts',
+      children: <ArtifactsTab projectId={project.id} projectName={project.name} liveGates={liveGates} liveWarnings={liveWarnings} />,
     },
     {
       key: 'kanban',

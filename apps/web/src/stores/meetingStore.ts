@@ -1,18 +1,21 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { AgentRole } from '@ai-corp/shared-types';
+import { AclPerformative, AgentRole } from '@ai-corp/shared-types';
 
 export interface MeetingMessage {
   id: string;
   fromRole: AgentRole;
   toRole: AgentRole | 'all';
   message: string;
-  type: 'chat' | 'thinking' | 'action' | 'notification' | 'approval';
+  type: 'chat' | 'thinking' | 'action' | 'notification' | 'approval' | 'acl';
   timestamp: Date;
   approvalId?: string;
   projectId?: string;
   approvalType?: string;
   requestData?: Record<string, unknown>;
+  /** Agent-to-agent message fields (messageType 'acl') */
+  performative?: AclPerformative;
+  protocol?: string;
 }
 
 interface MeetingState {

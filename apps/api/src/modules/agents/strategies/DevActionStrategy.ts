@@ -5,19 +5,15 @@ import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { DevAgentOutput, DevOutput, DevPlanOutput } from '../../../domain/agent/AgentOutputs';
+import { DEV_PROFILE } from '../profiles';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { OOADArtifactService } from '../services/ooad-artifact.service';
+import { parseQuestions, stripMarkers } from '../services/collaboration-replies';
 
 @Injectable()
-export class DevActionStrategy implements IActionStrategy {
+export class DevActionStrategy implements IActionStrategy<DevAgentOutput> {
   private readonly logger = new Logger(DevActionStrategy.name);
-  private readonly systemPrompt: string = 'You are an expert software developer. Write clean, efficient, production-quality code.';
-  private readonly modelConfig: ModelRouteConfig = { 
-    provider: 'opencode', 
-    model: 'openrouter/openrouter/free', 
-    fallbackProvider: 'opencode' 
-  };
 
   constructor(
     private readonly memoryService: MemoryService,
@@ -28,7 +24,14 @@ export class DevActionStrategy implements IActionStrategy {
     private readonly workspace: ProjectWorkspace
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<DevAgentOutput>> {
+    if (context.taskType === 'planImplementation') {
+      return this.planImplementation(context, thought);
+    }
+    return this.implement(context, thought);
+  }
+
+  private async implement(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<DevOutput>> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
       ? `\n\nRelevant coding conventions:\n${memories.join('\n')}`
@@ -39,25 +42,8 @@ export class DevActionStrategy implements IActionStrategy {
     const projectName = context.projectName || context.projectContext?.name || '';
     const existingCode = context.code || '';
     const projectId = context.projectId;
-
-    // Load the OOAD design (use cases, domain model, class diagram, skeleton) written by BA/Architect
-    let ooadContext = '';
-    if (projectId) {
-      try {
-        const project = await this.prisma.project.findUnique({
-          where: { id: projectId },
-          select: { ooadMetadata: true }
-        });
-        const designContext = await this.ooadArtifacts.buildImplementationContext(project?.ooadMetadata, projectName);
-        if (designContext) {
-          ooadContext = `\n\n${designContext}\n\n`;
-        } else {
-          this.logger.warn('OOAD design missing - proceeding without design context');
-        }
-      } catch (err: any) {
-        this.logger.warn(`Failed to load OOAD design: ${err.message}`);
-      }
-    }
+    const ooadContext = await this.loadDesignContext(projectId, projectName);
+    const collaborationContext = DevActionStrategy.collaborationContext(context);
 
     const prompt = `You are implementing a software project. Write REAL, WORKING code.${ooadContext.length > 0 ? ' STRICTLY FOLLOW THE OOAD DESIGN PROVIDED BELOW.' : ''}
 
@@ -70,6 +56,7 @@ ${memoryContext}
 
 ${existingCode ? `EXISTING CODE:\n${existingCode}\n` : ''}
 ${ooadContext}
+${collaborationContext}
 
 INSTRUCTIONS:
 1. Analyze the PROJECT GOAL and DESCRIPTION carefully
@@ -89,12 +76,11 @@ ${ooadContext ? '6. File paths are relative to the project root; reuse the skele
 
 Write ALL files needed for the project to work. Make it production-quality.`;
 
-    // Fetch latest model config
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.DEV, this.modelConfig, context.projectId);
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(DEV_PROFILE, context.projectId);
 
     const result = await provider.chat({
       messages: [
-        { role: 'system', content: this.systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ],
       model,
@@ -133,9 +119,9 @@ Write ALL files needed for the project to work. Make it production-quality.`;
 
     // Save memory
     await this.memoryService.saveMemory(
-      await this.memoryService.getAgentIdByRole(AgentRole.DEV) || 'dev',
-      AgentRole.DEV,
-      'coding_conventions',
+      await this.memoryService.getAgentIdByRole(DEV_PROFILE.role) || 'dev',
+      DEV_PROFILE.role,
+      DEV_PROFILE.primaryNamespace,
       `Implemented task: ${context.task}. Files written: ${writtenFiles.join(', ') || 'none'}`,
       { importance: 5, projectId: context.projectId }
     );
@@ -164,8 +150,8 @@ Write ALL files needed for the project to work. Make it production-quality.`;
     this.websocketGateway.sendToProject(context.projectId, {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.DEV,
-        agentRole: AgentRole.DEV,
+        agentId: DEV_PROFILE.role,
+        agentRole: DEV_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'implement',
         toolName: writtenFiles.length > 0 ? 'write_file' : 'llm',
@@ -183,6 +169,90 @@ Write ALL files needed for the project to work. Make it production-quality.`;
         code: codeContent
       },
     };
+  }
+
+  /**
+   * pair_develop (Task 15): a short plan the Architect reviews before any code is written.
+   * Ambiguous use cases come back as QUESTION lines for the clarification loop.
+   */
+  private async planImplementation(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<DevPlanOutput>> {
+    const memories = thought.memories || [];
+    const projectName = context.projectName || context.projectContext?.name || '';
+    const ooadContext = await this.loadDesignContext(context.projectId, projectName);
+    const collaborationContext = DevActionStrategy.collaborationContext(context);
+
+    const prompt = `Before writing code, propose an implementation plan for the Architect to review.
+
+PROJECT: ${projectName || 'New Project'}
+GOAL: ${context.goal || context.projectContext?.goal || ''}
+${memories.length ? `\nRelevant coding conventions:\n${memories.join('\n')}\n` : ''}
+${ooadContext}
+${collaborationContext}
+
+Write the plan as a short list: for each use case (UC-xxx), the classes and files you will create or change,
+in which layer (domain / application / infrastructure / presentation), and which design pattern applies.
+Keep it under 30 lines.
+
+If a use case is too ambiguous to implement, add one line per question at the end:
+QUESTION: UC-xxx: <what you need to know>
+If nothing is ambiguous, write: QUESTION: none`;
+
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(DEV_PROFILE, context.projectId);
+    const result = await provider.chat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ],
+      model,
+      maxTokens: 1200
+    });
+
+    const text = result.content || '';
+    const plan = stripMarkers(text);
+    const questions = parseQuestions(text);
+    return {
+      success: true,
+      output: {
+        action: 'planImplementation',
+        output: plan,
+        implementationPlan: plan,
+        questions,
+      },
+    };
+  }
+
+  /** The OOAD design (use cases, domain model, class diagram, skeleton) written by BA/Architect */
+  private async loadDesignContext(projectId: string | undefined, projectName: string): Promise<string> {
+    if (!projectId) return '';
+    try {
+      const project = await this.prisma.project.findUnique({
+        where: { id: projectId },
+        select: { ooadMetadata: true }
+      });
+      const designContext = await this.ooadArtifacts.buildImplementationContext(project?.ooadMetadata, projectName);
+      if (designContext) {
+        return `\n\n${designContext}\n\n`;
+      }
+      this.logger.warn('OOAD design missing - proceeding without design context');
+    } catch (err: any) {
+      this.logger.warn(`Failed to load OOAD design: ${err.message}`);
+    }
+    return '';
+  }
+
+  /** What collaborators said so far: accepted plan, Architect feedback, BA clarifications */
+  static collaborationContext(context: AgentContext): string {
+    const parts: string[] = [];
+    if (context.implementationPlan) {
+      parts.push(`IMPLEMENTATION PLAN (accepted by the Architect):\n${context.implementationPlan}`);
+    }
+    if (context.designFeedback) {
+      parts.push(`ARCHITECT FEEDBACK (address every point):\n${context.designFeedback}`);
+    }
+    if (context.clarifications?.length) {
+      parts.push(`CLARIFICATIONS FROM BA:\n${context.clarifications.map(c => `- ${c}`).join('\n')}`);
+    }
+    return parts.join('\n\n');
   }
 
   private parseCodeBlocks(output: string): Array<{ filepath: string; content: string }> {

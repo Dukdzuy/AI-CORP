@@ -4,13 +4,12 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { MarketingOutput } from '../../../domain/agent/AgentOutputs';
+import { MARKETING_PROFILE } from '../profiles';
 
 @Injectable()
-export class MarketingActionStrategy implements IActionStrategy {
+export class MarketingActionStrategy implements IActionStrategy<MarketingOutput> {
   private readonly logger = new Logger(MarketingActionStrategy.name);
-  private readonly systemPrompt = 'You are the Marketing Manager. Your objective is to draft announcements, blog posts, and prepare launch materials.';
-  private readonly modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/owl-alpha', fallbackProvider: 'opencode' };
 
   constructor(
     private readonly memoryService: MemoryService,
@@ -18,7 +17,7 @@ export class MarketingActionStrategy implements IActionStrategy {
     private readonly websocketGateway: AppWebSocketGateway
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<MarketingOutput>> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
       ? `\n\nRelevant brand voice:\n${memories.join('\n')}`
@@ -41,12 +40,11 @@ Write a professional release announcement that:
 
 Target audience: Internal stakeholders and potential users.`;
 
-    // Fetch latest model config
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.MARKETING, this.modelConfig, context.projectId);
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(MARKETING_PROFILE, context.projectId);
 
     const result = await provider.chat({
       messages: [
-        { role: 'system', content: this.systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ],
       model,
@@ -55,9 +53,9 @@ Target audience: Internal stakeholders and potential users.`;
 
     // Save memory
     await this.memoryService.saveMemory(
-      await this.memoryService.getAgentIdByRole(AgentRole.MARKETING) || 'marketing',
-      AgentRole.MARKETING,
-      'brand_voice',
+      await this.memoryService.getAgentIdByRole(MARKETING_PROFILE.role) || 'marketing',
+      MARKETING_PROFILE.role,
+      MARKETING_PROFILE.primaryNamespace,
       `Drafted announcement for: ${projectSummary}`,
       { importance: 5, projectId: context.projectId }
     );
@@ -66,8 +64,8 @@ Target audience: Internal stakeholders and potential users.`;
     this.websocketGateway.sendToProject(context.projectId, {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.MARKETING,
-        agentRole: AgentRole.MARKETING,
+        agentId: MARKETING_PROFILE.role,
+        agentRole: MARKETING_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'draftAnnouncement',
         toolName: 'llm',
@@ -77,7 +75,7 @@ Target audience: Internal stakeholders and potential users.`;
 
     return {
       success: true,
-      output: { action: 'draftAnnouncement', output: result.content },
+      output: { action: 'draftAnnouncement', output: result.content || '' },
     };
   }
 }

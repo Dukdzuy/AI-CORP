@@ -4,6 +4,7 @@ import { Typography, Space, Card, Tag, Button, Avatar, Descriptions, Timeline, B
 import { ArrowLeftOutlined, RobotOutlined, LoadingOutlined, BulbOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { AgentRole, WebSocketEventType, AgentThinkingEvent, AgentActionEvent } from '@ai-corp/shared-types';
 import socketClient from '../lib/websocket/socket-client';
+import { LearningPanel } from '../components/learning/LearningPanel';
 
 const { Title, Text } = Typography;
 
@@ -137,7 +138,7 @@ export const AgentDetail: React.FC = () => {
               {isThinking ? 'Thinking' : 'Idle'}
             </Tag>
           </Descriptions.Item>
-          <Descriptions.Item label="Memory Namespace">{agentRole.toLowerCase()}_memories</Descriptions.Item>
+          <Descriptions.Item label="Memory Namespaces">lessons_learned, execution_outcomes</Descriptions.Item>
           <Descriptions.Item label="Current Task" span={2}>
             {currentTask ? (
               <Text style={{ color: '#faad14', fontStyle: 'italic' }}>{currentTask}</Text>
@@ -147,6 +148,8 @@ export const AgentDetail: React.FC = () => {
           </Descriptions.Item>
         </Descriptions>
       </Card>
+
+      <LearningPanel role={agentRole} />
 
       {/* Recent Activity */}
       <Card

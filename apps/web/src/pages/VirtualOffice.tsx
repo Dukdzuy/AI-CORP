@@ -92,12 +92,15 @@ export const VirtualOffice: React.FC = () => {
       (data) => {
         setAgentStatuses((prev) => ({ ...prev, [data.fromAgent]: 'idle' }));
         addMessage({
-          id: `msg-${Date.now()}-${data.fromAgent}`,
+          id: data.id ?? `msg-${Date.now()}-${data.fromAgent}`,
           fromRole: data.fromAgent,
-          toRole: data.toAgent,
+          toRole: data.toAgent || 'all',
           message: data.message,
           type: data.messageType as MeetingMessage['type'],
-          timestamp: new Date(data.timestamp),
+          timestamp: data.timestamp ? new Date(data.timestamp) : new Date(),
+          projectId: data.projectId,
+          performative: data.performative,
+          protocol: data.protocol,
         });
       }
     );

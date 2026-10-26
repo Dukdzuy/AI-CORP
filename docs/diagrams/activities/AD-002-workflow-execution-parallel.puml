@@ -27,26 +27,24 @@ fork
     :DEV Agent: ACTING → COMPLETED;
   }
 fork again
-  :Execute Branch B (QA);
-  partition "Quality Assurance Branch" {
-    :Assign QA Agent;
-    :QA Agent: IDLE → THINKING;
-    :Review Test Strategy;
-    :QA Agent: THINKING → ACTING;
-    :Prepare Test Environment;
-    :Write Test Cases;
-    :QA Agent: ACTING → COMPLETED;
+  :Execute Branch B (QC);
+  partition "Quality Control Branch" {
+    :Assign QC Agent;
+    :QC Agent: IDLE → THINKING;
+    :Read Approved Use Cases;
+    :QC Agent: THINKING → ACTING;
+    :Write Acceptance Tests per Use Case;
+    :QC Agent: ACTING → COMPLETED;
   }
 fork again
-  :Execute Branch C (DevOps);
-  partition "Infrastructure Branch" {
-    :Assign DevOps Agent;
-    :DevOps Agent: IDLE → THINKING;
-    :Plan Deployment Strategy;
-    :DevOps Agent: THINKING → ACTING;
-    :Configure CI/CD Pipeline;
-    :Provision Resources;
-    :DevOps Agent: ACTING → COMPLETED;
+  :Execute Branch C (Marketing);
+  partition "Release Communication Branch" {
+    :Assign Marketing Agent;
+    :Marketing Agent: IDLE → THINKING;
+    :Read Project Summary;
+    :Marketing Agent: THINKING → ACTING;
+    :Draft Release Announcement;
+    :Marketing Agent: ACTING → COMPLETED;
   }
 end fork
 
@@ -77,8 +75,8 @@ if (All Branches Successful?) then (yes)
     :Initiate Rollback Procedure;
     partition "Compensation Activities" {
       :Rollback DEV Changes;
-      :Clean QA Environment;
-      :Deallocate DevOps Resources;
+      :Discard QC Test Drafts;
+      :Discard Marketing Draft;
       :Restore Previous State;
     }
     :Set Status = FAILED;

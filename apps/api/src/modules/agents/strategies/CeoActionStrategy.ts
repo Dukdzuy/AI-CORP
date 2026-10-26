@@ -4,10 +4,11 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { CeoOutput } from '../../../domain/agent/AgentOutputs';
+import { CEO_PROFILE } from '../profiles';
 
 @Injectable()
-export class CeoActionStrategy implements IActionStrategy {
+export class CeoActionStrategy implements IActionStrategy<CeoOutput> {
   private readonly logger = new Logger(CeoActionStrategy.name);
 
   constructor(
@@ -16,15 +17,13 @@ export class CeoActionStrategy implements IActionStrategy {
     private readonly websocketGateway: AppWebSocketGateway
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<CeoOutput>> {
     const goal = context.projectContext?.goal || context.goal || '';
     const description = context.projectContext?.description || '';
     
-    const systemPrompt = `You are the CEO. Your objective is to define the strategic vision, plan high-level milestones, and ensure the product aligns with market needs.`;
-    
     // The CEO opens the workflow (milestone plan) and closes it (project wrap-up)
     const completing = context.taskType === 'complete_project';
-    const actionName = completing ? 'complete_project' : 'planMilestones';
+    const actionName: CeoOutput['action'] = completing ? 'complete_project' : 'planMilestones';
 
     const prompt = completing
       ? `You are the CEO closing a project.
@@ -47,26 +46,25 @@ Format your response as a numbered list:
 
 Be specific and actionable. Each milestone should be completable in a reasonable timeframe.`;
 
-    // Fetch latest model config
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.CEO, modelConfig, context.projectId);
+    const memoryContext = thought.memories?.length ? `\n\nPast strategic decisions:\n${thought.memories.join('\n')}` : '';
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(CEO_PROFILE, context.projectId);
 
     const result = await provider.chat({
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt }
+        { role: 'user', content: prompt + memoryContext }
       ],
       model,
       maxTokens: 1000
     });
 
     // Save memory
-    const agentId = await this.memoryService.getAgentIdByRole(AgentRole.CEO);
+    const agentId = await this.memoryService.getAgentIdByRole(CEO_PROFILE.role);
     if (agentId) {
       await this.memoryService.saveMemory(
         agentId,
-        AgentRole.CEO,
-        'strategy',
+        CEO_PROFILE.role,
+        CEO_PROFILE.primaryNamespace,
         completing ? `Closed project: ${goal}` : `Created milestones for goal: ${goal}`,
         { importance: 8, projectId: context.projectId }
       );
@@ -76,8 +74,8 @@ Be specific and actionable. Each milestone should be completable in a reasonable
     this.websocketGateway.sendToProject(context.projectId || 'unknown', {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.CEO,
-        agentRole: AgentRole.CEO,
+        agentId: CEO_PROFILE.role,
+        agentRole: CEO_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: actionName,
         toolName: 'llm',
@@ -87,7 +85,7 @@ Be specific and actionable. Each milestone should be completable in a reasonable
 
     return {
       success: true,
-      output: { action: actionName, output: result.content },
+      output: { action: actionName, output: result.content || '' },
     };
   }
 }

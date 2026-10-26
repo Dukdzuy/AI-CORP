@@ -4,6 +4,7 @@ import { RobotOutlined, BulbOutlined, ThunderboltOutlined, MessageOutlined, Chec
 import { AgentRole } from '@ai-corp/shared-types';
 import { MeetingMessage } from '../../stores/meetingStore';
 import socketClient from '../../lib/websocket/socket-client';
+import { performativeStyle, protocolLabel } from './performatives';
 
 const { Text } = Typography;
 
@@ -133,7 +134,10 @@ const MessageBubble: React.FC<{ msg: MeetingMessage }> = ({ msg }) => {
     chat: <MessageOutlined style={{ color: '#8b949e', fontSize: 11 }} />,
     notification: null,
     approval: null,
+    acl: null,
   }[msg.type];
+  const performative = performativeStyle(msg.performative);
+  const protocol = protocolLabel(msg.protocol);
 
   return (
     <div
@@ -155,9 +159,17 @@ const MessageBubble: React.FC<{ msg: MeetingMessage }> = ({ msg }) => {
             {msg.fromRole}
           </Text>
           {typeIcon}
+          {performative && (
+            <Tag color={performative.color} style={{ margin: 0, fontSize: 10 }} title={msg.performative}>
+              {msg.performative}
+            </Tag>
+          )}
           <Text style={{ color: '#484f58', fontSize: 10 }}>
             → {msg.toRole === 'all' ? 'everyone' : msg.toRole}
           </Text>
+          {protocol && (
+            <Text style={{ color: '#484f58', fontSize: 10 }}>· {protocol}</Text>
+          )}
           <Text style={{ color: '#484f58', fontSize: 10 }}>{timeStr}</Text>
         </Space>
         <div
@@ -174,6 +186,7 @@ const MessageBubble: React.FC<{ msg: MeetingMessage }> = ({ msg }) => {
               color: msg.type === 'thinking' ? '#d4a816' : '#c9d1d9',
               fontSize: 12,
               fontStyle: msg.type === 'thinking' ? 'italic' : 'normal',
+              whiteSpace: 'pre-wrap',
             }}
           >
             {msg.message}

@@ -473,211 +473,88 @@ If user rejects:
 ### Overview
 
 **Diagram ID**: SD-004  
-**Title**: Task Delegation Chain (Multi-Agent Hierarchy)  
+**Title**: Task Delegation Chain (default OOAD workflow v2.0.0)  
 **File**: `docs/diagrams/sequences/SD-004-task-delegation-chain.puml`  
 **Primary Use Case**: UC-025 (Agent Delegation Chain)  
-**Business Context**: Enterprise workflow requiring multiple specialized agents collaborating through delegation.
+**Business Context**: One project run through the default workflow, from goal to close-out, with every agent handing its output to the next.
+
+> Updated 2026-10-26 (Phase 3, Task 11): the deployment role was removed from the roster, QC was added, and the order now follows OOAD (analysis and design before planning and implementation). See *Agent role review* in `Implementation_plan.md`.
 
 ### Purpose and Context
 
-This sequence diagram models the complete agent delegation hierarchy in the AI-CORP platform, demonstrating:
+This sequence diagram models how the eight agents collaborate in one workflow run:
 
-1. **Chain of Responsibility pattern** for task routing
-2. **Multi-agent collaboration** with 8 agents (CEO → PM → BA → Architect → DEV → QA → DevOps)
-3. **Bidirectional delegation** (forward delegation and return to previous agent)
-4. **Context preservation** across delegation chain
-5. **Role-specific responsibilities** following Single Responsibility Principle (SRP)
-
-This diagram is the most comprehensive in the system, showcasing the full enterprise workflow automation capability that differentiates this thesis project.
+1. **Hand-off through the workflow engine**: agents never call each other; each `agent_task` node calls `AgentOrchestratorService.invokeAgent(role, context)` and the strategy's typed output (`BaOutput`, `QcOutput`, ...) is merged into the run's variables for the next node
+2. **OOAD order**: CEO → BA → Architect → OOAD gate → PM → DEV → QC → QA → Marketing → human approval → CEO
+3. **Two backward edges**: OOAD gate fail → Architect, QA reject → DEV
+4. **Persistent artifacts**: everything the agents generate is written to the project workspace (`PROJECTS_WORKSPACE_DIR/projects/<id>/`) and summarised in `Project.ooadMetadata`
 
 ### Participants
 
 | Participant | Type | Role | Responsibilities |
 |-------------|------|------|------------------|
-| Board Member | Human Actor | Project initiator | Starts workflow, monitors progress |
-| WorkflowEngine | System Component | Orchestrator | Routes tasks to agents, manages state |
-| CEOAgent | AI Agent | Strategic planning | Define vision, create milestones, allocate budget |
-| PMAgent | AI Agent | Project management | Break down milestones, prioritize tasks, estimate effort |
-| BAAgent | AI Agent | Requirements analysis | Elicit requirements, document use cases, define acceptance criteria |
-| ArchitectAgent | AI Agent | System design | Design architecture, select technologies, write ADRs |
-| DEVAgent | AI Agent | Implementation | Write code, unit tests, documentation |
-| QAAgent | AI Agent | Quality assurance | Code review, testing, approve/reject |
-| DevOpsAgent | AI Agent | Deployment | Generate configs, deploy, monitor |
-| PrismaDB | External System | Persistence | Store project, tasks, documents, deployments |
+| Board Member | Human Actor | Project initiator | Starts the workflow, approves completion |
+| WorkflowEngine | System Component | Orchestrator | Walks the DAG, merges agent outputs into variables |
+| AgentOrchestratorService | System Component | Registry | Looks up the agent for a role in `IAgent[]` from the `AGENTS` token |
+| CEO | AI Agent | Strategy | Milestone plan (`planMilestones`), close-out report (`complete_project`) |
+| BA | AI Agent | Analysis | Actors and use cases, `use-cases.md`, use case diagram |
+| Architect | AI Agent | Design | Domain model, class/sequence diagrams, patterns, layered code skeleton |
+| OOAD gate | Workflow node | Process quality (QA) | Use case / entity / pattern counts and required artifacts |
+| PM | AI Agent | Planning | One task per approved use case, ordered by priority |
+| DEV | AI Agent | Implementation | Fills in the skeleton, marks services with `// UC-xxx` |
+| QC | AI Agent | Product quality | Acceptance tests per use case, traceability matrix, coverage (`qc_passed`) |
+| QA | AI Agent | Process quality | Design-conformance review using the QC report (`qa_approved`) |
+| Marketing | AI Agent | Communication | Release announcement |
+| ProjectWorkspace / PrismaDB | Persistence | Storage | Generated files / metadata, tasks, milestones, runs |
 
 ### Main Flow Description
 
-1. **Project Initialization** (Lines 1-15):
-   - Board Member starts workflow with 'enterprise_workflow' definition
-   - WorkflowEngine creates WorkflowRun with currentNodeId='ceo_strategic_planning'
-
-2. **CEO: Strategic Analysis** (Lines 16-40):
-   - CEO receives project goal, description, budget
-   - CEO analyzes market fit and strategic vision
-   - CEO calls LLM for strategic roadmap generation
-   - CEO creates 5 milestones: Requirements, Design, Implementation, Testing, Deployment
-   - CEO delegates to PM with task='breakdown_requirements'
-   - **Delegation Message**: { fromAgent: 'CEO', toAgent: 'PM', taskType: 'breakdown_requirements', context: {...}, priority: 'high' }
-
-3. **PM: Sprint Planning** (Lines 41-70):
-   - PM receives milestones from CEO
-   - PM breaks milestones into 20 tasks with priorities and estimates
-   - PM creates Task records in database
-   - PM identifies first milestone (Requirements) needs business analysis
-   - PM delegates to BA with tasks for Requirements phase
-   - **Chain continues**: CEO → PM → BA
-
-4. **BA: Requirements Analysis** (Lines 71-105) **[NEW AGENT]**:
-   - BA receives tasks for Requirements milestone
-   - BA calls LLM to extract functional and non-functional requirements
-   - BA generates use case diagrams (PlantUML)
-   - BA documents acceptance criteria per requirement
-   - BA creates ProjectDocument with type='requirements_spec'
-   - BA saves memory: "Documented 15 functional requirements"
-   - BA delegates to Architect with requirements specification
-   - **Chain continues**: CEO → PM → BA → Architect
-
-5. **Architect: System Design** (Lines 106-145) **[NEW AGENT]**:
-   - Architect receives requirements specification
-   - Architect calls LLM for architecture recommendations
-   - Architect evaluates technology options (NestJS vs Express, PostgreSQL vs MongoDB)
-   - Architect generates component diagram (microservices architecture)
-   - Architect generates deployment diagram (Docker + Kubernetes)
-   - Architect writes Architecture Decision Record (ADR) for key decisions
-   - Architect creates 3 ProjectDocuments: architecture_spec, component_diagram, adr
-   - Architect delegates back to PM for implementation planning
-   - **Chain forks**: PM creates tasks for each component
-
-6. **PM: Implementation Planning** (Lines 146-165):
-   - PM receives architecture with component breakdown
-   - PM calls LLM to create implementation tasks per component
-   - PM creates tasks: "Implement AuthService", "Implement ProjectService", etc.
-   - PM assigns first task to DEV
-   - PM delegates to DEV with task specification
-   - **Chain continues**: CEO → PM → BA → Architect → PM → DEV
-
-7. **DEV: Code Implementation** (Lines 166-200):
-   - DEV receives task with component specification
-   - DEV loads coding conventions from memory
-   - DEV calls LLM for code generation (NestJS AuthService)
-   - DEV executes code in sandbox Docker container
-   - DEV runs unit tests (npm test)
-   - DEV updates Task status to 'review'
-   - DEV saves memory: "Implemented JWT auth with refresh token rotation"
-   - DEV delegates to QA for code review
-   - **Chain continues**: ... → PM → DEV → QA
-
-8. **QA: Code Review & Testing** (Lines 201-245):
-   - QA receives code and test results from DEV
-   - QA calls LLM for code review (security, best practices)
-   - QA runs static analysis (ESLint, SonarQube)
-   - QA runs security scan (npm audit, Snyk)
-   - QA runs integration tests (npm run test:e2e)
-   - **Decision Point**: Code quality determines next step
-   
-   **If Approved**:
-   - QA updates Task status to 'done', qa_approved=true
-   - QA delegates to DevOps for deployment
-   - **Chain continues**: ... → QA → DevOps
-   
-   **If Rejected**:
-   - QA updates Task status to 'in_progress', qa_approved=false
-   - QA provides feedback: "Security issue: SQL injection risk"
-   - QA delegates back to DEV for fixes
-   - **Chain loops**: DEV fixes → QA reviews again
-
-9. **DevOps: Deployment** (Lines 246-285) **[NEW AGENT]**:
-   - DevOps receives approved code from QA
-   - DevOps calls LLM to generate Dockerfile and docker-compose.yml
-   - DevOps generates deployment configs (Kubernetes manifests)
-   - DevOps executes docker build in sandbox
-   - DevOps deploys to staging environment (docker-compose up)
-   - DevOps runs health checks (HTTP probe on /health endpoint)
-   
-   **If Deployment Successful**:
-   - DevOps creates Deployment record with status='success', url='https://staging.ai-corp.com'
-   - DevOps saves memory: "Deployed AuthService with zero downtime"
-   
-   **If Deployment Failed**:
-   - DevOps creates Deployment record with status='failed', error message
-   - DevOps delegates back to DEV (rare, usually infrastructure issue)
-
-10. **Workflow Completion** (Lines 286-295):
-    - WorkflowEngine marks WorkflowRun as 'completed'
-    - Board Member receives completion notification
-    - Total: 20 tasks completed across 8 agents
+1. **CEO – planMilestones**: CEO reads the goal and lists 2–4 milestones; the engine creates Milestone rows from the list.
+2. **BA – generateUseCases**: BA returns JSON validated by `UseCaseDataSchema` (≥ 5 use cases), renders `docs/use-cases.md` and `docs/use-case-diagram.puml`, stores `ooadMetadata.useCases`.
+3. **Architect – designArchitecture**: Architect reads the use cases, generates the domain model, patterns, layers and sequence diagrams for the high-priority use cases, renders the diagrams and the layered skeleton (`src/domain`, `src/application`, `src/infrastructure`, `src/presentation`).
+4. **OOAD gate**: `QualityGateStrategy` checks the counts and that the required docs exist in the workspace. Fail → back to the Architect; pass → PM.
+5. **PM – breakdownTasks**: one developer task per use case (title starts with the use case id); the engine creates Task rows in `todo`.
+6. **DEV – implement**: DEV receives the OOAD design context, writes code into the workspace (unsafe paths are rejected); the engine moves tasks to `review`.
+7. **QC – verify**: QC writes `tests/UC-xxx.spec.ts` for untested use cases, runs the project's Jest suite through `SandboxExecutor.runInWorkspace` (read-only mount of `projects/<id>`, no network), maps results per use case, builds `docs/traceability-matrix.md` (Passing / Failing / Missing) and stores coverage and pass/fail counts. `qc_passed` needs coverage ≥ 80% and no failing High-priority use case; otherwise it emits a `quality_warning`.
+8. **QA – review**: QA reviews the code against the approved design, the QC report and the failing tests. `qa_approved = false` → tasks back to `in_progress` and the run returns to DEV; `true` → tasks `done`.
+9. **Marketing – draftAnnouncement**, then **human approval** (`project_completion`).
+10. **CEO – complete_project**: close-out report; the run is `completed`.
 
 ### Design Patterns Highlighted
 
 | Pattern | Implementation | Purpose |
 |---------|----------------|---------|
-| **Chain of Responsibility** | Each agent processes its responsibility then delegates to appropriate next agent | Decoupled agent collaboration, dynamic routing |
-| **Strategy Pattern** | Each agent has role-specific thinking/action strategies | Pluggable behavior per agent type |
-| **Command Pattern** | Delegation messages are Command objects with fromAgent, toAgent, taskType, context | Encapsulates requests, enables undo/logging |
-| **Template Method** | All agents inherit BaseAgent.execute() skeleton | Code reuse, consistent execution flow |
-| **Observer Pattern** | Each agent emits events on delegation | Real-time monitoring, audit trail |
+| **Registry** | `AGENTS` token → `AgentOrchestratorService` map by role | Add a role without touching the orchestrator (OCP) |
+| **Strategy** | One thinking + one action strategy per role | Role behaviour isolated from the agent contract |
+| **Template Method** | `BaseAgent.execute()` (resolve task type → think → act → complete) | Same lifecycle and events for every role |
+| **State** | `AgentStateMachine` (IDLE → THINKING → ACTING → COMPLETED → IDLE, ERROR) | Valid agent transitions only |
+| **Chain of Responsibility** | Review chain QC → QA, with backward edges in the DAG | Product check before process check; more reviewers can be added (Task 15) |
+| **Observer / Domain events** | `AgentEventEmitter`, `EventBus` (`TaskCompletedEvent`, `AgentErrorEvent`, ...) | Real-time UI and audit |
 
 ### Synchronous vs Asynchronous Interactions
 
 **Synchronous**:
-- All agent.execute() calls block until completion
-- Database operations are transactional
-- LLM API calls block with timeout
+- `invokeAgent()` / `agent.execute()` complete before the engine moves to the next node
+- LLM calls block with the node timeout
 
 **Asynchronous**:
-- Delegation between agents is queued via BullMQ
-- Memory saves are background tasks
-- WebSocket notifications are fire-and-forget
-
-### Timing Constraints
-
-| Phase | Duration | Agent Count |
-|-------|----------|-------------|
-| CEO strategic planning | < 2 minutes | 1 |
-| PM task breakdown | < 3 minutes | 1 |
-| BA requirements analysis | < 5 minutes | 1 (NEW) |
-| Architect system design | < 10 minutes | 1 (NEW) |
-| DEV implementation | < 30 minutes | 1-5 (parallel) |
-| QA review | < 10 minutes | 1 |
-| DevOps deployment | < 5 minutes | 1 (NEW) |
-| **Total end-to-end** | **< 2 hours** | **8 agents** |
+- Workflow steps run through BullMQ when Redis is available (direct execution otherwise)
+- Domain events and WebSocket notifications are fire-and-forget
 
 ### Key Invariants
 
-1. **Delegation preserves context**: Context object passed through entire chain without loss
-2. **Each agent executes once per task**: No duplicate processing (idempotency)
-3. **Backward delegation is allowed**: QA can return to DEV on rejection
-4. **All delegations are logged**: Audit trail in database
-5. **Agent execution order follows DAG**: No circular dependencies (CEO never called by DevOps)
-
-### Delegation Context Structure
-
-```typescript
-interface DelegationContext {
-  fromAgent: AgentRole;
-  toAgent: AgentRole;
-  taskType: string;
-  context: AgentContext;
-  priority: Priority;
-  metadata: {
-    projectId: string;
-    milestoneId?: string;
-    taskId?: string;
-    parentDelegationId?: string; // For tracking chain
-  };
-}
-```
+1. **Analysis and design come first**: PM and DEV never run before the OOAD gate has passed
+2. **Every agent output is typed**: the engine reads named fields (`code`, `qcReport`, `qa_approved`) instead of free text
+3. **Backward edges only**: gate → Architect, QA → DEV; no other cycles
+4. **Artifacts persist**: files live in the project workspace, not in the sandbox
+5. **One agent per role**: the orchestrator rejects duplicate registrations
 
 ### Postconditions
 
-- All 20 tasks have status='done' or 'cancelled'
-- Requirements document exists with 15 functional requirements
-- Architecture document exists with 8 components
-- Code implemented for all components with >80% test coverage
-- QA approved all code
-- All components deployed to staging environment
-- Deployment URLs accessible and health checks passing
-- Project status='completed'
+- `docs/` holds use cases, use case / domain / class / sequence diagrams, architecture patterns and the traceability matrix
+- `src/` holds the layered implementation, `tests/` the acceptance tests per use case
+- `Project.ooadMetadata` holds use cases, domain model, patterns, architecture and test coverage
+- All tasks are `done`; the workflow run is `completed`
 
 ---
 
@@ -1167,6 +1044,45 @@ This is the most complex error-handling diagram, essential for enterprise-grade 
 
 ---
 
+## SD-007: Pair Develop with Clarification
+
+### Overview
+
+**Diagram**: `docs/diagrams/sequences/SD-007-pair-develop.puml` (added in Phase 3, Task 15)
+
+The `pair_develop` collaboration node of the collaborative workflow (`WORKFLOW_COLLABORATION=pair`). DEV drives and the Architect navigates: the Architect reviews DEV's plan before any code is written and then reviews the code. When DEV finds a use case ambiguous it sends a REQUEST to BA, which answers with an INFORM and updates the use case.
+
+### Participants
+
+- **WorkflowEngine**: runs every agent turn as its own workflow step (`ctx.executeNode` with a synthetic `agent_task` node such as `pair_develop:3:architect-reviewPlan`)
+- **AgentCollaborationStrategy**: the `agent_collaboration` node strategy; picks the pattern from `CollaborationRegistry`, merges the result into the run variables
+- **PairDevelopCollaboration**: the pattern (Strategy); reuses `ClarificationLoopCollaboration`
+- **AgentMessageBus** (Mediator): validates each message against the conversation, persists it as an `AgentMessage` with `messageType 'acl'` and streams it to the Meeting Room
+- **DEV, BA, ARCHITECT**: agents, using the task types `planImplementation`, `clarifyUseCase`, `reviewPlan` and `reviewCode`
+
+### Main Flow Description
+
+1. DEV `planImplementation` returns a plan and `QUESTION: UC-xxx: ...` lines
+2. For each question (at most 3): REQUEST DEV → BA, BA `clarifyUseCase`, INFORM BA → DEV (in reply to the REQUEST); DEV re-plans with the clarifications
+3. PROPOSE DEV → ARCHITECT; the Architect answers ACCEPT or REJECT (in reply to the PROPOSE). A REJECT carries feedback and DEV proposes a revised plan in reply to it, up to `maxRounds` (default 2)
+4. DEV `implement` with the plan, feedback and clarifications in its prompt; INFORM DEV → ARCHITECT lists the files
+5. The Architect `reviewCode`: ACCEPT, or REJECT and another implementation round
+6. The node returns DEV's output plus `implementationPlan`, `planAccepted`, `codeAccepted`, `navigatorReviews`; the next node is `review_chain` (QC → QA, Chain of Responsibility)
+
+### Design Patterns Highlighted
+
+- **Mediator**: agents never call each other; all messages go through `AgentMessageBus`
+- **Strategy + Registry**: collaboration patterns are interchangeable and looked up by name
+- **Chain of Responsibility**: `ReviewHandler` links in the review chain that follows
+- **Value Object**: `AclMessage` is immutable and validated on creation
+
+### Key Invariants
+
+- An ACCEPT or REJECT always answers an earlier message of the same conversation, sent to the replier
+- The navigator advises: after `maxRounds` DEV's last version goes on, and QC/QA decide
+
+---
+
 ## Summary Table: All Sequence Diagrams
 
 | ID | Title | Primary Actors | Key Patterns | Complexity | Purpose |
@@ -1174,9 +1090,10 @@ This is the most complex error-handling diagram, essential for enterprise-grade 
 | SD-001 | Project Creation Workflow | Board Member, CEOAgent, PMAgent | Template Method, State Machine, Strategy | Medium | End-to-end project initialization |
 | SD-002 | Agent Think-Act Cycle | WorkflowEngine, BaseAgent, AgentStateMachine | State, Strategy, Observer, Template Method | High | Core agent execution model |
 | SD-003 | Human Approval Flow | WorkflowEngine, ApprovalService, Board Member | State, State Machine, Observer, Command, Memento | Medium | Human-in-the-loop decision making |
-| SD-004 | Task Delegation Chain | 8 Agents (CEO → DevOps) | Chain of Responsibility, Strategy, Command | Very High | Multi-agent collaboration hierarchy |
+| SD-004 | Task Delegation Chain | 8 Agents (CEO → BA → Architect → PM → DEV → QC → QA → Marketing) | Registry, Strategy, Template Method, Chain of Responsibility | Very High | OOAD workflow hand-offs |
 | SD-005 | Agent Learning Cycle | BaseAgent, MemoryService, VectorStore | Repository, Strategy, Observer, Lazy Loading | High | Semantic memory storage and retrieval |
 | SD-006 | Workflow Rollback | WorkflowEngine, CompensationService, Agents | Saga, Command, Memento, Chain of Responsibility | Very High | Distributed transaction rollback |
+| SD-007 | Pair Develop with Clarification | DEV, ARCHITECT, BA, AgentMessageBus | Mediator, Strategy, Registry, Value Object | High | Agent collaboration with FIPA-ACL messages |
 
 ### Coverage Analysis
 
@@ -1195,7 +1112,8 @@ This is the most complex error-handling diagram, essential for enterprise-grade 
 - Strategy Pattern: SD-001, SD-002, SD-004
 - Observer Pattern: SD-001, SD-002, SD-003, SD-005
 - Template Method: SD-001, SD-002
-- Chain of Responsibility: SD-004, SD-006
+- Chain of Responsibility: SD-004, SD-006, SD-007 (review chain)
+- Mediator: SD-007
 - Command Pattern: SD-003, SD-004, SD-006
 - Memento Pattern: SD-003, SD-006
 - Saga Pattern: SD-006

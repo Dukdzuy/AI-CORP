@@ -9,6 +9,7 @@ import { WORKFLOW_ENGINE_REPOSITORY } from './persistence/workflow-engine.reposi
 import { PrismaWorkflowEngineRepository } from './persistence/prisma-workflow-engine.repository';
 import { QualityGateHandler } from './handlers/quality-gate.handler';
 import { QualityGateStrategy } from './strategies/quality-gate.strategy';
+import { AgentCollaborationStrategy } from './collaboration/agent-collaboration.strategy';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 
@@ -20,6 +21,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
     WorkflowDefinitionService,
     QualityGateHandler,
     QualityGateStrategy,
+    AgentCollaborationStrategy,
     { provide: WORKFLOW_ENGINE_REPOSITORY, useClass: PrismaWorkflowEngineRepository },
   ],
   exports: [WorkflowValidator, WorkflowEngine, WorkflowDefinitionService],

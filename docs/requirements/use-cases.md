@@ -1080,6 +1080,7 @@ CEO Agent orchestrates high-level workflow by delegating tasks to appropriate ag
 ### UC-016: Verify Implementation against Use Cases (QC Agent)
 
 > Revised 2026-10-26: replaces "Deploy Application (DevOps Agent)". DevOps was removed from the agent roster and QC was added (see Implementation_plan.md, Status & Audit).
+> Revised 2026-10-26 (Phase 3, Task 12): QC now executes the tests in the sandbox, so coverage counts *passing* use cases.
 
 | Field | Value |
 |-------|-------|
@@ -1090,7 +1091,7 @@ CEO Agent orchestrates high-level workflow by delegating tasks to appropriate ag
 | **Status** | Implemented |
 
 **Brief Description:**  
-QC Agent derives acceptance tests from every use case written by the BA, writes them into the generated project, and builds the traceability matrix (use case → domain classes → implementation files → tests) with the use case coverage.
+QC Agent derives acceptance tests from every use case written by the BA, writes them into the generated project, runs the project's Jest suite in the sandbox, and builds the traceability matrix (use case → domain classes → implementation files → tests → Passing / Failing / Missing) with the use case coverage.
 
 **Pre-conditions:**
 1. The OOAD quality gate passed (use cases, domain model and patterns exist in ooadMetadata).
@@ -1101,7 +1102,8 @@ QC Agent derives acceptance tests from every use case written by the BA, writes 
 1. One acceptance test file per untested use case exists under tests/ (describe('UC-xxx: ...')).
 2. docs/traceability-matrix.md is written to the project workspace.
 3. ooadMetadata.testCoverage and ooadMetadata.traceability are updated.
-4. Workflow variables qc_passed, testCoverage, missingUseCases and qcReport are available to QA.
+4. Workflow variables qc_passed, testCoverage, missingUseCases, failingUseCases, failingTests, testsExecuted and qcReport are available to QA.
+5. The project workspace is unchanged by the test run (read-only mount).
 
 **Main Flow:**
 1. Workflow Engine invokes QC Agent (node "test", after "develop").
@@ -1111,23 +1113,29 @@ QC Agent derives acceptance tests from every use case written by the BA, writes 
 5. QC builds a first traceability pass to find use cases without tests.
 6. QC prompts the LLM with those use cases and the application services, asking for one Jest test file per use case (main, alternative and exception flows).
 7. QC writes the returned test files under tests/, rejecting unsafe or non-test paths.
-8. QC rebuilds the traceability matrix over the final file set and writes docs/traceability-matrix.md.
-9. QC persists testCoverage and the traceability summary to ooadMetadata.
-10. QC returns qc_passed = (coverage ≥ 80%).
+8. QC runs `jest --json` on a copy of projects/<id>/ through SandboxExecutor.runInWorkspace (read-only mount, tmpfs work dir, no network) and maps each test to its use case by the UC-xxx id in its title or file name.
+9. QC rebuilds the traceability matrix over the final file set and the executed results (Passing / Failing / Missing) and writes docs/traceability-matrix.md.
+10. QC persists testCoverage (passing use cases / all use cases) and the pass/fail counts to ooadMetadata.traceability.
+11. QC returns qc_passed = coverage ≥ 80% and no failing High-priority use case, plus failingTests for QA.
 
 **Alternative Flows:**
 - **AF-1: All Use Cases Already Covered**
-  - At step 5, if no use case is missing tests, QC skips steps 6–7 and only rebuilds the matrix.
+  - At step 5, if no use case is missing tests, QC skips steps 6–7.
+- **AF-2: Tests Cannot Be Executed**
+  - At step 8, if there is no Docker daemon (and the local fallback is not enabled with SANDBOX_ALLOW_LOCAL_RUN), the project has no package.json / jest.config.js, or the run times out, QC keeps the static coverage (use cases with tests count as Covered) and notes the reason in the matrix.
 
 **Exception Flows:**
 - **EF-1: Coverage Below 80%**
-  - At step 10, QC emits a quality_warning WebSocket event listing the missing use cases; QA takes the report into account.
+  - At step 11, QC emits a quality_warning WebSocket event listing the missing use cases; QA takes the report into account.
+- **EF-3: High-Priority Use Case Failing**
+  - At step 11, qc_passed is false even with coverage ≥ 80%; QC emits a quality_warning with the failing use cases and QA receives the failing tests (and rejects, sending the run back to DEV).
 - **EF-2: No Project Context**
   - QC returns a failed action result; the workflow node fails and is retried.
 
 **Special Requirements:**
 - **SR-1:** Test names must carry the use case id so the matrix can trace them.
 - **SR-2:** Files are written only inside projects/<projectId>/ of the project workspace.
+- **SR-3:** Generated code runs only in the sandbox container (read-only mount, no capabilities, no network unless a package registry is configured); the host fallback is opt-in.
 
 **Assumptions:**
 - Executing the generated tests in the sandbox is Phase 3 Task 12.
@@ -1599,6 +1607,54 @@ Admin monitors system health metrics including database connection, Redis queue 
 
 ---
 
+### UC-026: Browse Generated Project Artifacts
+
+> Added 2026-10-26 (Phase 3, Task 13).
+
+| Field | Value |
+|-------|-------|
+| **ID** | UC-026 |
+| **Name** | Browse Generated Project Artifacts |
+| **Actors** | Board Member |
+| **Priority** | High |
+| **Status** | Implemented |
+
+**Brief Description:**  
+Board Member opens the *Artifacts* tab of a project to see what the agents produced: use cases, diagrams, architecture notes, generated code, acceptance tests and the traceability matrix, plus the OOAD quality gate checklist, QC warnings and the OOAD summary. The whole project can be downloaded as a zip.
+
+**Pre-conditions:**
+1. Board Member is authenticated.
+2. The project exists; at least the BA has written files to the project workspace.
+
+**Post-conditions:**
+1. Nothing is changed: the workspace is read only through ProjectWorkspace.
+
+**Main Flow:**
+1. Board Member opens Project Detail and selects *Artifacts*.
+2. System loads the file list (`GET /api/projects/:id/files`), the gate history (`GET /api/projects/:id/quality-gates`) and the OOAD summary (`GET /api/ooad-metrics/project/:id`).
+3. System shows the OOAD summary (use cases, entities, patterns, gate pass rate, use case test coverage with passing / failing / missing use cases), the latest result of each quality gate with its checklist, and the file tree.
+4. System opens `docs/use-cases.md` by default.
+5. Board Member selects a file; System loads it (`GET /api/projects/:id/files/<path>`) and renders Markdown as formatted text, `*.puml` as a diagram (PlantUML server) with a source toggle, and code/JSON with line numbers.
+6. Board Member clicks *Download zip*; System returns `GET /api/projects/:id/archive` with every file under `<project-slug>/`.
+
+**Alternative Flows:**
+- **AF-1: Live quality events**
+  - While a workflow runs, `quality_gate_result` and `quality_warning` events update the gate checklist and the warning list and refresh the file list.
+- **AF-2: Diagram rendering off**
+  - If `VITE_PLANTUML_SERVER` is empty, or the server cannot render the diagram, System shows the PlantUML source.
+
+**Exception Flows:**
+- **EF-1: Path outside the project** — a path with `..`, an absolute path or an encoded traversal returns 400.
+- **EF-2: Unknown project or file** — 404; a project without files returns 404 for the archive.
+- **EF-3: File larger than 1 MB** — 413; the UI suggests the archive.
+- **EF-4: Not authenticated** — 401.
+
+**Special Requirements:**
+- **SR-1:** Generated text is rendered as React elements, never injected as HTML.
+- **SR-2:** Diagram sources are sent to the configured PlantUML server; use a self-hosted server for private projects.
+
+---
+
 ## 4. Use Case Relationships
 
 ### Include Relationships
@@ -1629,6 +1685,7 @@ Admin monitors system health metrics including database connection, Redis queue 
 | UC-018 | FR-LLM-001 (LLM Request Routing) | NFR-RELIABILITY-001 (Circuit Breaker) |
 | UC-023 | FR-AGENT-004 (QA Code Quality Analysis) | NFR-QUALITY-003 (Technical Debt Quantification) |
 | UC-024 | FR-AGENT-005 (ML-based Task Estimation) | NFR-ACCURACY-001 (Estimation Confidence Interval) |
+| UC-026 | FR-PROJ-008 (Generated Project Artifacts) | NFR-SEC (path confinement) |
 
 ---
 

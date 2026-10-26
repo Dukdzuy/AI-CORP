@@ -32,7 +32,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 | Phase 1 – Foundation & Documentation | Done | UML/use-case docs in `docs/`. Actor list updated: DevOps removed, QC added (see role review) |
 | Phase 2 – Domain Layer Refactoring | Done (fixed) | Repositories, entities, application services (PR #2), engine strategies (PR #4), agent typing (PR #5) |
 | Phase 2.5 – OOAD Project Automation | Done (fixed) | Templates + skeleton (PR #3). Quality gate, traceability and metrics were not wired end-to-end; fixed in this audit |
-| Phase 3 – Agent System Enhancement | **Ready to start** | Re-scoped below: BA/Architect were already delivered by Phase 2.5 |
+| Phase 3 – Agent System Enhancement | **Done** (2026-10-26) | Re-scoped below. Tasks 11–15 done; end-to-end run documented in `docs/phase3-e2e/` |
 | Phases 4–7 | Not started | DevOps references removed |
 
 ### **Audit findings and fixes**
@@ -55,7 +55,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 **Verification**: `nest build` 0 errors, Jest 21/21 suites (351 tests), web `tsc` clean. Full workflow run end-to-end against PostgreSQL with a mock LLM: gate passed, 2 use-case tasks moved todo → review → done, every role logged usage, 28 files persisted in the workspace (an unsafe `../../etc/evil.ts` path from the "LLM" was rejected), traceability 80%, metrics endpoint correct, human approval → CEO close-out → `completed`.
 
-**Known gaps carried into later phases** (not regressions): `domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies (Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); `EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing (Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); generated tests are written but not executed yet (Task 12). Phase 1 class/sequence/activity diagrams still mention DevOps (Task 11, step 6).
+**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); ~~`EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing~~ (keyword fallback since Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); ~~generated tests are written but not executed yet~~ (executed since Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
 
 ### **Agent role review**
 
@@ -1073,7 +1073,7 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
 
 ---
 
-**Task 11: Agent Registry & Uniform Agent Contract**
+**Task 11: Agent Registry & Uniform Agent Contract** — ✅ Done (2026-10-26)
 - **Objective**: Adding a role must not require editing the orchestrator, the module and the base class (OCP), and every agent must follow one contract.
 - **Implementation**:
   1. Introduce an `AGENTS` multi-provider token; each agent class declares its `role`. `AgentOrchestratorService` builds its `Map<AgentRole, IAgent>` from the injected array instead of 8 constructor parameters:
@@ -1091,10 +1091,18 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - `BaseAgent.execute()` state transitions (IDLE→THINKING→ACTING→COMPLETED→IDLE, ERROR path) with mocked strategies
   - Unit tests for each action strategy with a mocked `AgentLLMService` (prompt contains design context, output shape)
 - **Demo**: Show the class diagram before/after: orchestrator depends on `IAgent[]`, not on 8 concrete classes.
+- **Result (2026-10-26)**:
+  1. `agents/agents.registry.ts`: `AGENTS` token, `AGENT_CLASSES` (the only list of concrete agents) and `agentsProvider()`; `AgentOrchestratorService` takes `@Inject(AGENTS) agents: IAgent[]` and rejects duplicate roles.
+  2. `agents/profiles/`: `RoleProfile` value object (role, display name, system prompt, default model, memory namespaces, task types) and one profile per role. Strategies get model + persona from `AgentLLMService.providerFor(profile)`; thinking strategies recall `profile.primaryNamespace`; `prisma/seed.ts` builds the Agent rows from `ROLE_PROFILES`. Side fix: QA used to read `testing_patterns` but write `review_checklist`, so it never recalled its own memories.
+  3. `BaseAgent<TOutput>` implements `IAgent` with constructor `(profile, thinkingStrategy, actionStrategy, websocketGateway, eventBus)`; the abstract `think()/act()`, `callLLM`, `executeTool`, `loadMemory/saveMemory` and the `memoryService/llmFactory/toolRegistry/sandboxExecutor/apiUsageService` arguments are gone. Concrete agents are 15-line classes. Observers now also receive `thinkingCompleted` / `actionCompleted`.
+  4. `BaseAgent` resolves `context.taskType` against the profile (unknown → role default, logged). `AgentActionResult<TOutput>` / `IActionStrategy<TOutput>` are generic; outputs are typed in `domain/agent/AgentOutputs.ts` (`CeoOutput`, `BaOutput`, ..., `QcOutput`).
+  5. `domain/agent/strategies/` and its spec deleted; replaced by specs for the module strategies.
+  6. Diagrams refreshed: `agent-aggregate`, `domain-model-overview`, `patterns-factory` (registry before/after), `patterns-strategy`, `AD-001`, `AD-002`, `SD-003`, `SD-004`, `component-diagram`, `package-diagram`; `docs/design/*.md` and the traceability matrix (FR-AGENT-013 added, status summary recounted).
+  - **Verification**: `nest build` 0 errors; Jest 24/24 suites, 374 tests (new: `role-profile`, `agent-registry` incl. a 9th `TestAgent`, `base-agent`, `agent-strategies` for all 16 strategies); the API boots and resolves `AgentsModule`/`OrchestratorModule` through the token.
 
 ---
 
-**Task 12: Executable QC Verification**
+**Task 12: Executable QC Verification** — ✅ Done (2026-10-26)
 - **Objective**: QC runs the generated acceptance tests, so traceability reports *passing* use cases, not just *existing* tests.
 - **Implementation**:
   1. Extend the Architect skeleton with `package.json`, `tsconfig.json` and `jest.config.js` templates for the generated project.
@@ -1107,10 +1115,18 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Jest JSON → per-use-case status mapping
   - Coverage/`qc_passed` rules (all pass, one High failing, missing tests)
 - **Demo**: Break `OrderService.placeOrder`, rerun: traceability shows UC-001 *Failing*, QA rejects, DEV fixes, QC passes.
+- **Result (2026-10-26)**:
+  1. The Architect skeleton now also renders `package.json` (jest, ts-jest, typescript), `tsconfig.json` and `jest.config.js` (`ts-jest` with `isolatedModules`, so a type error fails only the test that hits it).
+  2. `SandboxExecutor.runInWorkspace(dir, command, limits, options)` takes the project folder (from `ProjectWorkspace.projectDir`) rather than an id, to keep the tools module independent of the workspace module. The folder is bind-mounted **read-only** at `/workspace` and copied to a tmpfs `/work` before the command runs. The root filesystem is read-only, all capabilities are dropped, `no-new-privileges` and a PID limit are set, and the network is `none` unless `SANDBOX_REGISTRY_URL` names a package mirror. Docker log frames are demultiplexed so a large JSON report stays intact. Without Docker, a local fallback runs in a temp copy with a `node_modules` link. It is **opt-in** (`SANDBOX_ALLOW_LOCAL_RUN=true`) because it runs generated code on the API host.
+  3. `ProjectTestRunner` (agents/services) runs `jest --json` and prints the report after a marker, so the workspace is never written. `JestReportMapper` maps each test to a use case by the `UC-xxx` id in its titles, else in its file name, else by use case name. A file that fails to load counts as a failure of its use cases. `TraceabilityService.build(..., execution)` sets `Passing | Failing | Missing` (or the old `Covered | Missing` when the tests could not run, with the reason in the matrix). Coverage counts passing use cases. `ooadMetadata.traceability` stores `executed`, passing and failing counts, `failingUseCases` and `testsPassed`/`testsFailed`.
+  4. `TraceabilityService.qcPassed`: coverage ≥ 80% and no failing High-priority use case. `QcOutput` adds `testsExecuted`, `failingUseCases` and `failingTests`. The workflow merges them into the variables, and QA's prompt lists the failing tests and rejects when one belongs to a High-priority use case.
+  5. Not done (optional): a separate `qc_condition` node. The QA reject edge already sends failing High-priority use cases back to DEV, so a second loop would only duplicate it.
+  - Side fix: the API's Jest config now ignores `apps/api/workspace/`. Before, generated projects' `tests/*.spec.ts` would have run as part of the platform's own suite.
+  - **Verification**: `nest build` 0 errors. Jest 25/25 suites, 394 tests. The new `qc-verification.spec.ts` covers the read-only, confined mount options, refusal of the local fallback, that the project folder is unchanged after a run, the Jest JSON mapping, the `qc_passed` rules (all pass, one High failing at 80%, Low failing tolerated, missing tests) and a **real Jest run** of a generated project whose broken `placeOrder` comes out as UC-001 *Failing*.
 
 ---
 
-**Task 13: Generated Project Artifacts API & UI**
+**Task 13: Generated Project Artifacts API & UI** — ✅ Done (2026-10-26)
 - **Objective**: Make every artifact the agents produce visible — this is the thesis evidence for "OOAD applied to every project the agents create".
 - **Implementation**:
   1. `ProjectArtifactsController`: `GET /api/projects/:id/files` (tree), `GET /api/projects/:id/files/*path` (content), `GET /api/projects/:id/archive` (zip download); reads through `ProjectWorkspace` only.
@@ -1122,10 +1138,18 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Zip contains docs/, src/, tests/
   - Web component tests for the file tree and gate checklist
 - **Demo**: Open a finished project: browse use case diagram, class diagram, generated code, tests and the traceability matrix; download the zip.
+- **Result (2026-10-26)**:
+  1. `modules/project-artifacts/`: `ProjectArtifactsController` (JWT-guarded) serves `GET /api/projects/:id/files` (path, size, kind), `GET /api/projects/:id/files/*` (content, 1 MB cap → 413), `GET /api/projects/:id/archive` (zip, entries under `<project-slug>/`, `node_modules` excluded) and `GET /api/projects/:id/quality-gates` (gate history with score). `ProjectArtifactsService` reads only through `ProjectWorkspace`, which gained `readBuffer`/`stat`. The zip is built by a small dependency-free `ZipWriter` (deflate, CRC-32, UTF-8 names; checked with Python's `zipfile`). CORS exposes `Content-Disposition` so the browser keeps the file name.
+  2. Web: an *Artifacts* tab in Project Detail (`components/artifacts/`) with a file tree, Markdown rendered by a small parser into React elements (tables, lists, code, so no HTML injection), PlantUML through the server in `VITE_PLANTUML_SERVER` (deflate + PlantUML base64; empty value → source only), and code/JSON with line numbers. The zip is downloaded with the JWT header.
+  3. `quality_gate_result` and `quality_warning` are now in `WebSocketEventType` with typed payloads. `useQualityEvents` (Project Detail level) collects them live, merges them with the stored gate history (latest per gate) and refreshes the artifact queries.
+  4. `/api/ooad-metrics/project/:id` also returns QC's `traceability` summary. The OOAD summary card shows use cases, entities, patterns, gate pass rate and coverage with passing / failing / missing use cases.
+  - Docs: UC-026 *Browse Generated Project Artifacts*, FR-PROJ-008 (matrix recount: 76 / 1 / 9 of 86), component and package diagrams.
+  - Not done: the Virtual Office does not show quality events yet (Project Detail does). Web tests cover the logic modules (tree, Markdown parser, PlantUML encoding, gate and warning merging) with Vitest in node. The web package has no jsdom / Testing Library, so components were checked with Playwright screenshots against a mocked API instead.
+  - **Verification**: `nest build` 0 errors. API Jest 26/26 suites, 405 tests; the new `project-artifacts.spec.ts` runs a real HTTP server and covers auth 401, the list, content, `..` and `%2f` traversal → 400, unknown project/file → 404, a zip containing `docs/`, `src/` and `tests/` with valid CRCs, and the gate history. Web: `tsc` clean, Vitest 20/20, `vite build` OK. API boot maps the 4 new routes.
 
 ---
 
-**Task 14: Agent Learning & Memory Refinement**
+**Task 14: Agent Learning & Memory Refinement** — ✅ Done (2026-10-26)
 - **Objective**: Agents improve from past executions, using the quality signals the workflow now produces.
 - **Implementation**:
   1. `AgentLearningHandler` (subscribes to `AgentCompletedTaskEvent`) stores an execution memory per agent with the outcome signal: gate result for BA/Architect, QC coverage for DEV, QA verdict for DEV/QC.
@@ -1138,10 +1162,18 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Lessons appear in the next prompt (mock LLM captures prompt)
   - Keyword fallback returns memories without embeddings
 - **Demo**: Run the same project type 3 times; show the Architect's gate failures decrease and the lessons it learned.
+- **Result (2026-10-26)**:
+  1. The outcome signals arrive *after* the graded execution (the gate runs after the Architect, QC after DEV, QA after QC). So `AgentLearningHandler` (new `modules/learning/`, subscribed to the global `EventBus`) grades on the signal events, not on the agent's own completion. `QualityGateHandler` now publishes a `QualityGateEvaluatedEvent` (→ BA and Architect). QC's `AgentCompletedTaskEvent` (`qc_passed`, coverage, failing use cases) → DEV. QA's (`qa_approved` plus the first findings) → DEV and QC. The mapping is the pure `OutcomeSignalPolicy`. Each `ExecutionOutcome` (value object, `domain/agent/learning/`) is stored as a memory in `execution_outcomes`, with the structured outcome in its metadata; failures get importance 7, successes 4.
+  2. `MemoryService.refineMemory(role, namespace, summarize)` selects the last 20 memories and stores the summary as a `lessons_learned` memory (importance 9). The summariser is passed in, so the memory module does not depend on agents. `LearningService.refine` supplies an LLM summariser through `AgentLLMService.providerFor(profile)`, so the call is costed. It runs every `LEARNING_REFINE_EVERY` (default 3) outcomes of a role, in the background, because `EventBus.publish` awaits its handlers.
+  3. All thinking strategies use `MemoryService.recall()`: the role's top 3 lessons first (prefixed `Lesson learned:`), then the namespace search. Every action prompt already includes `thought.memories`.
+  4. Without an embedding provider (`EmbeddingService.isEnabled()`), memories are saved without a vector and `searchMemories` ranks by keyword overlap × 0.7 + importance × 0.3, falling back to importance and recency when nothing matches.
+  5. `GET /api/agents/:role/learning` returns the success rate, a per-day timeline, per-signal counts, the top lessons and recent outcomes. Agent Detail shows them in a *Learning* card (stat tiles, a single-series line chart with tooltip, lessons, outcomes).
+  - Docs: FR-MEM-006/007 (matrix recount: 78 / 1 / 9 of 88), class diagram `docs/diagrams/classes/learning-loop.puml`.
+  - **Verification**: `nest build` 0 errors. Jest 27/27 suites, 419 tests. The new `learning.spec.ts` covers the policy for every signal and ignored case, refinement on the N-th outcome only (and `LEARNING_REFINE_EVERY`), a lesson refined from outcomes appearing in the next action prompt (the mock LLM captures it), the keyword fallback without embeddings, lessons recalled first with role isolation, and the stats timeline. Web `tsc` and build pass, and the Learning card was checked in a Playwright screenshot.
 
 ---
 
-**Task 15: Agent Collaboration Patterns**
+**Task 15: Agent Collaboration Patterns** — ✅ Done (2026-10-26)
 - **Objective**: Model agent collaboration explicitly (Mediator + collaboration strategies) instead of only sequential hand-offs.
 - **Implementation**:
   1. `AgentMessageBus` (Mediator) with FIPA-ACL performatives (REQUEST, INFORM, PROPOSE, ACCEPT, REJECT) replacing ad-hoc `AgentMessage` text; messages persisted and streamed to the Meeting Room.
@@ -1154,6 +1186,14 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Each collaboration strategy with mocked agents (message order, final output)
   - Message bus delivers, persists and validates performatives
 - **Demo**: Meeting Room transcript of Architect ↔ DEV pairing, and a BA clarification answered mid-run.
+- **Result (2026-10-26)**:
+  1. `AclMessage` (value object, `domain/collaboration/`) carries a FIPA-ACL performative, sender, receiver, conversation id and `inReplyTo`; `AclProtocol` says which performative may answer which (a REQUEST is answered by INFORM or REJECT, a PROPOSE by ACCEPT or REJECT; ACCEPT and REJECT must answer something). `AgentMessageBus` (Mediator, `modules/orchestrator/`) is the only channel between agents: it checks every reply against the conversation (known message, sent to the replier, allowed performative), stores it as an `AgentMessage` with `messageType 'acl'` and the ACL fields in its metadata, and notifies `on(role)` listeners. Persistence and listener errors are logged, protocol errors throw. The orchestrator's ad-hoc `"Action taken: {json}"` text is now one INFORM line (`Completed implement: Wrote 3 file(s) ...`).
+  2. Fixed on the way: `AgentMessageService` emitted the raw Prisma row, while the Meeting Room reads `AgentMessageEvent` (`fromAgent`, `toAgent`, `timestamp`), so agent messages showed no sender. It now emits the event shape, plus the ACL fields; the Meeting Room shows a coloured performative tag and the pattern name.
+  3. New task types on existing roles (RoleProfile only, no new agent): DEV `planImplementation` (plan + `QUESTION: UC-xxx:` lines), Architect `reviewPlan` / `reviewCode` (`DECISION: ACCEPT|REJECT`, feedback), BA `clarifyUseCase` (answer, and an updated use case validated by `UseCaseItemSchema`, merged into `ooadMetadata` without touching the design and re-rendered to `use-cases.md`). DEV's implement prompt now includes the accepted plan, the Architect's feedback and BA's clarifications.
+  4. `agent_collaboration` node (`AgentCollaborationStrategy`, registers itself with the engine like `QualityGateStrategy`) runs a pattern from `CollaborationRegistry`. Each agent turn is a synthetic `agent_task` node run through `ctx.executeNode`, so it is a normal workflow step (logging, events, variables, Kanban moves for `implement` / `review` only). Patterns: `pair_develop` (SD-007), `review_chain` (`ReviewHandler` Chain of Responsibility; default QC advisory → QA deciding, more reviewers from node metadata; sets `qa_approved` and the edge), `clarification_loop` (DEV/QC → BA, at most 3 questions).
+  5. `PAIR_WORKFLOW_DEFINITION` (`pair-project-workflow`) replaces `develop → test → review → qa_condition` with `pair_develop → review_chain` (onFail back to `pair_develop`). `WORKFLOW_COLLABORATION=pair` makes it the workflow new projects start with; both definitions are registered.
+  - Docs: FR-AGENT-014, FR-WF-011 (matrix recount: 80 / 1 / 9 of 90), FR-AGENT-012 updated; class diagram `docs/diagrams/classes/agent-collaboration.puml`; sequence diagram SD-007 in `docs/diagrams/sequences/` and `docs/design/sequence-diagrams.md`.
+  - **Verification**: `nest build` 0 errors. Jest 28/28 suites, 450 passed (15 skipped). The new `collaboration.spec.ts` covers `AclMessage` validation and protocol, the bus (delivery, broadcast, persistence shape, reply validation, failure isolation), each pattern with scripted agents (exact message and turn order, revision rounds, `maxRounds`, extra reviewers, early stop), the node (synthetic steps, merged variables, edge, failures) and the workflow variant; `agent-strategies.spec.ts` covers the four new task types. Web `tsc` and vitest (22 tests) pass.
 
 ---
 
@@ -1162,6 +1202,8 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
 - QC coverage is based on executed tests; QA decisions reference real failures
 - Every generated project can be browsed and downloaded from the UI
 - `nest build`, Jest (new specs for every task) and web `tsc` stay green; one end-to-end run documented with screenshots for the thesis
+
+_Status 2026-10-26: all met. `nest build` 0 errors, Jest 28/28 suites (452 passed, 15 skipped), web `tsc`, vitest and build pass. End-to-end run on PostgreSQL + Redis with a scripted OpenAI-compatible LLM: `docs/phase3-e2e/README.md` (20 workflow steps incl. pair_develop and review_chain, generated tests executed, Meeting Room and Artifacts screenshots)._
 
 ---
 

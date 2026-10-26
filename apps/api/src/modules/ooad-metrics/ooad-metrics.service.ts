@@ -10,6 +10,18 @@ export interface ProjectMetrics {
   gatePassRate: number;
   lastGateScore: number | null;
   testCoverage: number | null;
+  /** QC's latest verification summary (ooadMetadata.traceability), project view only */
+  traceability?: {
+    executed: boolean;
+    passingCount: number | null;
+    failingCount: number;
+    totalCount: number;
+    missingUseCases: string[];
+    failingUseCases: string[];
+    testsPassed: number;
+    testsFailed: number;
+    generatedAt: string | null;
+  } | null;
 }
 
 export interface AggregateMetrics {
@@ -60,7 +72,7 @@ export class OoadMetricsService {
       ? this.calculateScore(gateLogs[0].checklist as any)
       : null;
 
-    // Extract test coverage from ooadMetadata (persisted by QA Agent)
+    // Extract test coverage from ooadMetadata (persisted by the QC Agent)
     const testCoverage = metadata.testCoverage !== undefined && metadata.testCoverage !== null
       ? Math.round(metadata.testCoverage)
       : null;
@@ -73,7 +85,20 @@ export class OoadMetricsService {
       patternCount,
       gatePassRate: Math.round(gatePassRate),
       lastGateScore,
-      testCoverage
+      testCoverage,
+      traceability: metadata.traceability
+        ? {
+            executed: metadata.traceability.executed === true,
+            passingCount: metadata.traceability.passingCount ?? null,
+            failingCount: metadata.traceability.failingCount ?? 0,
+            totalCount: metadata.traceability.totalCount ?? useCaseCount,
+            missingUseCases: metadata.traceability.missingUseCases ?? [],
+            failingUseCases: metadata.traceability.failingUseCases ?? [],
+            testsPassed: metadata.traceability.testsPassed ?? 0,
+            testsFailed: metadata.traceability.testsFailed ?? 0,
+            generatedAt: metadata.traceability.generatedAt ?? null,
+          }
+        : null,
     };
   }
 

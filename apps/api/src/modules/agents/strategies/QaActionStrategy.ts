@@ -4,8 +4,10 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { QaOutput } from '../../../domain/agent/AgentOutputs';
+import { QA_PROFILE } from '../profiles';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { summarizeDesign } from '../services/design-summary';
 
 /**
  * QA (Quality Assurance) action: process-side review.
@@ -16,15 +18,8 @@ import { PrismaService } from '../../../prisma/prisma.service';
  * Product-side testing and the traceability matrix belong to QC (QcActionStrategy).
  */
 @Injectable()
-export class QaActionStrategy implements IActionStrategy {
+export class QaActionStrategy implements IActionStrategy<QaOutput> {
   private readonly logger = new Logger(QaActionStrategy.name);
-  private readonly systemPrompt: string =
-    'You are a QA (Quality Assurance) engineer. You check that code produced by an AI developer follows the approved OOAD design and the team process. Be thorough but fair.';
-  private readonly modelConfig: ModelRouteConfig = {
-    provider: 'opencode',
-    model: 'openrouter/openrouter/free',
-    fallbackProvider: 'opencode'
-  };
 
   constructor(
     private readonly memoryService: MemoryService,
@@ -33,7 +28,7 @@ export class QaActionStrategy implements IActionStrategy {
     private readonly prisma: PrismaService
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<QaOutput>> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
       ? `\n\nRelevant review checklist items:\n${memories.join('\n')}`
@@ -44,11 +39,13 @@ export class QaActionStrategy implements IActionStrategy {
     const projectId = context.projectId;
     const designSummary = await this.loadDesignSummary(projectId);
     const qcReport = typeof context.qcReport === 'string' ? context.qcReport : '';
+    const failingTests = Array.isArray(context.failingTests) ? context.failingTests.slice(0, 30) : [];
 
     const prompt = `You are reviewing code from an AI developer against the approved design.
 ${memoryContext}
 ${designSummary ? `APPROVED DESIGN:\n${designSummary}\n` : ''}
 ${qcReport ? `QC VERIFICATION REPORT:\n${qcReport}\n` : ''}
+${failingTests.length ? `FAILING TESTS (executed by QC):\n${failingTests.map(t => `- ${t}`).join('\n')}\n` : ''}
 Code to review:
 ${hasCode ? code : 'No code was provided by the developer.'}
 
@@ -57,22 +54,22 @@ Review checklist:
 2. Entities and value objects match the domain model
 3. Application service methods carry their use case comment (// UC-xxx)
 4. Listed design patterns are applied where the design says
-5. QC report: use cases without tests
+5. QC report: use cases without tests, and the failing tests listed above (name the code that causes each failure)
 
 List findings for each checklist item, then give your verdict.
 Rules for your verdict:
 - If real implementation code exists and broadly follows the design (even if imperfect), reply: VERDICT: PASS
-- Reply VERDICT: FAIL only if there is NO real code, the code is a placeholder, or it ignores the design entirely
+- Reply VERDICT: FAIL if there is NO real code, the code is a placeholder, it ignores the design entirely, or a failing test belongs to a High priority use case
 
 Reply with EXACTLY one of these on the last line:
 VERDICT: PASS
 VERDICT: FAIL`;
 
-    const { provider, model } = await this.agentLLM.providerFor(AgentRole.QA, this.modelConfig, context.projectId);
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(QA_PROFILE, context.projectId);
 
     const result = await provider.chat({
       messages: [
-        { role: 'system', content: this.systemPrompt },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt }
       ],
       model,
@@ -81,9 +78,9 @@ VERDICT: FAIL`;
 
     // Save memory
     await this.memoryService.saveMemory(
-      await this.memoryService.getAgentIdByRole(AgentRole.QA) || 'qa',
-      AgentRole.QA,
-      'review_checklist',
+      await this.memoryService.getAgentIdByRole(QA_PROFILE.role) || 'qa',
+      QA_PROFILE.role,
+      QA_PROFILE.primaryNamespace,
       `Reviewed design conformance for task: ${context.taskId || 'unknown'}`,
       { importance: 5, projectId }
     );
@@ -96,12 +93,12 @@ VERDICT: FAIL`;
     this.websocketGateway.sendToProject(projectId || 'unknown', {
       type: 'agent:action',
       payload: {
-        agentId: AgentRole.QA,
-        agentRole: AgentRole.QA,
+        agentId: QA_PROFILE.role,
+        agentRole: QA_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'review',
         toolName: 'llm',
-        parameters: { codeLength: code.length, approved }
+        parameters: { codeLength: code.length, approved, failingTests: failingTests.length }
       }
     });
 
@@ -130,23 +127,6 @@ VERDICT: FAIL`;
       where: { id: projectId },
       select: { ooadMetadata: true }
     });
-    const m = (project?.ooadMetadata as any) || {};
-    const lines: string[] = [];
-    if (m.useCases?.length) {
-      lines.push(`Use cases: ${m.useCases.map((uc: any) => `${uc.id} ${uc.name}`).join('; ')}`);
-    }
-    if (m.domainModel?.entities?.length) {
-      lines.push(`Entities: ${m.domainModel.entities.map((e: any) => e.name).join(', ')}`);
-    }
-    if (m.domainModel?.valueObjects?.length) {
-      lines.push(`Value objects: ${m.domainModel.valueObjects.map((v: any) => v.name).join(', ')}`);
-    }
-    if (m.patterns?.length) {
-      lines.push(`Patterns: ${m.patterns.map((p: any) => `${p.name} (${p.location})`).join('; ')}`);
-    }
-    if (m.architecture?.style) {
-      lines.push(`Architecture style: ${m.architecture.style}`);
-    }
-    return lines.join('\n');
+    return summarizeDesign(project?.ooadMetadata);
   }
 }

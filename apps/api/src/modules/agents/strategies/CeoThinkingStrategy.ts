@@ -2,28 +2,27 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { LLMProviderFactory } from '../../llm/llm-provider.factory';
-import { AgentRole } from '@ai-corp/shared-types';
+import { CEO_PROFILE } from '../profiles';
 
 @Injectable()
 export class CeoThinkingStrategy implements IThinkingStrategy {
-  constructor(
-    private readonly memoryService: MemoryService,
-    private readonly llmFactory: LLMProviderFactory
-  ) {}
+  constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
     const goal = context.projectContext?.goal || context.goal || '';
-    
-    // Load relevant strategic memories
-    const memories = await this.memoryService.searchMemories(
-      AgentRole.CEO,
-      'strategy',
+    const completing = context.taskType === 'complete_project';
+
+    // Load lessons_learned, then relevant strategic memories
+    const memories = await this.memoryService.recall(
+      CEO_PROFILE.role,
+      CEO_PROFILE.primaryNamespace,
       goal,
       3
     );
 
-    const reasoning = 'Analyzing project goals to formulate milestones.';
+    const reasoning = completing
+      ? 'Reviewing what was delivered against the project goal to close the project.'
+      : 'Analyzing project goals to formulate milestones.';
 
     return {
       reasoning,
@@ -31,11 +30,11 @@ export class CeoThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          rationale: 'Generate 2-4 strategic milestones'
+          rationale: completing ? 'Write the project close-out report' : 'Generate 2-4 strategic milestones'
         }
       ],
       confidence: 0.9,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

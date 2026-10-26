@@ -2,22 +2,22 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { AgentRole } from '@ai-corp/shared-types';
+import { PM_PROFILE } from '../profiles';
 
 @Injectable()
 export class PmThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load task breakdown memories
-    const memories = await this.memoryService.searchMemories(
-      AgentRole.PM,
-      'task_breakdown',
+    // Load lessons_learned, then task breakdown memories
+    const memories = await this.memoryService.recall(
+      PM_PROFILE.role,
+      PM_PROFILE.primaryNamespace,
       JSON.stringify(context),
       5
     );
 
-    const reasoning = 'Breaking down CEO milestones into developer tasks.';
+    const reasoning = 'Turning the approved use cases into developer tasks, one per use case.';
 
     return {
       reasoning,
@@ -25,11 +25,11 @@ export class PmThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          rationale: 'Generate 2-4 actionable developer tasks'
+          rationale: 'Generate one actionable developer task per use case'
         }
       ],
       confidence: 0.85,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

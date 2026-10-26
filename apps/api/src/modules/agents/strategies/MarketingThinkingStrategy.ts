@@ -2,17 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { IThinkingStrategy } from '../../../domain/agent/interfaces/IThinkingStrategy.interface';
 import { AgentContext, AgentThought } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { AgentRole } from '@ai-corp/shared-types';
+import { MARKETING_PROFILE } from '../profiles';
 
 @Injectable()
 export class MarketingThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load brand voice memories
-    const memories = await this.memoryService.searchMemories(
-      AgentRole.MARKETING,
-      'brand_voice',
+    // Load lessons_learned, then brand voice memories
+    const memories = await this.memoryService.recall(
+      MARKETING_PROFILE.role,
+      MARKETING_PROFILE.primaryNamespace,
       JSON.stringify(context),
       5
     );
@@ -29,7 +29,7 @@ export class MarketingThinkingStrategy implements IThinkingStrategy {
         }
       ],
       confidence: 0.85,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

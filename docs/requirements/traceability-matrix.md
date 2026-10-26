@@ -56,23 +56,26 @@ Requirements are organized into 7 subsystems:
 | FR-PROJ-005 | Task Breakdown | PM Agent shall break milestones into 5-20 granular tasks | UC-011 | Class: PmAgent (act method) | apps/api/src/modules/agents/pm.agent.ts | TEST-AGENT-PM-001 | Implemented |
 | FR-PROJ-006 | Kanban Status Management | System shall enforce Kanban transitions: todo→in_progress→review→done | UC-020 | Class: TaskApplicationService (updateTask) → Task.transitionTo / TaskStatus | apps/api/src/modules/projects/task-application.service.ts, apps/api/src/domain/entities/Task.ts | TEST-PROJ-005, TEST-PROJ-006 | Implemented |
 | FR-PROJ-007 | Budget Tracking | System shall track project.costAccrued and prevent exceeding budget | UC-002, UC-008, UC-011 | Class: ProjectApplicationService (accrueCost) → Project.accrueCost | apps/api/src/modules/projects/project-application.service.ts, apps/api/src/domain/entities/Project.ts | TEST-PROJ-007 | Implemented |
+| FR-PROJ-008 | Generated Project Artifacts | Board Member shall browse and download every artifact the agents generate for a project (docs, diagrams, code, tests, traceability) and see the quality gate checklist, QC warnings and OOAD summary | UC-026 | Class: ProjectArtifactsController, ProjectArtifactsService, ZipWriter, ProjectWorkspace; Web: ArtifactsTab, ArtifactViewer, MarkdownView, QualityPanel | apps/api/src/modules/project-artifacts/, apps/web/src/components/artifacts/ | apps/api/tests/unit/artifacts/project-artifacts.spec.ts, apps/web/src/components/artifacts/__tests__/*.test.ts | Implemented |
 
 ### 3.3 Agent Framework Subsystem
 
 | Req ID | Requirement Name | Description | Use Case IDs | Design Artifacts | Implementation Files | Test IDs | Status |
 |--------|------------------|-------------|--------------|------------------|---------------------|----------|--------|
-| FR-AGENT-001 | BA Agent - Requirements Analysis | BA Agent shall analyze project goals and generate requirements documents (FR/NFR lists, use case outlines) | UC-009 | Class: BaAgent extends BaseAgent | apps/api/src/modules/agents/ba.agent.ts | TEST-AGENT-BA-001, TEST-AGENT-BA-002 | Planned |
-| FR-AGENT-002 | Architect Agent - System Design | Architect Agent shall design system architecture, generate PlantUML diagrams, and create ADRs | UC-010 | Class: ArchitectAgent extends BaseAgent | apps/api/src/modules/agents/architect.agent.ts | TEST-AGENT-ARCH-001, TEST-AGENT-ARCH-002 | Planned |
-| FR-AGENT-003 | QC Agent - Use Case Verification | QC Agent shall derive acceptance tests from use cases and maintain the traceability matrix with coverage (replaces DevOps, 2026-10-26) | UC-016 | Class: QcAgent, QcActionStrategy, TraceabilityService | apps/api/src/modules/agents/qc.agent.ts | tests/unit/agents/traceability.spec.ts | Implemented |
-| FR-AGENT-004 | Base Agent Architecture | All agents shall extend BaseAgent and implement think() and act() methods (Template Method pattern) | UC-004, UC-009-016 | Abstract Class: BaseAgent | apps/api/src/modules/agents/base.agent.ts | TEST-AGENT-BASE-001 | Implemented |
-| FR-AGENT-005 | Agent State Management | Agents shall transition through states: IDLE→THINKING→ACTING→COMPLETED (State pattern) | UC-004 | Class: AgentStateMachine, Interface: IAgent | apps/api/src/domain/agent-state-machine.ts | TEST-AGENT-STATE-001, TEST-AGENT-STATE-002 | Implemented |
+| FR-AGENT-001 | BA Agent - Requirements Analysis | BA Agent shall analyze project goals and generate requirements documents (FR/NFR lists, use case outlines) | UC-009 | Class: BaAgent, BAActionStrategy (UseCaseDataSchema), BA_PROFILE | apps/api/src/modules/agents/ba.agent.ts | apps/api/tests/unit/agents/agent-strategies.spec.ts, apps/api/tests/unit/agents/ooad-artifacts.spec.ts | Implemented |
+| FR-AGENT-002 | Architect Agent - System Design | Architect Agent shall design system architecture, generate PlantUML diagrams, and create ADRs | UC-010 | Class: ArchitectAgent, ArchitectActionStrategy, OOADArtifactService, ARCHITECT_PROFILE | apps/api/src/modules/agents/architect.agent.ts | apps/api/tests/unit/agents/agent-strategies.spec.ts, apps/api/tests/unit/agents/ooad-artifacts.spec.ts | Implemented |
+| FR-AGENT-003 | QC Agent - Use Case Verification | QC Agent shall derive acceptance tests from use cases, execute them in the sandbox and maintain the traceability matrix with passing / failing / missing use cases (replaces DevOps, 2026-10-26; tests executed since Task 12) | UC-016 | Class: QcAgent, QcActionStrategy, TraceabilityService, ProjectTestRunner, JestReportMapper, SandboxExecutor.runInWorkspace | apps/api/src/modules/agents/qc.agent.ts, apps/api/src/modules/agents/services/project-test-runner.service.ts | apps/api/tests/unit/agents/traceability.spec.ts, apps/api/tests/unit/agents/agent-strategies.spec.ts, apps/api/tests/unit/agents/qc-verification.spec.ts | Implemented |
+| FR-AGENT-004 | Base Agent Architecture | All agents shall extend BaseAgent, which runs the injected thinking/action strategies in one execute() flow (Template Method + Strategy) | UC-004, UC-009-016 | Abstract Class: BaseAgent<TOutput> implements IAgent; RoleProfile | apps/api/src/modules/agents/base.agent.ts | apps/api/tests/unit/agents/base-agent.spec.ts | Implemented |
+| FR-AGENT-005 | Agent State Management | Agents shall transition through states: IDLE→THINKING→ACTING→COMPLETED (State pattern) | UC-004 | Class: AgentStateMachine, Interface: IAgent | apps/api/src/domain/agent/AgentStateMachine.ts, apps/api/src/modules/agents/base.agent.ts | tests/unit/domain/agent/AgentStateMachine.spec.ts, apps/api/tests/unit/agents/base-agent.spec.ts | Implemented |
 | FR-AGENT-006 | Agent Memory Storage | Agents shall save observations to AgentMemory with importance [1-10] and namespace | UC-017 | Class: MemoryService (saveMemory method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-001, TEST-MEM-002 | Implemented |
 | FR-AGENT-007 | Agent Memory Search | Agents shall search memories using semantic similarity (pgvector cosine distance) | UC-017, UC-009-016 | Class: MemoryService (searchMemories method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-003, TEST-MEM-004 | Implemented |
-| FR-AGENT-008 | LLM Integration | Agents shall call LLM via callLLM() with dynamic model config from database | UC-018 | Class: BaseAgent (callLLM method), LLMProviderFactory | apps/api/src/modules/agents/base.agent.ts, apps/api/src/modules/llm/llm-provider.factory.ts | TEST-LLM-001, TEST-LLM-002 | Implemented |
+| FR-AGENT-008 | LLM Integration | Agent strategies shall call the LLM through AgentLLMService (role model from Agent Settings or RoleProfile default, usage costed per project) | UC-018 | Class: AgentLLMService (Facade), UsageTrackingLLMProvider (Decorator), LLMProviderFactory | apps/api/src/modules/agents/services/agent-llm.service.ts, apps/api/src/modules/llm/usage-tracking.provider.ts | TEST-LLM-001, TEST-LLM-002 | Implemented |
 | FR-AGENT-009 | Sandbox Execution | Agents shall execute tools in isolated Docker containers with resource limits | UC-012, UC-028 | Class: SandboxExecutor | apps/api/src/modules/tools/sandbox.executor.ts | TEST-SANDBOX-001, TEST-SANDBOX-002 | Implemented |
 | FR-AGENT-010 | Tool Authorization | System shall enforce tool authorization per agent role (e.g., DEV can run_code, CEO cannot) | UC-028 | Class: ToolRegistry (isToolAuthorizedForRole method) | apps/api/src/modules/tools/tool.registry.ts | TEST-TOOLS-001 | Implemented |
 | FR-AGENT-011 | Agent Configuration | Admin shall configure agent LLM models (provider, model, fallback) | UC-003 | Class: AgentsService (updateConfig method) | apps/api/src/modules/agents/agents.service.ts | TEST-AGENT-CONFIG-001 | Implemented |
-| FR-AGENT-012 | Agent Communication | Agents shall broadcast messages to Virtual Office meeting room | UC-021, UC-024 | Class: BaseAgent (emitMessage method), AppWebSocketGateway | apps/api/src/modules/agents/base.agent.ts, apps/api/src/modules/websocket/websocket.gateway.ts | TEST-AGENT-MSG-001 | Implemented |
+| FR-AGENT-012 | Agent Communication | Agents shall broadcast messages to Virtual Office meeting room (task results as an ACL INFORM through AgentMessageBus since Task 15) | UC-021, UC-024 | Class: BaseAgent (emitMessage method), AgentOrchestratorService, AgentMessageBus, AppWebSocketGateway | apps/api/src/modules/agents/base.agent.ts, apps/api/src/modules/orchestrator/agent-orchestrator.service.ts, apps/api/src/modules/websocket/websocket.gateway.ts | apps/api/tests/unit/agents/agent-registry.spec.ts, apps/api/tests/unit/collaboration/collaboration.spec.ts | Implemented |
+| FR-AGENT-013 | Agent Registry & Role Profiles | Adding a role shall only require its RoleProfile, its strategies and one entry in AGENT_CLASSES; the orchestrator resolves agents from the AGENTS token | UC-004, UC-009-016 | Registry (AGENTS token), RoleProfile value object, IAgent | apps/api/src/modules/agents/agents.registry.ts, apps/api/src/modules/agents/profiles/, apps/api/src/modules/orchestrator/agent-orchestrator.service.ts | apps/api/tests/unit/agents/agent-registry.spec.ts, apps/api/tests/unit/agents/role-profile.spec.ts | Implemented |
+| FR-AGENT-014 | Agent-to-Agent Messaging (FIPA-ACL) | Agents shall talk only through a message bus using the performatives REQUEST, INFORM, PROPOSE, ACCEPT, REJECT; replies are validated against the conversation, persisted and shown in the Meeting Room with their performative | UC-021 | Mediator: AgentMessageBus; Value Object: AclMessage, AclProtocol; Web: MeetingRoom performative tags | apps/api/src/domain/collaboration/AclMessage.ts, apps/api/src/modules/orchestrator/agent-message.bus.ts, apps/web/src/components/virtual-office/ | apps/api/tests/unit/collaboration/collaboration.spec.ts, apps/web/src/components/virtual-office/performatives.test.ts | Implemented |
 
 ### 3.4 Workflow Orchestration Subsystem
 
@@ -88,6 +91,7 @@ Requirements are organized into 7 subsystems:
 | FR-WF-008 | Workflow Rollback | System shall rollback workflow to previous checkpoint with rollback handlers | UC-019 | Class: WorkflowEngine (rollback method), Memento pattern | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-009 | Planned |
 | FR-WF-009 | Workflow Pause/Resume | Board Member shall pause and resume workflows manually | UC-004 | Class: WorkflowEngine (pauseWorkflow, resumeWorkflow methods) | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-010 | Implemented |
 | FR-WF-010 | Workflow Status Tracking | System shall track workflow status: running, paused, completed, failed, cancelled | UC-004, UC-007 | Enum: WorkflowStatus in schema.prisma | apps/api/prisma/schema.prisma | TEST-WF-011 | Implemented |
+| FR-WF-011 | Agent Collaboration Nodes | An agent_collaboration node shall run a named collaboration pattern: pair_develop (Architect reviews DEV's plan and code), review_chain (QC → QA, more reviewers by metadata), clarification_loop (DEV/QC ask BA, BA updates the use case); WORKFLOW_COLLABORATION=pair starts projects on the collaborative workflow | UC-004, UC-012, UC-016 | Strategy: AgentCollaborationStrategy, CollaborationStrategy; Registry: CollaborationRegistry; Chain of Responsibility: ReviewHandler; SD-007 | apps/api/src/modules/workflow/collaboration/, apps/api/src/modules/workflow/default-workflow.ts | apps/api/tests/unit/collaboration/collaboration.spec.ts, apps/api/tests/unit/agents/agent-strategies.spec.ts | Implemented |
 
 ### 3.5 Approval System Subsystem
 
@@ -119,6 +123,8 @@ Requirements are organized into 7 subsystems:
 | FR-MEM-003 | Memory Importance | System shall validate memory importance ∈ [1, 10] (Requirement 17.3) | UC-017 | MemoryService validation | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-008 | Implemented |
 | FR-MEM-004 | Memory Namespace | System shall organize memories by namespace (e.g., "requirements_patterns", "coding_conventions") | UC-017 | Schema: AgentMemory.namespace field | apps/api/prisma/schema.prisma | TEST-MEM-009 | Implemented |
 | FR-MEM-005 | Memory Pruning | System shall prune old low-importance memories when agent exceeds 1000 memories | UC-017 | Class: MemoryService (pruneMemories method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-010 | Planned |
+| FR-MEM-006 | Agent Learning from Outcomes | Agents shall learn from the workflow's quality signals: OOAD gate (BA, Architect), QC tests (DEV) and QA verdict (DEV, QC) are stored as graded outcomes and refined every N outcomes into lessons_learned that thinking strategies recall first; Agent Detail shows success rate over time and top lessons | UC-017 | Class: AgentLearningHandler, OutcomeSignalPolicy, LearningService, ExecutionOutcome, QualityGateEvaluatedEvent, MemoryService.refineMemory/recall; Web: LearningPanel | apps/api/src/modules/learning/, apps/api/src/modules/memory/memory.service.ts | apps/api/tests/unit/learning/learning.spec.ts | Implemented |
+| FR-MEM-007 | Memory Search without Embeddings | Memory search shall fall back to keyword/recency ranking when no embedding provider is configured | UC-017 | Class: MemoryService.keywordSearch, EmbeddingService.isEnabled | apps/api/src/modules/memory/memory.service.ts | apps/api/tests/unit/learning/learning.spec.ts | Implemented |
 
 ---
 
@@ -160,14 +166,14 @@ Requirements are organized into 7 subsystems:
 | Req ID | Requirement Name | Description | Use Case IDs | Design Decisions | Implementation | Test IDs | Status |
 |--------|------------------|-------------|--------------|------------------|----------------|----------|--------|
 | NFR-MAINT-001 | Single Responsibility Principle | Each class shall have one reason to change | All | Separate services: AuthService, ProjectApplicationService, WorkflowEngine, MemoryService | All service classes | CODE-REVIEW-001 | Implemented |
-| NFR-MAINT-002 | Open/Closed Principle | Classes shall be open for extension, closed for modification | UC-009-016 | BaseAgent abstract class, agents extend without modifying base | BaseAgent + CeoAgent, PmAgent, etc. | CODE-REVIEW-002 | Implemented |
+| NFR-MAINT-002 | Open/Closed Principle | Classes shall be open for extension, closed for modification | UC-009-016 | AGENTS multi-provider token; orchestrator depends on IAgent[]; one RoleProfile per role | agents/agents.registry.ts, orchestrator/agent-orchestrator.service.ts, agents/profiles/*.ts | apps/api/tests/unit/agents/agent-registry.spec.ts (9th TestAgent added without orchestrator change) | Implemented |
 | NFR-MAINT-003 | Liskov Substitution Principle | Derived classes must be substitutable for base class | UC-004 | All agents implement IAgent interface, WorkflowEngine uses IAgent | IAgent interface, BaseAgent implements | CODE-REVIEW-003 | Implemented |
 | NFR-MAINT-004 | Interface Segregation Principle | Clients shall not depend on interfaces they don't use | All | Separate interfaces: IAgent, IThinkingStrategy, IActionStrategy, IAgentObserver | domain/ interfaces | CODE-REVIEW-004 | Implemented |
 | NFR-MAINT-005 | Dependency Inversion Principle | Depend on abstractions, not concretions | All | NestJS dependency injection, services depend on interface tokens | Constructor injection throughout | CODE-REVIEW-005 | Implemented |
-| NFR-MAINT-006 | Strategy Pattern | Agent thinking/acting strategies shall be interchangeable | UC-009-016 | IThinkingStrategy, IActionStrategy interfaces | domain/strategies/ | CODE-REVIEW-006 | Implemented |
-| NFR-MAINT-007 | State Pattern | Agent and workflow states shall be managed via state machines | UC-004, UC-005 | AgentStateMachine, WorkflowStateMachine classes | domain/agent-state-machine.ts | CODE-REVIEW-007 | Implemented |
+| NFR-MAINT-006 | Strategy Pattern | Agent thinking/acting strategies shall be interchangeable | UC-009-016 | IThinkingStrategy, IActionStrategy interfaces | modules/agents/strategies/ (8 thinking + 8 action strategies) | apps/api/tests/unit/agents/agent-strategies.spec.ts | Implemented |
+| NFR-MAINT-007 | State Pattern | Agent and workflow states shall be managed via state machines | UC-004, UC-005 | AgentStateMachine, WorkflowStateMachine classes | domain/agent/AgentStateMachine.ts | CODE-REVIEW-007 | Implemented |
 | NFR-MAINT-008 | Observer Pattern | Agents shall emit events to observers (WebSocket gateway) | UC-021, UC-024 | IAgentObserver interface, AppWebSocketGateway implements | websocket/websocket.gateway.ts | CODE-REVIEW-008 | Implemented |
-| NFR-MAINT-009 | Template Method Pattern | Agent execution flow (think→act) shall be defined in base class | UC-009-016 | BaseAgent.execute() calls think() then act() (abstract methods) | BaseAgent.execute() | CODE-REVIEW-009 | Implemented |
+| NFR-MAINT-009 | Template Method Pattern | Agent execution flow (think→act) shall be defined in base class | UC-009-016 | BaseAgent.execute(): resolve task type → think → act → complete/error | BaseAgent.execute() | apps/api/tests/unit/agents/base-agent.spec.ts | Implemented |
 | NFR-MAINT-010 | Factory Pattern | LLM providers shall be created via factory | UC-018 | LLMProviderFactory.getProvider(config) | llm/llm-provider.factory.ts | CODE-REVIEW-010 | Implemented |
 
 ### 4.5 Testability Requirements
@@ -291,21 +297,20 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Implemented | 38 | 70.4% |
-| Planned | 14 | 25.9% |
-| Not Started | 2 | 3.7% |
-| **TOTAL** | **54** | **100%** |
+| Implemented | 80 | 88.9% |
+| Partial | 1 | 1.1% |
+| Planned | 9 | 10.0% |
+| **TOTAL** | **90** | **100%** |
+
+_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above._
 
 ### Planned Requirements (Priority for Next Sprint)
-1. FR-AGENT-001 (BA Agent)
-2. FR-AGENT-002 (Architect Agent)
-3. FR-AGENT-003 (QC Agent)
-4. FR-WF-008 (Workflow Rollback)
-5. FR-MEM-005 (Memory Pruning)
-6. NFR-PERF-004 (Cost Dashboard Caching)
-7. NFR-PERF-005 (Concurrent Workflow Load Testing)
-8. NFR-REL-005 (Idempotency Key Implementation)
-9. NFR-SCALE-001 (Horizontal Scaling Validation)
+1. FR-WF-008 (Workflow Rollback)
+2. FR-MEM-005 (Memory Pruning)
+3. NFR-PERF-004 (Cost Dashboard Caching)
+4. NFR-PERF-005 (Concurrent Workflow Load Testing)
+5. NFR-REL-005 (Idempotency Key Implementation)
+6. NFR-SCALE-001 (Horizontal Scaling Validation)
 
 ---
 

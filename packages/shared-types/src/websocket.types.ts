@@ -10,6 +10,10 @@ export enum WebSocketEventType {
   WORKFLOW_STATE_CHANGED = 'workflow:state_changed',
   HUMAN_APPROVAL_REQUIRED = 'human:approval_required',
   SYSTEM_NOTIFICATION = 'system:notification',
+  /** OOAD quality gate evaluated (QualityGateHandler) */
+  QUALITY_GATE_RESULT = 'quality_gate_result',
+  /** DEV / QC quality warning (missing UC ids, low coverage, failing use cases) */
+  QUALITY_WARNING = 'quality_warning',
 }
 
 export interface WebSocketEvent {
@@ -35,14 +39,25 @@ export interface AgentActionEvent {
   parameters: Record<string, unknown>;
 }
 
+export type AclPerformative = 'REQUEST' | 'INFORM' | 'PROPOSE' | 'ACCEPT' | 'REJECT';
+
 export interface AgentMessageEvent {
+  id?: string;
+  projectId?: string;
   agentId: string;
   agentRole: AgentRole;
   fromAgent: AgentRole;
   toAgent: AgentRole | 'all';
   message: string;
-  messageType: 'chat' | 'thinking' | 'action' | 'notification';
+  /** 'acl' = an agent-to-agent message through AgentMessageBus (Task 15) */
+  messageType: 'chat' | 'thinking' | 'action' | 'notification' | 'acl';
   timestamp: Date;
+  /** FIPA-ACL fields, present when messageType is 'acl' */
+  performative?: AclPerformative;
+  conversationId?: string;
+  inReplyTo?: string;
+  /** Collaboration pattern that produced the message, e.g. pair_develop */
+  protocol?: string;
 }
 
 export interface TaskUpdatedEvent {
@@ -89,4 +104,27 @@ export interface SystemNotificationEvent {
   message: string;
   timestamp: Date;
   metadata?: Record<string, unknown>;
+}
+
+export interface QualityGateChecklistItem {
+  name: string;
+  actual?: unknown;
+  expected?: unknown;
+  passed: boolean;
+}
+
+/** Payload of quality_gate_result (sent as { type, payload } on project_event) */
+export interface QualityGateResultEvent {
+  gateId: string;
+  passed: boolean;
+  score: number;
+  checklist: QualityGateChecklistItem[];
+}
+
+/** Payload of quality_warning (sent as { type, payload } on project_event) */
+export interface QualityWarningEvent {
+  message: string;
+  severity: 'info' | 'warning' | 'error';
+  missingUseCases?: string[];
+  failingUseCases?: string[];
 }
