@@ -1,5 +1,7 @@
 // Task and Project types for AI Corp Platform
 
+import type { WorkflowRun } from './workflow.types';
+
 export enum TaskStatus {
   TODO = 'todo',
   IN_PROGRESS = 'in_progress',
@@ -34,17 +36,6 @@ export interface Project {
   workflowRuns?: WorkflowRun[];
   tasks?: Task[];
   milestones?: Milestone[];
-}
-
-export interface WorkflowRun {
-  id: string;
-  projectId: string;
-  workflowDefId: string;
-  status: 'running' | 'paused' | 'completed' | 'failed' | 'cancelled';
-  currentNodeId?: string;
-  context: any;
-  startedAt: Date;
-  completedAt?: Date;
 }
 
 export interface Milestone {

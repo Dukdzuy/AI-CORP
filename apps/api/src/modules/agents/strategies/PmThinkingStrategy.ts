@@ -25,7 +25,7 @@ export class PmThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          expectedOutcome: 'Generate 2-4 actionable developer tasks'
+          rationale: 'Generate 2-4 actionable developer tasks'
         }
       ],
       confidence: 0.85,

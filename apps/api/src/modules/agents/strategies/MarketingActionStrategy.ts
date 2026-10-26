@@ -79,7 +79,6 @@ Target audience: Internal stakeholders and potential users.`;
     return {
       success: true,
       output: { action: 'draftAnnouncement', output: result.content },
-      errors: []
     };
   }
 }

@@ -68,13 +68,14 @@ describe('EmbeddingService', () => {
       expect(config.batchSize).toBe(10);
     });
 
-    it('should throw error if OPENAI_API_KEY is not set', () => {
+    it('should start disabled (zero vectors) instead of throwing if OPENAI_API_KEY is not set', async () => {
       (configService.get as jest.Mock).mockReturnValue(undefined);
-      expect(() => {
-        // This will be called during initialization
-        // We need to create a new instance to trigger the error
-        new EmbeddingService(configService);
-      }).toThrow('OPENAI_API_KEY environment variable is not set');
+
+      const disabled = new EmbeddingService(configService);
+      const embedding = await disabled.generateEmbedding('some text');
+
+      expect(embedding).toHaveLength(1536);
+      expect(embedding.every((v) => v === 0)).toBe(true);
     });
   });
 

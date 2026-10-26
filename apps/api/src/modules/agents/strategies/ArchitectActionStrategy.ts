@@ -155,7 +155,6 @@ export class ArchitectActionStrategy implements IActionStrategy {
         skeletonFiles: skeletonFiles.map(f => f.path),
         filesWritten
       },
-      errors: []
     };
   }
 
@@ -207,7 +206,7 @@ Output ONLY valid JSON.`;
       ],
       model,
       maxTokens: 2500,
-      response_format: { type: 'json_object' } as any
+      responseFormat: { type: 'json_object' }
     });
 
     try {
@@ -253,7 +252,7 @@ Output ONLY valid JSON.`;
       ],
       model,
       maxTokens: 2000,
-      response_format: { type: 'json_object' } as any
+      responseFormat: { type: 'json_object' }
     });
 
     try {
@@ -309,7 +308,7 @@ Output ONLY valid JSON.`;
       ],
       model,
       maxTokens: 1500,
-      response_format: { type: 'json_object' } as any
+      responseFormat: { type: 'json_object' }
     });
 
     try {
@@ -364,7 +363,7 @@ Output ONLY valid JSON.`;
         ],
         model,
         maxTokens: 1500,
-        response_format: { type: 'json_object' } as any
+        responseFormat: { type: 'json_object' }
       });
       return SequenceDiagramSchema.parse(this.extractJSON(result.content || ''));
     } catch (error: any) {

@@ -129,7 +129,6 @@ VERDICT: FAIL`;
         edgeCondition: approved ? 'onSuccess' : 'onFail',
         traceabilityMatrix: traceabilityMatrix || undefined
       },
-      errors: []
     };
   }
 

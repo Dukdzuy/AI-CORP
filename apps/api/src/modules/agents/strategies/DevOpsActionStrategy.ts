@@ -106,7 +106,6 @@ Provide actual configuration files where possible (Dockerfile, .gitlab-ci.yml, e
     return {
       success: true,
       output: { action: 'designDevOps', output: result.content },
-      errors: []
     };
   }
 }

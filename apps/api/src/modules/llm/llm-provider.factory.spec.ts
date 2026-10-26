@@ -8,7 +8,19 @@ describe('LLMProviderFactory', () => {
 
   const mockHealthService = {
     checkHealth: jest.fn().mockResolvedValue(true),
+    getIsCircuitOpen: jest.fn().mockReturnValue(false),
   };
+
+  const originalEnv = { ...process.env };
+
+  beforeAll(() => {
+    process.env.NINE_ROUTER_API_KEY = 'test-nine-router-key';
+    process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -53,7 +65,7 @@ describe('LLMProviderFactory', () => {
       expect(provider.getProviderName()).toBe('anthropic-direct');
     });
 
-    it('should default to anthropic-direct when provider not specified', () => {
+    it('should default to opencode (9Router) when provider not specified', () => {
       const config: ModelRouteConfig = {
         provider: '',
         model: 'claude-sonnet-4',
@@ -65,7 +77,7 @@ describe('LLMProviderFactory', () => {
       expect(provider.getProviderName()).toBe('ninerouter');
     });
 
-    it('should default to anthropic-direct for unknown provider', () => {
+    it('should fall back to opencode (9Router) for unknown provider', () => {
       const config: ModelRouteConfig = {
         provider: 'unknown-provider' as any,
         model: 'claude-sonnet-4',
@@ -74,8 +86,7 @@ describe('LLMProviderFactory', () => {
       const provider = factory.getProvider(config);
 
       expect(provider).toBeDefined();
-      // Should fall back to anthropic-direct or provide some provider
-      expect(provider.getProviderName()).toBeDefined();
+      expect(provider.getProviderName()).toBe('ninerouter');
     });
 
     it('should cache provider instances by model', () => {

@@ -78,6 +78,7 @@ export class NineRouterProvider implements ILLMProvider {
           temperature: params.temperature ?? 0.7,
           max_tokens: params.maxTokens,
           tools: params.tools as any, // OpenAI tools format
+          ...(params.responseFormat && { response_format: params.responseFormat }),
         });
 
         this.logger.debug(

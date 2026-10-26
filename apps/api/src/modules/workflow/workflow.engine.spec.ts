@@ -99,6 +99,7 @@ describe('WorkflowEngine - Node Execution Logic', () => {
     const mockWebSocketGateway = {
       sendToProject: jest.fn(),
       sendToUser: jest.fn(),
+      sendToProjectAndUser: jest.fn(),
     };
 
     const mockOrchestrator = {
@@ -315,8 +316,9 @@ describe('WorkflowEngine - Node Execution Logic', () => {
         }),
       });
 
-      // Verify WebSocket event was sent to user
-      expect(websocketGateway.sendToUser).toHaveBeenCalledWith(
+      // Verify WebSocket event was sent to the project room and the owning user
+      expect(websocketGateway.sendToProjectAndUser).toHaveBeenCalledWith(
+        'project-456',
         'user-123',
         expect.objectContaining({
           type: 'human:approval_required',

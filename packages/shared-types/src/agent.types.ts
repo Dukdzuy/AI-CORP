@@ -106,6 +106,8 @@ export interface ChatParams {
   temperature?: number;
   maxTokens?: number;
   tools?: ToolDefinition[];
+  /** Ask the model for structured output (OpenAI-compatible providers only) */
+  responseFormat?: { type: 'json_object' | 'text' };
 }
 
 export interface ToolCall {

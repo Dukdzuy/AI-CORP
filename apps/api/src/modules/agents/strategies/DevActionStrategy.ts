@@ -190,7 +190,6 @@ Write ALL files needed for the project to work. Make it production-quality.`;
         filesWritten: writtenFiles,
         code: codeContent
       },
-      errors: []
     };
   }
 

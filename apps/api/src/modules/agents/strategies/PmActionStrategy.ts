@@ -80,7 +80,6 @@ Each task should be specific, measurable, and achievable.`;
     return {
       success: true,
       output: { action: 'breakdownTasks', output: result.content },
-      errors: []
     };
   }
 }

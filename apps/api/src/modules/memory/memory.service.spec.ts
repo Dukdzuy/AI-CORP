@@ -10,6 +10,30 @@ describe('MemoryService', () => {
 
   const mockEmbedding = Array(1536).fill(0.1);
 
+  /**
+   * Build an embedding whose cosine similarity with mockEmbedding is exactly `similarity`:
+   * similarity * u + sqrt(1 - similarity^2) * w, where u is the unit vector along mockEmbedding
+   * and w = (e0 - e1) / sqrt(2) is a unit vector orthogonal to it.
+   */
+  const embeddingWithSimilarity = (similarity: number): number[] => {
+    const u = 1 / Math.sqrt(mockEmbedding.length);
+    const vec = Array(mockEmbedding.length).fill(similarity * u);
+    const orthogonal = Math.sqrt(1 - similarity * similarity) / Math.SQRT2;
+    vec[0] += orthogonal;
+    vec[1] -= orthogonal;
+    return vec;
+  };
+
+  /** Stub the rows MemoryService.searchMemories reads, with embeddings matching each `similarity` */
+  const mockStoredMemories = (results: Array<{ similarity: number; [key: string]: unknown }>) => {
+    (prismaService.agentMemory.findMany as jest.Mock).mockResolvedValue(
+      results.map(({ similarity, ...memory }) => ({
+        ...memory,
+        embedding: JSON.stringify(embeddingWithSimilarity(similarity)),
+      })),
+    );
+  };
+
   beforeEach(async () => {
     // Create mocks
     const mockEmbeddingService = {
@@ -258,7 +282,7 @@ describe('MemoryService', () => {
         },
       ];
 
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(mockSearchResults);
+      mockStoredMemories(mockSearchResults);
 
       const results = await service.searchMemories(
         'DEV',
@@ -269,9 +293,9 @@ describe('MemoryService', () => {
 
       expect(results).toHaveLength(2);
       expect(results[0].id).toBe('mem-1');
-      expect(results[0].similarity).toBe(0.95);
+      expect(results[0].similarity).toBeCloseTo(0.95, 10);
       expect(results[1].id).toBe('mem-2');
-      expect(results[1].similarity).toBe(0.8);
+      expect(results[1].similarity).toBeCloseTo(0.8, 10);
     });
 
     it('should calculate combined rank score correctly', async () => {
@@ -302,7 +326,7 @@ describe('MemoryService', () => {
         },
       ];
 
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(mockSearchResults);
+      mockStoredMemories(mockSearchResults);
 
       const results = await service.searchMemories('DEV', 'coding', 'query', 10);
 
@@ -327,15 +351,19 @@ describe('MemoryService', () => {
         },
       ];
 
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(mockSearchResults);
+      mockStoredMemories(mockSearchResults);
 
       const results = await service.searchMemories('DEV', 'coding', 'query', 10);
 
       expect(results).toHaveLength(1);
       expect(results[0].agentRole).toBe('DEV');
 
-      // Verify the query was called with the agent role parameter
-      expect(prismaService.$queryRaw).toHaveBeenCalled();
+      // Verify the query was scoped to the agent role and namespace
+      expect(prismaService.agentMemory.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ agentRole: 'DEV', namespace: 'coding' }),
+        }),
+      );
     });
 
     it('should filter by similarity threshold >= 0.7', async () => {
@@ -364,12 +392,12 @@ describe('MemoryService', () => {
         },
       ];
 
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(mockSearchResults);
+      mockStoredMemories(mockSearchResults);
 
       const results = await service.searchMemories('PM', 'planning', 'query', 10);
 
-      // Should have 2 results from mock (filtering happens in DB query)
-      expect(results.length).toBeGreaterThan(0);
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe('mem-1');
     });
 
     it('should respect limit parameter', async () => {
@@ -385,14 +413,11 @@ describe('MemoryService', () => {
           similarity: 0.9 - i * 0.05,
         }));
 
-      (prismaService.$queryRaw as jest.Mock).mockImplementation((query, ...values) => {
-        // Simulate DB limit behavior by slicing
-        return Promise.resolve(mockSearchResults.slice(0, 3));
-      });
+      mockStoredMemories(mockSearchResults);
 
       const results = await service.searchMemories('QA', 'testing', 'query', 3);
 
-      expect(results.length).toBeLessThanOrEqual(3);
+      expect(results).toHaveLength(3);
     });
 
     it('should rank results by score descending', async () => {
@@ -406,7 +431,7 @@ describe('MemoryService', () => {
           agentRole: 'CEO',
           namespace: 'strategy',
           content: 'Memory 1',
-          importance: 9,
+          importance: 6,
           createdAt: new Date(),
           similarity: 0.85,
         },
@@ -430,18 +455,19 @@ describe('MemoryService', () => {
         },
       ];
 
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(mockSearchResults);
+      mockStoredMemories(mockSearchResults);
 
       const results = await service.searchMemories('CEO', 'strategy', 'query', 10);
 
-      // Verify results are sorted by rank
+      // mem-3 has lower similarity than mem-1 but higher importance, so it ranks first
+      expect(results.map((r) => r.id)).toEqual(['mem-3', 'mem-1', 'mem-2']);
       for (let i = 0; i < results.length - 1; i++) {
         expect(results[i].rank).toBeGreaterThanOrEqual(results[i + 1].rank);
       }
     });
 
     it('should return empty array for no matches', async () => {
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue([]);
+      mockStoredMemories([]);
 
       const results = await service.searchMemories(
         'MARKETING',
@@ -473,7 +499,7 @@ describe('MemoryService', () => {
 
     it('should call embedding service with query', async () => {
       const query = 'search for this';
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue([]);
+      mockStoredMemories([]);
       (embeddingService.generateEmbedding as jest.Mock).mockClear();
 
       await service.searchMemories('DEV', 'coding', query, 10);
@@ -729,7 +755,7 @@ describe('MemoryService', () => {
       expect(saveResult).toBe(memoryId);
 
       // Then search for it
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(searchResults);
+      mockStoredMemories(searchResults);
 
       const searchResult = await service.searchMemories(
         'CEO',
@@ -773,7 +799,7 @@ describe('MemoryService', () => {
       ];
 
       // First search for DEV memories
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(devMemories);
+      mockStoredMemories(devMemories);
 
       let results = await service.searchMemories('DEV', 'coding', 'query', 10);
 
@@ -781,7 +807,7 @@ describe('MemoryService', () => {
       expect(results[0].agentRole).toBe('DEV');
 
       // Then search for QA memories in same namespace
-      (prismaService.$queryRaw as jest.Mock).mockResolvedValue(qaMemories);
+      mockStoredMemories(qaMemories);
 
       results = await service.searchMemories('QA', 'coding', 'query', 10);
 
