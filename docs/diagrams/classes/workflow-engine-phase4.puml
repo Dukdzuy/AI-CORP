@@ -1,0 +1,114 @@
+@startuml Workflow Engine - Phase 4
+!theme plain
+title Workflow Engine after Phase 4 (Tasks 16-19)
+skinparam classAttributeIconSize 0
+
+package "domain/workflow" {
+  class SemanticVersion <<value object>> {
+    + parse(v): SemanticVersion
+    + withBuild(tag): SemanticVersion
+    + compareTo(other): number
+  }
+  class WorkflowGraph {
+    + next(nodeId, edgeCondition): Transition
+    + nextAfterFailure(nodeId): Transition
+    + subWorkflowReferences()
+  }
+  class DependencyResolver {
+    + layers(): string[][]
+    + ready(done, started): string[]
+  }
+  class CyclicDependencyError
+  class WorkflowRunMemento <<memento>> {
+    + capture(run, sequence)
+    + context(): object
+  }
+  abstract class WorkflowTemplate <<template method>> {
+    + instantiate(params): InstantiatedWorkflow
+    + resolveParameters(params)
+    # {abstract} build(params)
+  }
+}
+
+package "modules/workflow" {
+  class WorkflowEngine <<originator>> {
+    + createWorkflow(def)
+    + startWorkflow(projectId, defId, ctx, version?)
+    + rollbackWorkflow(runId, target)
+    + registerStrategy(strategy)
+  }
+  class WorkflowDefinitionRegistry {
+    + register(def): WorkflowDefinition
+    + get(id, version?)
+    + versionsOf(id)
+  }
+  class WorkflowValidator
+  class WorkflowSnapshotCaretaker <<caretaker>> {
+    + capture(run)
+    + select(runId, target)
+    + discardFrom(runId, sequence)
+  }
+  interface NodeExecutionStrategy {
+    + type: NodeType
+    + execute(node, run, ctx): NodeResult
+  }
+  class AgentTaskStrategy
+  class ConditionStrategy
+  class HumanApprovalStrategy
+  class ParallelStrategy
+  class QualityGateStrategy
+  class AgentCollaborationStrategy
+  class SubWorkflowStrategy <<composite>>
+  class WorkflowDefinitionService
+  class WorkflowTemplateCatalog
+  class OoadSoftwareProjectTemplate
+  class RestApiBackendTemplate
+  class OoadDesignOnlyTemplate
+  class WorkflowRunQueryService
+  class WorkflowsController
+  interface IWorkflowEngineRepository
+  interface IWorkflowDefinitionRepository
+}
+
+WorkflowEngine *-- WorkflowDefinitionRegistry
+WorkflowEngine *-- WorkflowSnapshotCaretaker
+WorkflowEngine o-- "1..*" NodeExecutionStrategy : by NodeType
+WorkflowEngine ..> WorkflowGraph
+WorkflowEngine ..> WorkflowRunMemento : creates / restores
+WorkflowEngine --> IWorkflowEngineRepository
+WorkflowSnapshotCaretaker --> IWorkflowEngineRepository
+WorkflowSnapshotCaretaker ..> WorkflowRunMemento : stores
+WorkflowDefinitionRegistry ..> WorkflowValidator
+WorkflowDefinitionRegistry ..> SemanticVersion
+WorkflowValidator ..> DependencyResolver
+
+NodeExecutionStrategy <|.. AgentTaskStrategy
+NodeExecutionStrategy <|.. ConditionStrategy
+NodeExecutionStrategy <|.. HumanApprovalStrategy
+NodeExecutionStrategy <|.. ParallelStrategy
+NodeExecutionStrategy <|.. QualityGateStrategy
+NodeExecutionStrategy <|.. AgentCollaborationStrategy
+NodeExecutionStrategy <|.. SubWorkflowStrategy
+ParallelStrategy ..> DependencyResolver
+DependencyResolver ..> CyclicDependencyError
+SubWorkflowStrategy ..> WorkflowGraph
+SubWorkflowStrategy --> IWorkflowEngineRepository : child runs
+SubWorkflowStrategy ..> WorkflowEngine : ctx.executeNode (child nodes)
+
+WorkflowTemplate <|-- OoadSoftwareProjectTemplate
+WorkflowTemplate <|-- RestApiBackendTemplate
+WorkflowTemplate <|-- OoadDesignOnlyTemplate
+WorkflowTemplateCatalog o-- "*" WorkflowTemplate : WORKFLOW_TEMPLATES
+WorkflowDefinitionService --> WorkflowTemplateCatalog
+WorkflowDefinitionService --> WorkflowEngine
+WorkflowDefinitionService --> IWorkflowDefinitionRepository
+WorkflowsController --> WorkflowDefinitionService
+WorkflowsController --> WorkflowEngine
+WorkflowsController --> WorkflowRunQueryService
+
+note bottom of SubWorkflowStrategy
+  A sub_workflow node is itself a workflow:
+  the child definition runs inline as a child
+  WorkflowRun (parentRunId, parentNodeId).
+end note
+@enduml

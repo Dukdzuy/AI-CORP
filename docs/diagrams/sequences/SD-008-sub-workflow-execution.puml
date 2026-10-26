@@ -1,0 +1,38 @@
+@startuml SD-008: Sub-workflow execution (Composite)
+!theme plain
+skinparam sequenceMessageAlign center
+
+title SD-008: Sub-workflow execution (Composite, Task 16)
+
+participant "WorkflowEngine" as Engine #Orange
+participant "SubWorkflowStrategy" as Sub #LightGreen
+participant "WorkflowDefinitionRegistry" as Registry #LightYellow
+participant "IWorkflowEngineRepository" as Repo #LightGray
+participant "WorkflowGraph" as Graph #White
+participant "child node strategies" as Child #Pink
+
+Engine -> Sub: execute(node 'build', parentRun, ctx)
+activate Sub
+Sub -> Registry: get(subWorkflowId, subWorkflowVersion)
+note right of Registry: version was pinned when the\nparent was registered
+Sub -> Sub: depth = parent._subWorkflowDepth + 1\n(fail if > MAX_DEPTH)
+Sub -> Sub: childVars = clone(pick(parentVars, metadata.inputs))
+Sub -> Repo: createRun(parentRunId, parentNodeId,\nworkflowDefId, workflowDefVersion, childContext)
+loop until the child completes or fails
+  Sub -> Repo: updateRun(child, currentNodeId)
+  Sub -> Engine: ctx.executeNode(childNode, childRun)
+  Engine -> Child: execute(childNode, childRun)
+  note right of Child: steps are recorded on the child run;\nagents merge output into the child's variables
+  Child --> Engine: NodeResult
+  Engine --> Sub: NodeResult (retried up to node.maxRetries)
+  Sub -> Graph: next(node, edgeCondition) / nextAfterFailure(node)
+end
+alt child completed
+  Sub -> Sub: parentVars += clone(pick(childVars, metadata.outputs))
+  Sub -> Repo: updateRun(parent, context)
+  Sub --> Engine: success { subWorkflowRunId, returnedVariables }
+else child failed
+  Sub --> Engine: failure (parent variables unchanged)
+end
+deactivate Sub
+@enduml
