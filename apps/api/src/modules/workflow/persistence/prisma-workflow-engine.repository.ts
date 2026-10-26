@@ -66,23 +66,6 @@ export class PrismaWorkflowEngineRepository implements IWorkflowEngineRepository
     });
   }
 
-  findLatestTaskByStatus(projectId: string, status: string) {
-    return this.prisma.task.findFirst({
-      where: {
-        projectId,
-        status,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  updateTaskStatus(taskId: string, status: string) {
-    return this.prisma.task.update({
-      where: { id: taskId },
-      data: { status },
-    });
-  }
-
   createApproval(data: CreateApprovalInput) {
     return this.prisma.approval.create({ data });
   }

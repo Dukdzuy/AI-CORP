@@ -3,6 +3,7 @@ import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentOrchestratorService } from '../../orchestrator/agent-orchestrator.service';
 import { Milestone } from '../../../domain/entities/Milestone';
 import { Task } from '../../../domain/entities/Task';
+import { TaskStatus } from '../../../domain/value-objects/TaskStatus';
 import { IMilestoneRepository, ITaskRepository } from '../../../domain/repositories';
 import { IWorkflowEngineRepository, WorkflowRunRecord } from '../persistence/workflow-engine.repository';
 import { NodeExecutionStrategy, NodeExecutionContext } from './node-execution-strategy';
@@ -221,8 +222,8 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
    */
   private async updateTaskStatusForAgent(agentRole: string, projectId: string, result: any, ctx: NodeExecutionContext): Promise<void> {
     try {
-      // Find the most recent task for this project that is in_progress
-      const task = await this.repository.findLatestTaskByStatus(projectId, 'in_progress');
+      // Find the most recent task for this project that is in_progress (newest first)
+      const [task] = await this.taskRepository.findByStatus(projectId, 'in_progress');
 
       if (!task) {
         ctx.logger.log(`No in_progress task found for project ${projectId}, skipping task status update`);
@@ -245,7 +246,10 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
       }
 
       if (newStatus) {
-        await this.repository.updateTaskStatus(task.id, newStatus);
+        // Move the task through the Task entity so Kanban transition rules apply
+        const entity = Task.fromPrimitives(task);
+        entity.transitionTo(TaskStatus.fromString(newStatus));
+        await this.taskRepository.update(task.id, { status: entity.toPrimitives().status });
         ctx.logger.log(`Updated task ${task.id} status to ${newStatus} after ${agentRole} agent completion`);
 
         // Emit WebSocket event for task status change

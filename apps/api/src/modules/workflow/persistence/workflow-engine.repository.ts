@@ -31,12 +31,6 @@ export interface ProjectWithOwnerRecord {
   createdById: string;
 }
 
-export interface TaskRecord {
-  id: string;
-  projectId: string;
-  status: string;
-}
-
 export interface ApprovalRecord {
   id: string;
 }
@@ -95,10 +89,6 @@ export interface IWorkflowEngineRepository {
   // Projects
   findProjectWithOwner(projectId: string): Promise<ProjectWithOwnerRecord | null>;
   updateProjectStatus(projectId: string, status: string): Promise<unknown>;
-
-  // Task status updates driven by agent results
-  findLatestTaskByStatus(projectId: string, status: string): Promise<TaskRecord | null>;
-  updateTaskStatus(taskId: string, status: string): Promise<unknown>;
 
   // Approvals
   createApproval(data: CreateApprovalInput): Promise<ApprovalRecord>;
