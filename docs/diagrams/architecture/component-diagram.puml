@@ -43,6 +43,7 @@ package "Presentation Layer" as PRESENTATION #EBF5FB {
   package "API Gateway (NestJS REST)" as API_GW {
     [Auth Controller] as AUTH_CTRL
     [Projects Controller] as PROJ_CTRL
+    [Project Artifacts Controller] as ART_CTRL
     [Agents Controller] as AGENT_CTRL
     [Workflow Controller] as WF_CTRL
     [Approvals Controller] as APPR_CTRL
@@ -85,6 +86,11 @@ package "Application Layer" as APPLICATION #EBF5FB {
 
   package "Orchestrator Module" as ORCH_MOD {
     [Orchestrator Service] as ORCH
+  }
+
+  package "Project Artifacts Module" as ART_MOD {
+    [Project Artifacts Service] as ART_SVC
+    [Zip Writer] as ZIP
   }
 
   package "Projects Module" as PROJ_MOD {
@@ -202,6 +208,9 @@ VOFFICE ..> WS : WebSocket
 COST_UI ..> COST_CTRL : HTTP REST
 AUTH_UI ..> AUTH_CTRL : HTTP REST
 PROJ_UI ..> PROJ_CTRL : HTTP REST
+PROJ_UI ..> ART_CTRL : files, archive, quality gates (Artifacts tab)
+ART_CTRL --> ART_SVC
+ART_SVC --> ZIP
 ADMIN_UI ..> AGENT_CTRL : HTTP REST
 
 ' API Controllers → Application Services

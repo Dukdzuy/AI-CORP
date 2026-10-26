@@ -1126,7 +1126,7 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
 
 ---
 
-**Task 13: Generated Project Artifacts API & UI**
+**Task 13: Generated Project Artifacts API & UI** — ✅ Done (2026-10-26)
 - **Objective**: Make every artifact the agents produce visible — this is the thesis evidence for "OOAD applied to every project the agents create".
 - **Implementation**:
   1. `ProjectArtifactsController`: `GET /api/projects/:id/files` (tree), `GET /api/projects/:id/files/*path` (content), `GET /api/projects/:id/archive` (zip download); reads through `ProjectWorkspace` only.
@@ -1138,6 +1138,14 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Zip contains docs/, src/, tests/
   - Web component tests for the file tree and gate checklist
 - **Demo**: Open a finished project: browse use case diagram, class diagram, generated code, tests and the traceability matrix; download the zip.
+- **Result (2026-10-26)**:
+  1. `modules/project-artifacts/`: `ProjectArtifactsController` (JWT-guarded) serves `GET /api/projects/:id/files` (path, size, kind), `GET /api/projects/:id/files/*` (content, 1 MB cap → 413), `GET /api/projects/:id/archive` (zip, entries under `<project-slug>/`, `node_modules` excluded) and `GET /api/projects/:id/quality-gates` (gate history with score). `ProjectArtifactsService` reads only through `ProjectWorkspace`, which gained `readBuffer`/`stat`. The zip is built by a small dependency-free `ZipWriter` (deflate, CRC-32, UTF-8 names; checked with Python's `zipfile`). CORS exposes `Content-Disposition` so the browser keeps the file name.
+  2. Web: an *Artifacts* tab in Project Detail (`components/artifacts/`) with a file tree, Markdown rendered by a small parser into React elements (tables, lists, code, so no HTML injection), PlantUML through the server in `VITE_PLANTUML_SERVER` (deflate + PlantUML base64; empty value → source only), and code/JSON with line numbers. The zip is downloaded with the JWT header.
+  3. `quality_gate_result` and `quality_warning` are now in `WebSocketEventType` with typed payloads. `useQualityEvents` (Project Detail level) collects them live, merges them with the stored gate history (latest per gate) and refreshes the artifact queries.
+  4. `/api/ooad-metrics/project/:id` also returns QC's `traceability` summary. The OOAD summary card shows use cases, entities, patterns, gate pass rate and coverage with passing / failing / missing use cases.
+  - Docs: UC-026 *Browse Generated Project Artifacts*, FR-PROJ-008 (matrix recount: 76 / 1 / 9 of 86), component and package diagrams.
+  - Not done: the Virtual Office does not show quality events yet (Project Detail does). Web tests cover the logic modules (tree, Markdown parser, PlantUML encoding, gate and warning merging) with Vitest in node. The web package has no jsdom / Testing Library, so components were checked with Playwright screenshots against a mocked API instead.
+  - **Verification**: `nest build` 0 errors. API Jest 26/26 suites, 405 tests; the new `project-artifacts.spec.ts` runs a real HTTP server and covers auth 401, the list, content, `..` and `%2f` traversal → 400, unknown project/file → 404, a zip containing `docs/`, `src/` and `tests/` with valid CRCs, and the gate history. Web: `tsc` clean, Vitest 20/20, `vite build` OK. API boot maps the 4 new routes.
 
 ---
 

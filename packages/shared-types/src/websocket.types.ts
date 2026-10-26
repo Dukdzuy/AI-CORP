@@ -10,6 +10,10 @@ export enum WebSocketEventType {
   WORKFLOW_STATE_CHANGED = 'workflow:state_changed',
   HUMAN_APPROVAL_REQUIRED = 'human:approval_required',
   SYSTEM_NOTIFICATION = 'system:notification',
+  /** OOAD quality gate evaluated (QualityGateHandler) */
+  QUALITY_GATE_RESULT = 'quality_gate_result',
+  /** DEV / QC quality warning (missing UC ids, low coverage, failing use cases) */
+  QUALITY_WARNING = 'quality_warning',
 }
 
 export interface WebSocketEvent {
@@ -89,4 +93,27 @@ export interface SystemNotificationEvent {
   message: string;
   timestamp: Date;
   metadata?: Record<string, unknown>;
+}
+
+export interface QualityGateChecklistItem {
+  name: string;
+  actual?: unknown;
+  expected?: unknown;
+  passed: boolean;
+}
+
+/** Payload of quality_gate_result (sent as { type, payload } on project_event) */
+export interface QualityGateResultEvent {
+  gateId: string;
+  passed: boolean;
+  score: number;
+  checklist: QualityGateChecklistItem[];
+}
+
+/** Payload of quality_warning (sent as { type, payload } on project_event) */
+export interface QualityWarningEvent {
+  message: string;
+  severity: 'info' | 'warning' | 'error';
+  missingUseCases?: string[];
+  failingUseCases?: string[];
 }

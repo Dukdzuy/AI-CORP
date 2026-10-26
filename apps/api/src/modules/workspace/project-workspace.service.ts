@@ -80,6 +80,27 @@ export class ProjectWorkspace {
     }
   }
 
+  /** Raw bytes of a project file, or null when it does not exist */
+  async readBuffer(projectId: string, relativePath: string): Promise<Buffer | null> {
+    try {
+      return await fs.readFile(this.resolve(projectId, relativePath));
+    } catch (err: any) {
+      if (err?.code === 'ENOENT' || err?.code === 'EISDIR') return null;
+      throw err;
+    }
+  }
+
+  /** Size and modification time of a project file, or null when it is not a file */
+  async stat(projectId: string, relativePath: string): Promise<{ size: number; modifiedAt: Date } | null> {
+    try {
+      const info = await fs.stat(this.resolve(projectId, relativePath));
+      return info.isFile() ? { size: info.size, modifiedAt: info.mtime } : null;
+    } catch (err: any) {
+      if (err?.code === 'ENOENT') return null;
+      throw err;
+    }
+  }
+
   async exists(projectId: string, relativePath: string): Promise<boolean> {
     try {
       await fs.access(this.resolve(projectId, relativePath));

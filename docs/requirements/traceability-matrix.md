@@ -56,6 +56,7 @@ Requirements are organized into 7 subsystems:
 | FR-PROJ-005 | Task Breakdown | PM Agent shall break milestones into 5-20 granular tasks | UC-011 | Class: PmAgent (act method) | apps/api/src/modules/agents/pm.agent.ts | TEST-AGENT-PM-001 | Implemented |
 | FR-PROJ-006 | Kanban Status Management | System shall enforce Kanban transitions: todo→in_progress→review→done | UC-020 | Class: TaskApplicationService (updateTask) → Task.transitionTo / TaskStatus | apps/api/src/modules/projects/task-application.service.ts, apps/api/src/domain/entities/Task.ts | TEST-PROJ-005, TEST-PROJ-006 | Implemented |
 | FR-PROJ-007 | Budget Tracking | System shall track project.costAccrued and prevent exceeding budget | UC-002, UC-008, UC-011 | Class: ProjectApplicationService (accrueCost) → Project.accrueCost | apps/api/src/modules/projects/project-application.service.ts, apps/api/src/domain/entities/Project.ts | TEST-PROJ-007 | Implemented |
+| FR-PROJ-008 | Generated Project Artifacts | Board Member shall browse and download every artifact the agents generate for a project (docs, diagrams, code, tests, traceability) and see the quality gate checklist, QC warnings and OOAD summary | UC-026 | Class: ProjectArtifactsController, ProjectArtifactsService, ZipWriter, ProjectWorkspace; Web: ArtifactsTab, ArtifactViewer, MarkdownView, QualityPanel | apps/api/src/modules/project-artifacts/, apps/web/src/components/artifacts/ | apps/api/tests/unit/artifacts/project-artifacts.spec.ts, apps/web/src/components/artifacts/__tests__/*.test.ts | Implemented |
 
 ### 3.3 Agent Framework Subsystem
 
@@ -292,12 +293,12 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Implemented | 75 | 88.2% |
+| Implemented | 76 | 88.4% |
 | Partial | 1 | 1.2% |
-| Planned | 9 | 10.6% |
-| **TOTAL** | **85** | **100%** |
+| Planned | 9 | 10.5% |
+| **TOTAL** | **86** | **100%** |
 
-_Recounted 2026-10-26 (Phase 3, Task 11) from the tables above._
+_Recounted 2026-10-26 (Phase 3, Task 13: FR-PROJ-008 added) from the tables above._
 
 ### Planned Requirements (Priority for Next Sprint)
 1. FR-WF-008 (Workflow Rollback)

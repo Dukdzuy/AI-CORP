@@ -8,7 +8,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3000;
 
   app.setGlobalPrefix('api');
-  app.enableCors();
+  // Content-Disposition is exposed so the web app can name the project zip download
+  app.enableCors({ exposedHeaders: ['Content-Disposition'] });
   app.useGlobalPipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,

@@ -1607,6 +1607,54 @@ Admin monitors system health metrics including database connection, Redis queue 
 
 ---
 
+### UC-026: Browse Generated Project Artifacts
+
+> Added 2026-10-26 (Phase 3, Task 13).
+
+| Field | Value |
+|-------|-------|
+| **ID** | UC-026 |
+| **Name** | Browse Generated Project Artifacts |
+| **Actors** | Board Member |
+| **Priority** | High |
+| **Status** | Implemented |
+
+**Brief Description:**  
+Board Member opens the *Artifacts* tab of a project to see what the agents produced: use cases, diagrams, architecture notes, generated code, acceptance tests and the traceability matrix, plus the OOAD quality gate checklist, QC warnings and the OOAD summary. The whole project can be downloaded as a zip.
+
+**Pre-conditions:**
+1. Board Member is authenticated.
+2. The project exists; at least the BA has written files to the project workspace.
+
+**Post-conditions:**
+1. Nothing is changed: the workspace is read only through ProjectWorkspace.
+
+**Main Flow:**
+1. Board Member opens Project Detail and selects *Artifacts*.
+2. System loads the file list (`GET /api/projects/:id/files`), the gate history (`GET /api/projects/:id/quality-gates`) and the OOAD summary (`GET /api/ooad-metrics/project/:id`).
+3. System shows the OOAD summary (use cases, entities, patterns, gate pass rate, use case test coverage with passing / failing / missing use cases), the latest result of each quality gate with its checklist, and the file tree.
+4. System opens `docs/use-cases.md` by default.
+5. Board Member selects a file; System loads it (`GET /api/projects/:id/files/<path>`) and renders Markdown as formatted text, `*.puml` as a diagram (PlantUML server) with a source toggle, and code/JSON with line numbers.
+6. Board Member clicks *Download zip*; System returns `GET /api/projects/:id/archive` with every file under `<project-slug>/`.
+
+**Alternative Flows:**
+- **AF-1: Live quality events**
+  - While a workflow runs, `quality_gate_result` and `quality_warning` events update the gate checklist and the warning list and refresh the file list.
+- **AF-2: Diagram rendering off**
+  - If `VITE_PLANTUML_SERVER` is empty, or the server cannot render the diagram, System shows the PlantUML source.
+
+**Exception Flows:**
+- **EF-1: Path outside the project** — a path with `..`, an absolute path or an encoded traversal returns 400.
+- **EF-2: Unknown project or file** — 404; a project without files returns 404 for the archive.
+- **EF-3: File larger than 1 MB** — 413; the UI suggests the archive.
+- **EF-4: Not authenticated** — 401.
+
+**Special Requirements:**
+- **SR-1:** Generated text is rendered as React elements, never injected as HTML.
+- **SR-2:** Diagram sources are sent to the configured PlantUML server; use a self-hosted server for private projects.
+
+---
+
 ## 4. Use Case Relationships
 
 ### Include Relationships
@@ -1637,6 +1685,7 @@ Admin monitors system health metrics including database connection, Redis queue 
 | UC-018 | FR-LLM-001 (LLM Request Routing) | NFR-RELIABILITY-001 (Circuit Breaker) |
 | UC-023 | FR-AGENT-004 (QA Code Quality Analysis) | NFR-QUALITY-003 (Technical Debt Quantification) |
 | UC-024 | FR-AGENT-005 (ML-based Task Estimation) | NFR-ACCURACY-001 (Estimation Confidence Interval) |
+| UC-026 | FR-PROJ-008 (Generated Project Artifacts) | NFR-SEC (path confinement) |
 
 ---
 

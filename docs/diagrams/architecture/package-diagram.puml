@@ -176,6 +176,7 @@ package "Presentation Layer\n(REST Controllers + WebSocket)" as PRES_LAYER #FDED
   package "rest (presentation)" as PKG_REST {
     class "AuthController" as AuthCtrl
     class "ProjectsController" as ProjCtrl
+    class "ProjectArtifactsController" as ArtCtrl
     class "AgentsController" as AgentCtrl
     class "WorkflowController" as WFCtrl
     class "ApprovalsController" as ApprCtrl
