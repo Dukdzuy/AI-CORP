@@ -43,11 +43,28 @@ export interface ArchitectOutput extends BaseAgentOutput {
   filesWritten: string[];
 }
 
+/** Static analysis of the code a DEV run wrote (Phase 6, Task 26) */
+export interface DevCodeQuality {
+  score: number;
+  /** Score before the refinement round, when there was one */
+  scoreBefore: number | null;
+  refined: boolean;
+  refinedFiles: string[];
+  threshold: number;
+  predictedQaVerdict: 'pass' | 'fail';
+  reasons: string[];
+  findings: Record<string, number>;
+  /** Text handed to QA with the code */
+  summary: string;
+  reportPath: string | null;
+}
+
 export interface DevOutput extends BaseAgentOutput {
   action: 'implement';
   toolOutput: string;
   filesWritten: string[];
   code: string;
+  codeQuality?: DevCodeQuality;
 }
 
 export interface QcOutput extends BaseAgentOutput {

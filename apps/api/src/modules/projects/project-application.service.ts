@@ -95,14 +95,16 @@ export class ProjectApplicationService {
   }
 
   async getProjectDetails(id: string) {
-    const project = await this.projectRepository.findById(id);
+    // Independent reads, run together (Phase 6 load test: sequential reads made this the slowest GET)
+    const [project, projectWithMilestones, projectWithTasks, projectWithWorkflows] = await Promise.all([
+      this.projectRepository.findById(id),
+      this.projectRepository.findWithMilestones(id),
+      this.projectRepository.findWithTasks(id),
+      this.projectRepository.findWithWorkflowRuns(id, 10),
+    ]);
     if (!project) {
       throw new NotFoundException(`Project with ID ${id} not found.`);
     }
-
-    const projectWithMilestones = await this.projectRepository.findWithMilestones(id);
-    const projectWithTasks = await this.projectRepository.findWithTasks(id);
-    const projectWithWorkflows = await this.projectRepository.findWithWorkflowRuns(id, 10);
 
     return {
       ...project,

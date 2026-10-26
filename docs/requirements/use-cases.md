@@ -1458,101 +1458,88 @@ A Board Member views the cost and agent performance report of a project and expo
 
 ---
 
-### UC-023: Perform Code Quality Analysis (QA Agent)
+### UC-023: Perform Code Quality Analysis (DEV and QA Agents)
+
+> Rewritten 2026-10-26 (Phase 6, Task 26) to match the implementation. The first version ran ESLint, SonarQube and Istanbul in the sandbox and asked the QA agent for a debt estimate in hours; the platform instead analyses the generated TypeScript itself, lets the DEV agent fix what it finds once, and gives QA the result as evidence.
 
 | Field | Value |
 |-------|-------|
 | **ID** | UC-023 |
 | **Name** | Perform Code Quality Analysis |
-| **Actors** | QA Agent |
+| **Actors** | DEV Agent, QA Agent, Board Member (reads the result) |
 | **Priority** | Medium |
-| **Status** | Documented |
+| **Status** | Implemented |
 
 **Brief Description:**  
-QA Agent performs deep code quality analysis including complexity metrics, test coverage, duplication detection, and technical debt assessment.
+After the DEV agent writes code, the system measures every generated source file (syntax, cyclomatic complexity, maintainability index, unsafe calls, hard-coded secrets, OOAD layer violations, use case references), scores it and predicts the QA verdict. Code predicted to fail is refined once by the DEV agent; the QA review receives the analysis as evidence.
 
 **Pre-conditions:**
-1. Code is submitted for review.
-2. Static analysis tools are available.
+1. The DEV agent has written files under `src/` in the project workspace (UC-012).
 
 **Post-conditions:**
-1. Quality report is generated with metrics.
-2. Technical debt is quantified (hours to fix).
-3. Recommendations are provided.
+1. `docs/code-quality.md` is in the project workspace and the DEV output carries `codeQuality` (score, verdict, findings summary, refinement).
+2. The refined files replace the originals only if the score went up.
 
 **Main Flow:**
-1. QA Agent receives code files.
-2. QA runs static analysis tools in sandbox:
-   - ESLint for linting.
-   - SonarQube API for complexity metrics.
-   - Istanbul for coverage.
-3. QA aggregates metrics: {cyclomaticComplexity, testCoverage%, codeSmells[], duplication%}.
-4. QA calls LLM to interpret metrics and generate recommendations.
-5. QA generates quality report (Markdown).
-6. QA calculates technical debt score (0-100).
-7. QA returns report to workflow.
+1. DEV agent writes its files.
+2. System analyses each source file (tests excluded) with `TypeScriptCodeAnalyzer` (TypeScript compiler API): syntax errors, per-function McCabe complexity, Halstead volume and maintainability index, security rules, imports that break the layer rules.
+3. `CodeQualityPolicy` scores each file (100 minus capped penalties), weights the files by LOC and predicts the QA verdict: *fail* if the score is below the threshold (70, `CODE_QUALITY_MIN_SCORE`) or there is a syntax error or layer violation.
+4. If the verdict is *fail*, the DEV agent gets the findings and rewrites the weakest files once (AF-1).
+5. System writes `docs/code-quality.md` and adds `codeQuality` to the DEV output.
+6. QA agent's review prompt includes the static analysis; QA gives its verdict (UC-013).
+7. Board Member opens *Reports → Code quality* (`GET /api/projects/:id/code-quality`).
 
 **Alternative Flows:**
-- None.
+- **AF-1: Refinement does not help** — at step 4, if the rewritten files score no better, the original files are kept and the report says so; QA then decides (the e2e run's *Unsafe Portal*: QA rejects, the DEV agent runs again).
+- **AF-2: Refinement disabled** — `CODE_QUALITY_REFINE=off` skips step 4.
 
 **Exception Flows:**
-- None.
+- **EF-1:** The analysis throws → it is logged and the DEV output is returned without `codeQuality` (never fails the DEV step).
 
 **Special Requirements:**
-- **SR-1:** Analysis must complete within 120 seconds.
-- **SR-2:** Technical debt must be quantified in hours.
-
-**Assumptions:**
-- Code is parseable by analysis tools.
+- **SR-1:** At most one refinement round (bounded LLM cost).
+- **SR-2:** Analysis is deterministic; results are cached per file content and per project for 30 s (Task 28).
+- **SR-3:** The prediction is measured against the real QA verdicts (UC-033, *QA prediction accuracy*).
 
 ---
 
-### UC-024: Estimate Task Complexity (BA/PM Agent)
+### UC-024: Forecast Project Effort and Cost (System, PM Agent)
+
+> Rewritten 2026-10-26 (Phase 6, Task 25). The first version trained a model per task from ≥ 50 completed tasks and estimated hours; the platform records no human hours, so it forecasts the agents' run time and LLM cost per project from finished projects and derives the PM's task estimates from it.
 
 | Field | Value |
 |-------|-------|
 | **ID** | UC-024 |
-| **Name** | Estimate Task Complexity |
-| **Actors** | BA Agent, PM Agent |
+| **Name** | Forecast Project Effort and Cost |
+| **Actors** | System, PM Agent, Board Member (reads the forecast) |
 | **Priority** | Medium |
-| **Status** | Documented |
+| **Status** | Implemented |
 
 **Brief Description:**  
-BA or PM Agent estimates task complexity (story points or hours) using historical data and machine learning model.
+From the finished projects, the system learns per agent role how run time and LLM cost grow with the size of the request (description length, number of use cases). It forecasts a new project when its workflow starts and again when the plan is known, sets the PM's task estimates, and compares each forecast with the outcome.
 
 **Pre-conditions:**
-1. Task description exists.
-2. Historical task data (≥50 completed tasks) exists for training.
+1. A project's workflow starts (`workflow.started`).
 
 **Post-conditions:**
-1. Task.estimatedCost is set.
-2. Confidence interval is provided (e.g., 4-6 hours).
+1. A `ProjectEstimate` (stage `start` or `planned`) is stored with time, cost, confidence and per-role detail.
+2. Tasks created by the PM carry `estimatedCost`.
 
 **Main Flow:**
-1. PM Agent receives task description.
-2. PM extracts features: {descriptionLength, keywordCount (e.g., "API", "database"), dependencyCount}.
-3. PM queries historical tasks with similar features.
-4. PM trains simple regression model (or uses pre-trained model).
-5. PM predicts effort (hours).
-6. PM calculates confidence interval based on variance.
-7. PM sets Task.estimatedCost = predicted effort.
-8. PM returns estimate to workflow.
+1. System collects one training sample per finished project and role (projects whose latest run completed).
+2. `EstimationModel` fits, per role, a ridge linear regression on the features, or the median when the role has fewer than 6 samples, and measures it by leave-one-out error.
+3. On `workflow.started`, System forecasts the project and stores the `start` estimate.
+4. When the PM agent creates tasks, System stores the `planned` estimate and sets each task's `estimatedCost` (DEV + QC + QA cost divided by the number of tasks).
+5. Board Member opens *Reports → Effort & cost forecast* (`GET /api/projects/:id/estimate`) or *Agent Analytics → Estimation model* (`GET /api/analytics/estimation`).
+6. When the project is finished, System shows the error of the `start` forecast against the outcome.
 
 **Alternative Flows:**
-- **AF-1: Insufficient Historical Data**
-  - At step 3, if <50 tasks exist:
-    1. PM falls back to heuristic (e.g., 4 hours default).
-    2. PM flags estimate as low-confidence.
-
-**Exception Flows:**
-- None.
+- **AF-1: No history** — no finished project: no forecast is stored and tasks keep `estimatedCost = null`.
+- **AF-2: Little history** — fewer than 6 samples for a role: the median is used and the confidence is *low*.
 
 **Special Requirements:**
-- **SR-1:** Estimation must complete within 5 seconds.
-- **SR-2:** Model must be retrained weekly as new tasks complete.
-
-**Assumptions:**
-- Historical task data is accurate.
+- **SR-1:** The model is cached and retrained only when a run completes (cache key: number of completed runs and last completion time).
+- **SR-2:** Predictions never go below the smallest value seen (no negative cost from extrapolation).
 
 ---
 
@@ -1796,6 +1783,42 @@ An external tool (CI pipeline, BI tool) uses an API key to list and create proje
 
 ---
 
+### UC-033: Review Agent Performance Analytics
+
+> Added 2026-10-26 (Phase 6, Task 24).
+
+| Field | Value |
+|-------|-------|
+| **ID** | UC-033 |
+| **Name** | Review Agent Performance Analytics |
+| **Actors** | Board Member, Admin, System (anomaly monitor), External System (webhook) |
+| **Priority** | Medium |
+| **Status** | Implemented |
+
+**Brief Description:**  
+Board Member compares the agents over a period: success rate, duration, cost per successful step, a role-specific quality measure, the trend against the previous period and a ranking. The system warns about anomalies and notifies integrations.
+
+**Pre-conditions:**
+1. The user has `report:view`.
+
+**Post-conditions:**
+1. Nothing is changed by viewing. A detected anomaly is published once per role, type and day (`agent.anomaly`), audited and sent to subscribed webhooks.
+
+**Main Flow:**
+1. User opens *Agent Analytics* and picks 7, 30 or 90 days (`GET /api/analytics/agents?days=`).
+2. `AgentPerformanceAnalyzer` computes per role: steps, success rate, average and p95 duration, cost per success, quality, trend and rank; a daily success series, an activity heatmap and the accuracy of the QA prediction (UC-023).
+3. Quality is role-specific: QA approvals for DEV, QC test results for QC, OOAD gate results for the Architect, first-attempt success for the others.
+4. `AgentAnomalyDetector` applies its rules (success-rate drop, repeated failures, cost spike, slowdown, low quality) and the page shows the anomalies first.
+5. The page shows the estimation model and its accuracy (UC-024).
+
+**Alternative Flows:**
+- **AF-1: Anomaly while nobody watches** — after each finished or failed run, `AgentAnomalyMonitor` evaluates the last 7 days and publishes new anomalies (`agent.anomaly`), which the audit log and webhooks receive (UC-030, UC-031).
+
+**Special Requirements:**
+- **SR-1:** Under 300 ms p50 for 20 concurrent users (`scripts/perf/budgets.json`).
+
+---
+
 ## 4. Use Case Relationships
 
 ### Include Relationships
@@ -1805,7 +1828,8 @@ An external tool (CI pipeline, BI tool) uses an API key to list and create proje
 
 ### Extend Relationships
 - **UC-006** (Reject Workflow Step) extends **UC-005** (Approve Workflow Step).
-- **UC-023** (Perform Code Quality Analysis) extends **UC-013** (Execute Code Review).
+- **UC-023** (Perform Code Quality Analysis) extends **UC-012** (Execute Development Task) and gives evidence to **UC-013** (Execute Code Review).
+- **UC-033** (Review Agent Performance Analytics) includes the accuracy views of **UC-023** and **UC-024**.
 
 ### Generalization Relationships
 - **UC-005** (Approve Workflow Step) and **UC-006** (Reject Workflow Step) generalize to "Handle Human Approval".
@@ -1824,14 +1848,15 @@ An external tool (CI pipeline, BI tool) uses an API key to list and create proje
 | UC-016 | FR-AGENT-003 (QC Agent Use Case Verification) | NFR2 (Test Coverage) |
 | UC-017 | FR-MEMORY-001 (Agent Memory Management) | NFR-PERF-002 (Semantic Search <500ms) |
 | UC-018 | FR-LLM-001 (LLM Request Routing) | NFR-RELIABILITY-001 (Circuit Breaker) |
-| UC-023 | FR-AGENT-004 (QA Code Quality Analysis) | NFR-QUALITY-003 (Technical Debt Quantification) |
-| UC-024 | FR-AGENT-005 (ML-based Task Estimation) | NFR-ACCURACY-001 (Estimation Confidence Interval) |
+| UC-023 | FR-CQ-001 (Static analysis of generated code), FR-CQ-002 (One refinement round), FR-CQ-003 (QA evidence & prediction) | NFR-QUALITY-003 (Quality score), NFR-PERF-006 (Load budgets) |
+| UC-024 | FR-EST-001 (Effort & cost model), FR-EST-002 (Forecast at start and plan), FR-EST-003 (Task estimates), FR-EST-004 (Forecast accuracy) | NFR-ACCURACY-001 (Measured LOO error) |
 | UC-026 | FR-PROJ-008 (Generated Project Artifacts) | NFR-SEC (path confinement) |
 | UC-022 | FR-REP-001 (Cost & performance reports), FR-REP-002 (Project export), FR-REP-003 (Weekly report) | NFR-SEC-010 (CSV injection) |
 | UC-029 | FR-AUTH-003 (RBAC), FR-AUTH-005 (Account deactivation) | NFR-SEC-007 (Least privilege) |
 | UC-030 | FR-AUD-001 (Audit trail), FR-AUD-002 (Audit search & export), FR-AUD-003 (Anomaly detection) | NFR-SEC-008 (Secret redaction) |
 | UC-031 | FR-INT-001 (API keys), FR-INT-002 (Webhooks) | NFR-SEC-009 (SSRF & signatures) |
 | UC-032 | FR-INT-003 (Versioned integration API) | NFR-SEC-009, NFR-SEC-007 |
+| UC-033 | FR-ANA-001 (Agent metrics & ranking), FR-ANA-002 (Anomaly detection & notification) | NFR-PERF-006 (Load budgets) |
 
 ---
 

@@ -27,6 +27,7 @@ export const WEBHOOK_PAYLOADS: Record<WebhookEventName, PayloadMapper> = {
   [WebhookEventName.QUALITY_GATE_EVALUATED]: e => ({ projectId: e.projectId, data: { gateId: e.gateId, passed: e.passed, score: e.score, failedChecks: e.failedChecks } }),
   [WebhookEventName.BUDGET_EXCEEDED]: e => ({ projectId: e.projectId, data: { currentCost: e.currentCost, budget: e.budget } }),
   [WebhookEventName.REPORT_GENERATED]: e => ({ projectId: e.projectId, data: { period: e.period, path: e.path, totalCost: e.totalCost } }),
+  [WebhookEventName.AGENT_ANOMALY]: e => ({ projectId: e.projectId, data: { agentRole: e.agentRole, type: e.anomalyType, severity: e.severity, message: e.message, value: e.value, threshold: e.threshold } }),
 };
 
 export function toEnvelope(event: DomainEvent): WebhookEnvelope | null {

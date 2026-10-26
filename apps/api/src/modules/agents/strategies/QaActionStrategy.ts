@@ -40,12 +40,15 @@ export class QaActionStrategy implements IActionStrategy<QaOutput> {
     const designSummary = await this.loadDesignSummary(projectId);
     const qcReport = typeof context.qcReport === 'string' ? context.qcReport : '';
     const failingTests = Array.isArray(context.failingTests) ? context.failingTests.slice(0, 30) : [];
+    // Phase 6, Task 26: the DEV run's static analysis (complexity, security, layering)
+    const staticAnalysis = typeof (context as any).codeQuality?.summary === 'string' ? (context as any).codeQuality.summary as string : '';
 
     const prompt = `You are reviewing code from an AI developer against the approved design.
 ${memoryContext}
 ${designSummary ? `APPROVED DESIGN:\n${designSummary}\n` : ''}
 ${qcReport ? `QC VERIFICATION REPORT:\n${qcReport}\n` : ''}
 ${failingTests.length ? `FAILING TESTS (executed by QC):\n${failingTests.map(t => `- ${t}`).join('\n')}\n` : ''}
+${staticAnalysis ? `STATIC ANALYSIS (automated, use as evidence for items 1 and 4):\n${staticAnalysis}\n` : ''}
 Code to review:
 ${hasCode ? code : 'No code was provided by the developer.'}
 

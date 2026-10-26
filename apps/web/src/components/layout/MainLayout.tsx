@@ -11,6 +11,7 @@ import {
   AuditOutlined,
   KeyOutlined,
   UsergroupAddOutlined,
+  LineChartOutlined,
 } from '@ant-design/icons';
 import { Permission } from '@ai-corp/shared-types';
 import { hasPermission, ROLE_LABELS } from '../../lib/permissions';
@@ -48,7 +49,7 @@ export const MainLayout: React.FC = () => {
     ? '/admin'
     : location.pathname.startsWith('/agents')
     ? '/agents'
-    : ['/users', '/audit', '/integrations'].find(p => location.pathname.startsWith(p)) ?? '/';
+    : ['/users', '/audit', '/integrations', '/analytics'].find(p => location.pathname.startsWith(p)) ?? '/';
 
   const menuItems = [
     {
@@ -74,6 +75,13 @@ export const MainLayout: React.FC = () => {
       icon: <RobotOutlined />,
       label: 'Agent Models',
       onClick: () => navigate('/agents'),
+    },
+    // Phase 6: agent performance analytics and the estimation model
+    hasPermission(user, Permission.REPORT_VIEW) && {
+      key: '/analytics',
+      icon: <LineChartOutlined />,
+      label: 'Agent Analytics',
+      onClick: () => navigate('/analytics'),
     },
     // Phase 5: shown only to roles that may use them
     hasPermission(user, Permission.INTEGRATION_MANAGE) && {

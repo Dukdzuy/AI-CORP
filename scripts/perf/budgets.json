@@ -1,0 +1,11 @@
+{
+  "description": "Performance budgets (Phase 6, Task 28). Latencies in milliseconds, measured at the HTTP client, for 20 concurrent users (--users 20) against one API process.",
+  "default": { "p50": 100, "p95": 500, "p99": 1000 },
+  "endpoints": {
+    "POST /projects": { "p50": 500, "p95": 2000, "p99": 3000, "note": "NFR-PERF-001: project creation under 2 s" },
+    "GET /analytics/agents": { "p50": 300, "p95": 1500, "p99": 3000, "note": "aggregates two periods of history" },
+    "GET /projects/:id/estimate": { "p50": 300, "p95": 1500, "p99": 3000, "note": "may retrain the estimation model" },
+    "GET /projects/:id/code-quality": { "p50": 300, "p95": 1500, "p99": 3000, "note": "parses the generated sources" }
+  },
+  "maxErrorRate": 0.01
+}

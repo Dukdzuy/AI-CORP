@@ -1,0 +1,533 @@
+{
+  "period": {
+    "start": "2026-10-19T08:46:22.386Z",
+    "end": "2026-10-26T08:46:22.387Z",
+    "previousStart": "2026-10-12T08:46:22.385Z"
+  },
+  "generatedAt": "2026-10-26T08:46:22.386Z",
+  "roles": [
+    {
+      "agentRole": "CEO",
+      "executionCount": 19,
+      "completed": 19,
+      "failed": 0,
+      "successRate": 1,
+      "avgDurationMs": 87,
+      "p95DurationMs": 109,
+      "retries": 0,
+      "totalCost": 0.019332,
+      "costPerExecution": 0.001017,
+      "costPerSuccess": 0.001017,
+      "quality": {
+        "value": 1,
+        "basis": "succeeded without retry",
+        "samples": 19
+      },
+      "previous": {
+        "agentRole": "CEO",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "succeeded without retry",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 1,
+      "recentOutcomes": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "agentRole": "PM",
+      "executionCount": 11,
+      "completed": 11,
+      "failed": 0,
+      "successRate": 1,
+      "avgDurationMs": 118,
+      "p95DurationMs": 130,
+      "retries": 0,
+      "totalCost": 0.015906,
+      "costPerExecution": 0.001446,
+      "costPerSuccess": 0.001446,
+      "quality": {
+        "value": 1,
+        "basis": "succeeded without retry",
+        "samples": 11
+      },
+      "previous": {
+        "agentRole": "PM",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "succeeded without retry",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 2,
+      "recentOutcomes": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "agentRole": "QA",
+      "executionCount": 12,
+      "completed": 12,
+      "failed": 0,
+      "successRate": 1,
+      "avgDurationMs": 278,
+      "p95DurationMs": 294,
+      "retries": 0,
+      "totalCost": 0.046209,
+      "costPerExecution": 0.003851,
+      "costPerSuccess": 0.003851,
+      "quality": {
+        "value": 1,
+        "basis": "succeeded without retry",
+        "samples": 12
+      },
+      "previous": {
+        "agentRole": "QA",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "succeeded without retry",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 3,
+      "recentOutcomes": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "agentRole": "QC",
+      "executionCount": 12,
+      "completed": 12,
+      "failed": 0,
+      "successRate": 1,
+      "avgDurationMs": 2175,
+      "p95DurationMs": 2268,
+      "retries": 0,
+      "totalCost": 0.084891,
+      "costPerExecution": 0.007074,
+      "costPerSuccess": 0.007074,
+      "quality": {
+        "value": 1,
+        "basis": "QC verifications passed",
+        "samples": 12
+      },
+      "previous": {
+        "agentRole": "QC",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "QC verifications passed",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 4,
+      "recentOutcomes": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "agentRole": "BA",
+      "executionCount": 11,
+      "completed": 11,
+      "failed": 0,
+      "successRate": 1,
+      "avgDurationMs": 122,
+      "p95DurationMs": 146,
+      "retries": 0,
+      "totalCost": 0.081093,
+      "costPerExecution": 0.007372,
+      "costPerSuccess": 0.007372,
+      "quality": {
+        "value": 1,
+        "basis": "succeeded without retry",
+        "samples": 11
+      },
+      "previous": {
+        "agentRole": "BA",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "succeeded without retry",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 5,
+      "recentOutcomes": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "agentRole": "ARCHITECT",
+      "executionCount": 11,
+      "completed": 11,
+      "failed": 0,
+      "successRate": 1,
+      "avgDurationMs": 648,
+      "p95DurationMs": 734,
+      "retries": 0,
+      "totalCost": 0.22041,
+      "costPerExecution": 0.020037,
+      "costPerSuccess": 0.020037,
+      "quality": {
+        "value": 1,
+        "basis": "OOAD gate passed",
+        "samples": 11
+      },
+      "previous": {
+        "agentRole": "ARCHITECT",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "OOAD gate passed",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 6,
+      "recentOutcomes": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "agentRole": "DEV",
+      "executionCount": 12,
+      "completed": 12,
+      "failed": 0,
+      "successRate": 1,
+      "avgDurationMs": 599,
+      "p95DurationMs": 703,
+      "retries": 0,
+      "totalCost": 0.214104,
+      "costPerExecution": 0.017842,
+      "costPerSuccess": 0.017842,
+      "quality": {
+        "value": 0.9167,
+        "basis": "QA reviews approved",
+        "samples": 12
+      },
+      "previous": {
+        "agentRole": "DEV",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "QA reviews approved",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 7,
+      "recentOutcomes": [
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed",
+        "completed"
+      ]
+    },
+    {
+      "agentRole": "MARKETING",
+      "executionCount": 20,
+      "completed": 8,
+      "failed": 12,
+      "successRate": 0.4,
+      "avgDurationMs": 7430,
+      "p95DurationMs": 12516,
+      "retries": 0,
+      "totalCost": 0.007014,
+      "costPerExecution": 0.000351,
+      "costPerSuccess": 0.000877,
+      "quality": {
+        "value": 0.4,
+        "basis": "succeeded without retry",
+        "samples": 20
+      },
+      "previous": {
+        "agentRole": "MARKETING",
+        "executionCount": 0,
+        "completed": 0,
+        "failed": 0,
+        "successRate": null,
+        "avgDurationMs": 0,
+        "p95DurationMs": 0,
+        "retries": 0,
+        "totalCost": 0,
+        "costPerExecution": null,
+        "costPerSuccess": null,
+        "quality": {
+          "value": null,
+          "basis": "succeeded without retry",
+          "samples": 0
+        }
+      },
+      "trend": {
+        "successRateDelta": null,
+        "avgDurationChange": null,
+        "costPerExecutionChange": null,
+        "qualityDelta": null
+      },
+      "rank": 8,
+      "recentOutcomes": [
+        "failed",
+        "failed",
+        "failed",
+        "failed",
+        "failed",
+        "failed",
+        "failed",
+        "failed",
+        "failed",
+        "failed"
+      ]
+    }
+  ],
+  "daily": [
+    {
+      "date": "2026-10-26",
+      "role": "ARCHITECT",
+      "executions": 11,
+      "successRate": 1
+    },
+    {
+      "date": "2026-10-26",
+      "role": "BA",
+      "executions": 11,
+      "successRate": 1
+    },
+    {
+      "date": "2026-10-26",
+      "role": "CEO",
+      "executions": 19,
+      "successRate": 1
+    },
+    {
+      "date": "2026-10-26",
+      "role": "DEV",
+      "executions": 12,
+      "successRate": 1
+    },
+    {
+      "date": "2026-10-26",
+      "role": "MARKETING",
+      "executions": 20,
+      "successRate": 0.4
+    },
+    {
+      "date": "2026-10-26",
+      "role": "PM",
+      "executions": 11,
+      "successRate": 1
+    },
+    {
+      "date": "2026-10-26",
+      "role": "QA",
+      "executions": 12,
+      "successRate": 1
+    },
+    {
+      "date": "2026-10-26",
+      "role": "QC",
+      "executions": 12,
+      "successRate": 1
+    }
+  ],
+  "heatmap": [
+    {
+      "weekday": 1,
+      "hour": 8,
+      "count": 108
+    }
+  ],
+  "qaPrediction": {
+    "samples": 12,
+    "truePass": 11,
+    "trueFail": 1,
+    "falsePass": 0,
+    "falseFail": 0,
+    "accuracy": 1
+  },
+  "anomalies": [
+    {
+      "type": "repeated_failures",
+      "agentRole": "MARKETING",
+      "severity": "high",
+      "message": "MARKETING failed its last 10 steps in a row",
+      "value": 10,
+      "threshold": 3
+    },
+    {
+      "type": "low_quality",
+      "agentRole": "MARKETING",
+      "severity": "medium",
+      "message": "MARKETING quality is low: 40% succeeded without retry (20 samples)",
+      "value": 0.4,
+      "threshold": 0.5
+    }
+  ]
+}

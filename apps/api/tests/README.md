@@ -28,12 +28,14 @@ tests/
 
 ## Test Coverage Requirements
 
-**Target: 90% coverage across all metrics**
+Enforced by `jest.coverageThreshold` in `apps/api/package.json` (Phase 6, Task 27); `npm run test:cov` fails below them.
 
-- **Branches**: 90%
-- **Functions**: 90%
-- **Lines**: 90%
-- **Statements**: 90%
+| Scope | Branches | Functions | Lines | Statements | Measured 2026-10-26 |
+|-------|---------:|----------:|------:|-----------:|---------------------|
+| `src/domain/` (entities, value objects, policies, analytics, estimation, quality) | 85% | 90% | 90% | 90% | 89.6 / 97.2 / 97.1 / 96.6 % |
+| Everything else (global floor) | 55% | 64% | 70% | 70% | whole API: 63.1 / 74.3 / 75.9 / 76.1 % |
+
+The 90% target applies to the domain layer, where the business rules are and where tests need no database or LLM. Controllers, Nest wiring and infrastructure adapters are covered by the service tests and the end-to-end runs (`docs/phase*-e2e`) instead; raising them to 90% would mean testing framework glue. Note that Jest excludes files matched by a path threshold from `global`, so the global floor is measured on the non-domain code only.
 
 ## Running Tests
 
@@ -64,7 +66,7 @@ npm test:watch
 
 ### Coverage Report
 ```bash
-npm test -- --coverage
+npm run test:cov   # jest --coverage, with the thresholds above
 ```
 
 ## Writing Tests (TDD Approach)

@@ -111,7 +111,10 @@ function answer(user) {
   return 'OK';
 }
 
-http.createServer((req, res) => {
+module.exports = { answer, code, tests };
+
+// Started directly: serve; required (Phase 6 mock): only reuse the answers
+if (require.main === module) http.createServer((req, res) => {
   let body = '';
   req.on('data', c => (body += c));
   req.on('end', () => {

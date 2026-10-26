@@ -1,0 +1,78 @@
+[
+  {
+    "event": "workflow.failed",
+    "body": {
+      "id": "9af050a5-68a4-4fa4-ac08-856b99065025",
+      "event": "workflow.failed",
+      "occurredAt": "2026-10-26T08:44:18.447Z",
+      "projectId": "43aab866-5bf6-4576-8d45-ab5f28fc0715",
+      "data": {
+        "runId": "27be9232-8cb7-461b-bfbb-3fd9c4a9bbe6",
+        "nodeId": "market",
+        "reason": "Node 'market' failed and has no onFail edge"
+      }
+    }
+  },
+  {
+    "event": "agent.anomaly",
+    "body": {
+      "id": "74b09305-f73a-470a-b72f-179c504ed5ff",
+      "event": "agent.anomaly",
+      "occurredAt": "2026-10-26T08:44:18.465Z",
+      "projectId": "43aab866-5bf6-4576-8d45-ab5f28fc0715",
+      "data": {
+        "agentRole": "MARKETING",
+        "type": "repeated_failures",
+        "severity": "high",
+        "message": "MARKETING failed its last 4 steps in a row",
+        "value": 4,
+        "threshold": 3
+      }
+    }
+  },
+  {
+    "event": "workflow.failed",
+    "body": {
+      "id": "a739e8a5-2ccd-4101-8643-cd76e90390f3",
+      "event": "workflow.failed",
+      "occurredAt": "2026-10-26T08:45:18.889Z",
+      "projectId": "21b1deff-3d20-4934-9436-c687831a3052",
+      "data": {
+        "runId": "8eb04e9f-9eac-46ed-bd3a-e86008b1662d",
+        "nodeId": "market",
+        "reason": "Node 'market' failed and has no onFail edge"
+      }
+    }
+  },
+  {
+    "event": "workflow.failed",
+    "body": {
+      "id": "9c74099b-8c77-4405-a407-ac511b4b4102",
+      "event": "workflow.failed",
+      "occurredAt": "2026-10-26T08:46:19.992Z",
+      "projectId": "910fe6fc-8a83-4f89-81e3-0cf896492de1",
+      "data": {
+        "runId": "181b13e0-8d59-4b23-adf9-2625a91519b3",
+        "nodeId": "market",
+        "reason": "Node 'market' failed and has no onFail edge"
+      }
+    }
+  },
+  {
+    "event": "agent.anomaly",
+    "body": {
+      "id": "53c29782-913e-49cc-9d82-db8cb34843c5",
+      "event": "agent.anomaly",
+      "occurredAt": "2026-10-26T08:46:20.005Z",
+      "projectId": "910fe6fc-8a83-4f89-81e3-0cf896492de1",
+      "data": {
+        "agentRole": "MARKETING",
+        "type": "low_quality",
+        "severity": "medium",
+        "message": "MARKETING quality is low: 40% succeeded without retry (20 samples)",
+        "value": 0.4,
+        "threshold": 0.5
+      }
+    }
+  }
+]

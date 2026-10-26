@@ -24,6 +24,9 @@ import { AuditModule } from './modules/audit/audit.module';
 import { UsersModule } from './modules/users/users.module';
 import { ReportingModule } from './modules/reporting/reporting.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { EstimationModule } from './modules/estimation/estimation.module';
+import { CodeQualityModule } from './modules/code-quality/code-quality.module';
 
 @Module({
   imports: [
@@ -55,6 +58,9 @@ import { IntegrationsModule } from './modules/integrations/integrations.module';
     UsersModule,
     ReportingModule,
     IntegrationsModule,
+    AnalyticsModule, // Phase 6
+    EstimationModule,
+    CodeQualityModule,
   ],
   providers: [EnvValidator],
 })

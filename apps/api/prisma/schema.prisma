@@ -54,6 +54,7 @@ model Project {
   agentMessages   AgentMessage[]
   apiUsageLogs    ApiUsageLog[]
   qualityGateLogs QualityGateLog[]
+  estimates       ProjectEstimate[]
 
   @@index([createdById])
   // Requirement 17.2: budget must be positive when provided
@@ -247,6 +248,8 @@ model WorkflowStep {
 
   @@index([workflowRunId, nodeId])
   @@index([status])
+  @@index([agentRole, startedAt]) // Phase 6: agent analytics and estimation history
+  @@index([startedAt])
   // Requirement 17.6: Timestamp ordering validation enforced in WorkflowService
 }
 
@@ -411,4 +414,23 @@ model WebhookDelivery {
   webhook      Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
   @@index([webhookId, createdAt])
+}
+
+// ============================================================================
+// Phase 6, Task 25: effort and cost forecasts, kept to compare with the outcome
+// ============================================================================
+
+model ProjectEstimate {
+  id                  String   @id @default(uuid())
+  projectId           String
+  stage               String   // start (workflow started), planned (PM created the tasks)
+  predictedDurationMs Int      // summed agent working time
+  predictedCost       Decimal  @db.Decimal(10, 6)
+  confidence          String   // low, medium, high
+  detail              Json     // per-role forecast, features, imputed features
+  createdAt           DateTime @default(now())
+
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
 }

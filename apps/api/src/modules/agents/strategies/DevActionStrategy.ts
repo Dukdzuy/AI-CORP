@@ -1,15 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { IActionStrategy } from '../../../domain/agent/interfaces/IActionStrategy.interface';
 import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { DevAgentOutput, DevOutput, DevPlanOutput } from '../../../domain/agent/AgentOutputs';
+import { DevAgentOutput, DevCodeQuality, DevOutput, DevPlanOutput } from '../../../domain/agent/AgentOutputs';
 import { DEV_PROFILE } from '../profiles';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { OOADArtifactService } from '../services/ooad-artifact.service';
 import { parseQuestions, stripMarkers } from '../services/collaboration-replies';
+import { CodeQualityService, SourceFile } from '../../code-quality/code-quality.service';
+import { CodeQualityPolicy } from '../../../domain/quality';
+
+/** At most this many low-scoring files are sent back for one refinement round */
+const MAX_REFINED_FILES = 6;
 
 @Injectable()
 export class DevActionStrategy implements IActionStrategy<DevAgentOutput> {
@@ -21,7 +26,9 @@ export class DevActionStrategy implements IActionStrategy<DevAgentOutput> {
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly prisma: PrismaService,
     private readonly ooadArtifacts: OOADArtifactService,
-    private readonly workspace: ProjectWorkspace
+    private readonly workspace: ProjectWorkspace,
+    // Phase 6, Task 26: static analysis and one refinement round of low-scoring code
+    @Optional() private readonly codeQuality?: CodeQualityService
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<DevAgentOutput>> {
@@ -92,8 +99,9 @@ Write ALL files needed for the project to work. Make it production-quality.`;
     // Parse <CODE filepath="..."> blocks
     const codeBlocks = this.parseCodeBlocks(llmOutput);
 
-    let writtenFiles: string[] = [];
-    let codeContent = '';
+    // Paths relative to the project (analysed) and as the workspace reports them (output)
+    let written: SourceFile[] = [];
+    const storedPath = new Map<string, string>();
 
     if (codeBlocks.length > 0 && projectId) {
       for (const block of codeBlocks) {
@@ -103,15 +111,20 @@ Write ALL files needed for the project to work. Make it production-quality.`;
           continue;
         }
         try {
-          const written = await this.workspace.writeFile(projectId, relativePath, block.content);
-          writtenFiles.push(written);
-          codeContent += `// File: ${written}\n${block.content}\n\n`;
-          this.logger.log(`DEV wrote file: ${written}`);
+          const stored = await this.workspace.writeFile(projectId, relativePath, block.content);
+          written.push({ path: relativePath, content: block.content });
+          storedPath.set(relativePath, stored);
+          this.logger.log(`DEV wrote file: ${stored}`);
         } catch (err: any) {
           this.logger.warn(`Failed to write file ${block.filepath}: ${err.message}`);
         }
       }
     }
+
+    const quality = await this.assureQuality(projectId, written, { provider, model, systemPrompt }, context.task);
+    if (quality) written = quality.files;
+    const writtenFiles = written.map(f => storedPath.get(f.path) ?? f.path);
+    let codeContent = written.map(f => `// File: ${storedPath.get(f.path) ?? f.path}\n${f.content}\n\n`).join('');
 
     if (!codeContent) {
       codeContent = llmOutput;
@@ -166,9 +179,97 @@ Write ALL files needed for the project to work. Make it production-quality.`;
         output: codeContent,
         toolOutput: writtenFiles.length > 0 ? `Wrote ${writtenFiles.length} file(s): ${writtenFiles.join(', ')}` : 'No files written (code in response only)',
         filesWritten: writtenFiles,
-        code: codeContent
+        code: codeContent,
+        ...(quality ? { codeQuality: quality.report } : {}),
       },
     };
+  }
+
+  /**
+   * Phase 6, Task 26: scores the files just written. When the analysis predicts that QA will
+   * reject the code (score below the threshold, syntax errors or layer violations), the LLM
+   * gets one round to fix the reported findings; the refinement is kept only if the score improves.
+   */
+  private async assureQuality(
+    projectId: string | undefined,
+    files: SourceFile[],
+    llm: { provider: any; model: string; systemPrompt: string },
+    task: string | undefined
+  ): Promise<{ files: SourceFile[]; report: DevCodeQuality } | null> {
+    if (!this.codeQuality || !projectId || !files.length) return null;
+    this.codeQuality.invalidate(projectId); // the files were just rewritten
+    try {
+      const before = this.codeQuality.assessFiles(files);
+      if (before.score === null) return null;
+      let after = before;
+      let current = files;
+      let refinedFiles: string[] = [];
+      let attempted = false;
+
+      if (before.predictedQaVerdict === 'fail' && this.codeQuality.refinementEnabled) {
+        attempted = true;
+        const weak = before.files.filter(f => f.findings.length).slice(0, MAX_REFINED_FILES).map(f => f.path);
+        const prompt = `Static analysis of the code you just wrote for "${task || 'the task'}" scored ${before.score}/100 (minimum ${before.threshold}): ${before.reasons.join('; ')}.
+
+FINDINGS:
+${CodeQualityPolicy.summarize(before, 30)}
+
+Rewrite ONLY the files listed below so that the findings are fixed: keep their paths, their public API, their layer
+(domain / application / infrastructure / presentation) and their // UC-xxx comments; split complex functions,
+remove unsafe calls and hard-coded secrets, and make dependencies point inwards (towards the domain).
+
+${current.filter(f => weak.includes(f.path)).map(f => `<CODE filepath="${f.path}">\n${f.content}\n</CODE>`).join('\n\n')}
+
+Answer with the complete corrected files in the same <CODE filepath="..."> format.`;
+        const result = await llm.provider.chat({
+          messages: [
+            { role: 'system', content: llm.systemPrompt },
+            { role: 'user', content: prompt },
+          ],
+          model: llm.model,
+          maxTokens: 3000,
+        });
+        const replacements = new Map<string, string>();
+        for (const block of this.parseCodeBlocks(result.content || '')) {
+          const path = this.workspace.normalize(projectId, block.filepath);
+          if (path && weak.includes(path)) replacements.set(path, block.content);
+        }
+        if (replacements.size) {
+          const candidate = current.map(f => (replacements.has(f.path) ? { path: f.path, content: replacements.get(f.path)! } : f));
+          const assessed = this.codeQuality.assessFiles(candidate);
+          if (assessed.score !== null && assessed.score > before.score) {
+            for (const [path, content] of replacements) await this.workspace.writeFile(projectId, path, content);
+            current = candidate;
+            after = assessed;
+            refinedFiles = [...replacements.keys()];
+          }
+        }
+        this.logger.log(`Code quality ${before.score} → ${after.score}${refinedFiles.length ? ` after refining ${refinedFiles.length} file(s)` : ' (refinement not kept)'}`);
+      }
+
+      const note = attempted
+        ? `Score before refinement: ${before.score}. ${refinedFiles.length ? `Refined: ${refinedFiles.join(', ')}.` : 'The refined code did not score higher and was discarded.'}\n`
+        : '';
+      const reportPath = await this.codeQuality.writeReport(projectId, after, note);
+      return {
+        files: current,
+        report: {
+          score: after.score!,
+          scoreBefore: attempted ? before.score : null,
+          refined: refinedFiles.length > 0,
+          refinedFiles,
+          threshold: after.threshold,
+          predictedQaVerdict: after.predictedQaVerdict!,
+          reasons: after.reasons,
+          findings: after.totals,
+          summary: CodeQualityPolicy.summarize(after),
+          reportPath,
+        },
+      };
+    } catch (err: any) {
+      this.logger.warn(`Code quality analysis skipped: ${err.message}`);
+      return null;
+    }
   }
 
   /**

@@ -264,9 +264,14 @@ export class Task {
     return this.actualCost.greaterThan(this.estimatedCost);
   }
 
-  getCostVariance(): Money | null {
+  /**
+   * Actual minus estimated cost in dollars: positive when over the estimate, negative under it.
+   * A plain number, because Money cannot be negative (it used to throw for every task under
+   * its estimate; found by the Phase 6 domain tests).
+   */
+  getCostVariance(): number | null {
     if (!this.estimatedCost) return null;
-    return this.actualCost.subtract(this.estimatedCost);
+    return Math.round((this.actualCost.toNumber() - this.estimatedCost.toNumber()) * 1e6) / 1e6;
   }
 
   // Update methods

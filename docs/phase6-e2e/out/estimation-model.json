@@ -1,0 +1,175 @@
+{
+  "trainingProjects": 8,
+  "minRegressionSamples": 6,
+  "roles": [
+    {
+      "role": "ARCHITECT",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 17,
+        "mapeDuration": 0.0269,
+        "maeCost": 0.000109,
+        "mapeCost": 0.0056
+      }
+    },
+    {
+      "role": "BA",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 13,
+        "mapeDuration": 0.1088,
+        "maeCost": 0.000066,
+        "mapeCost": 0.0095
+      }
+    },
+    {
+      "role": "CEO",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 8,
+        "mapeDuration": 0.0468,
+        "maeCost": 0.000089,
+        "mapeCost": 0.0462
+      }
+    },
+    {
+      "role": "DEV",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 229,
+        "mapeDuration": 0.3028,
+        "maeCost": 0.006796,
+        "mapeCost": 0.3223
+      }
+    },
+    {
+      "role": "MARKETING",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 9,
+        "mapeDuration": 0.1011,
+        "maeCost": 0.000057,
+        "mapeCost": 0.0672
+      }
+    },
+    {
+      "role": "PM",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 8,
+        "mapeDuration": 0.072,
+        "maeCost": 0.000061,
+        "mapeCost": 0.0438
+      }
+    },
+    {
+      "role": "QA",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 84,
+        "mapeDuration": 0.2324,
+        "maeCost": 0.001186,
+        "mapeCost": 0.2368
+      }
+    },
+    {
+      "role": "QC",
+      "samples": 8,
+      "method": "regression",
+      "evaluation": {
+        "maeDurationMs": 599,
+        "mapeDuration": 0.2135,
+        "maeCost": 0.001553,
+        "mapeCost": 0.1835
+      }
+    }
+  ],
+  "accuracy": [
+    {
+      "projectId": "9d78b3d4-95cc-47bf-9c15-80796c71b769",
+      "projectName": "Shop 2",
+      "stage": "start",
+      "predictedDurationMs": 4073,
+      "actualDurationMs": 4151,
+      "predictedCost": 0.053499,
+      "actualCost": 0.05478,
+      "durationError": 0.0192,
+      "costError": 0.0239
+    },
+    {
+      "projectId": "987d56bb-9a7c-4d47-b39e-91d417c4c8d2",
+      "projectName": "Shop 3",
+      "stage": "start",
+      "predictedDurationMs": 4114,
+      "actualDurationMs": 4111,
+      "predictedCost": 0.054141,
+      "actualCost": 0.055749,
+      "durationError": -0.0007,
+      "costError": 0.0297
+    },
+    {
+      "projectId": "c7ebf6e5-5fcf-4110-ab10-57eea188cdfa",
+      "projectName": "Legacy Billing",
+      "stage": "start",
+      "predictedDurationMs": 4132,
+      "actualDurationMs": 4123,
+      "predictedCost": 0.05478,
+      "actualCost": 0.060468,
+      "durationError": -0.0022,
+      "costError": 0.1038
+    },
+    {
+      "projectId": "3f10bf79-cd1e-495f-8bfc-a1f9652bd03b",
+      "projectName": "Shop 5",
+      "stage": "start",
+      "predictedDurationMs": 4096,
+      "actualDurationMs": 4092,
+      "predictedCost": 0.055211,
+      "actualCost": 0.057945,
+      "durationError": -0.001,
+      "costError": 0.0495
+    },
+    {
+      "projectId": "5ff61956-827c-429f-9a2a-d218bbdc16f5",
+      "projectName": "Unsafe Portal",
+      "stage": "start",
+      "predictedDurationMs": 4053,
+      "actualDurationMs": 7444,
+      "predictedCost": 0.055695,
+      "actualCost": 0.091308,
+      "durationError": 0.8367,
+      "costError": 0.6394
+    },
+    {
+      "projectId": "3c3991e7-29d3-4f14-86a7-e5194a4dee56",
+      "projectName": "Shop 7",
+      "stage": "start",
+      "predictedDurationMs": 7008,
+      "actualDurationMs": 4399,
+      "predictedCost": 0.089596,
+      "actualCost": 0.059838,
+      "durationError": -0.3723,
+      "costError": -0.3321
+    },
+    {
+      "projectId": "7b94849a-c2ad-49ff-814d-2e6a72b46702",
+      "projectName": "Shop 8",
+      "stage": "start",
+      "predictedDurationMs": 5941,
+      "actualDurationMs": 4376,
+      "predictedCost": 0.077625,
+      "actualCost": 0.060234,
+      "durationError": -0.2634,
+      "costError": -0.224
+    }
+  ],
+  "meanAbsoluteDurationError": 0.2136,
+  "meanAbsoluteCostError": 0.2003
+}

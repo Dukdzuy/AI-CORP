@@ -23,12 +23,21 @@ import { RoleProfile } from './profiles/role-profile';
  * RoleProfile and its thinking/action strategies; everything else (state machine, domain
  * events, WebSocket updates, error classification) lives here.
  *
+ * There is one agent instance per role, but several workflow runs can use it at the same
+ * time, so every execute() walks its own state machine (one task lifecycle). The agent's
+ * state is the state of its most recent task that is still running, else of the last one.
+ * (Phase 6 fix: a single shared machine made concurrent runs fail with "Invalid state
+ * transition" and left the role unusable after a permanent error.)
+ *
  * @pattern Template Method (execute: assign → think → act → complete), State (AgentStateMachine),
  *          Strategy (IThinkingStrategy / IActionStrategy), Observer (AgentEventEmitter)
  */
 export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDestroy {
   protected readonly logger = new Logger(this.constructor.name);
-  protected readonly stateMachine: AgentStateMachine;
+  /** Lifecycle of the most recent task */
+  protected stateMachine: AgentStateMachine;
+  /** Lifecycles of the tasks in progress, oldest first */
+  private readonly running = new Set<AgentStateMachine>();
   protected readonly eventEmitter: AgentEventEmitter;
 
   constructor(
@@ -58,7 +67,8 @@ export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDe
   }
 
   getState(): AgentState {
-    return this.stateMachine.getCurrentState();
+    const active = [...this.running];
+    return (active[active.length - 1] ?? this.stateMachine).getCurrentState();
   }
 
   addEventListener(observer: IAgentObserver): void {
@@ -105,16 +115,20 @@ export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDe
     const taskId = context.taskId || 'unknown';
     const taskTitle = context.task || context.taskType || 'Untitled Task';
     const startTime = Date.now();
+    const lifecycle = new AgentStateMachine(AgentState.IDLE);
+    this.stateMachine = lifecycle;
+    this.running.add(lifecycle);
+    const transition = (to: AgentState, reason: string) => this.transition(lifecycle, to, projectId, reason);
 
     try {
       await this.publish(new TaskAssignedEvent(taskId, projectId, role, taskTitle, context.priority));
 
-      this.transition(AgentState.THINKING, projectId, 'Starting thought process');
+      transition(AgentState.THINKING, 'Starting thought process');
       const thought = await this.thinkingStrategy.think(context);
       this.emitThinking(projectId, taskId, thought.reasoning);
       this.eventEmitter.emitThinkingCompleted({ agentId, agentRole: role, taskId, thought, timestamp: new Date() });
 
-      this.transition(AgentState.ACTING, projectId, 'Executing action based on thought');
+      transition(AgentState.ACTING, 'Executing action based on thought');
       const action = await this.actionStrategy.act(context, thought);
       this.eventEmitter.emitActionCompleted({
         agentId,
@@ -127,18 +141,18 @@ export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDe
         timestamp: new Date(),
       });
 
-      this.transition(AgentState.COMPLETED, projectId, 'Task completed successfully');
+      transition(AgentState.COMPLETED, 'Task completed successfully');
 
       const executionTimeMs = Date.now() - startTime;
       await this.publish(new TaskCompletedEvent(taskId, projectId, role, taskTitle, executionTimeMs, { thought, action }));
       await this.publish(new AgentCompletedTaskEvent(agentId, taskId, projectId, { thought, action }));
 
-      this.transition(AgentState.IDLE, projectId, 'Agent ready for next task');
+      transition(AgentState.IDLE, 'Agent ready for next task');
       return { thought, action };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const failedIn = this.stateMachine.getCurrentState();
-      this.transition(AgentState.ERROR, projectId, `Error during execution: ${message}`);
+      const failedIn = lifecycle.getCurrentState();
+      transition(AgentState.ERROR, `Error during execution: ${message}`);
 
       this.eventEmitter.emitError({
         agentId,
@@ -153,9 +167,11 @@ export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDe
 
       // Transient errors (timeouts, rate limits) leave the agent reusable; permanent ones keep it in ERROR
       if (this.isTransientError(error)) {
-        this.transition(AgentState.IDLE, projectId, 'Agent reset after transient error');
+        transition(AgentState.IDLE, 'Agent reset after transient error');
       }
       throw error;
+    } finally {
+      this.running.delete(lifecycle);
     }
   }
 
@@ -196,9 +212,9 @@ export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDe
       .catch(err => this.logger.error(`Failed to publish ${event.constructor.name}: ${err.message}`));
   }
 
-  private transition(to: AgentState, projectId: string, reason: string): void {
-    const from = this.stateMachine.getCurrentState();
-    this.stateMachine.transitionTo(to, reason);
+  private transition(lifecycle: AgentStateMachine, to: AgentState, projectId: string, reason: string): void {
+    const from = lifecycle.getCurrentState();
+    lifecycle.transitionTo(to, reason);
     this.emitStateChanged(from, to, projectId, reason);
   }
 

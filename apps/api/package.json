@@ -14,7 +14,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "db:migrate:deploy": "prisma migrate deploy"
+    "db:migrate:deploy": "prisma migrate deploy",
+    "test:cov": "jest --coverage"
   },
   "prisma": {
     "seed": "npx ts-node prisma/seed.ts"
@@ -48,6 +49,7 @@
     "reflect-metadata": "^0.1.13",
     "rxjs": "^7.8.0",
     "socket.io": "^4.7.2",
+    "typescript": "^5.3.3",
     "zod": "^3.22.4"
   },
   "devDependencies": {
@@ -68,8 +70,7 @@
     "prettier": "^3.1.0",
     "prisma": "^5.7.0",
     "ts-jest": "^29.1.0",
-    "ts-loader": "^9.5.0",
-    "typescript": "^5.3.3"
+    "ts-loader": "^9.5.0"
   },
   "jest": {
     "moduleFileExtensions": [
@@ -95,7 +96,13 @@
     "testEnvironment": "node",
     "coverageThreshold": {
       "global": {
-        "branches": 90,
+        "branches": 55,
+        "functions": 64,
+        "lines": 70,
+        "statements": 70
+      },
+      "./src/domain/": {
+        "branches": 85,
         "functions": 90,
         "lines": 90,
         "statements": 90

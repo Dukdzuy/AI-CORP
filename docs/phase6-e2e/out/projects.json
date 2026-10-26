@@ -1,0 +1,138 @@
+{
+  "projects": [
+    {
+      "id": "a5075e87-d4fb-4a46-81ca-1eae5e6929db",
+      "name": "Shop 1",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:42:35.476Z",
+      "updatedAt": "2026-10-26T08:42:35.476Z"
+    },
+    {
+      "id": "9d78b3d4-95cc-47bf-9c15-80796c71b769",
+      "name": "Shop 2",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:42:40.150Z",
+      "updatedAt": "2026-10-26T08:42:40.150Z"
+    },
+    {
+      "id": "987d56bb-9a7c-4d47-b39e-91d417c4c8d2",
+      "name": "Shop 3",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:42:44.820Z",
+      "updatedAt": "2026-10-26T08:42:44.820Z"
+    },
+    {
+      "id": "c7ebf6e5-5fcf-4110-ab10-57eea188cdfa",
+      "name": "Legacy Billing",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:42:49.465Z",
+      "updatedAt": "2026-10-26T08:42:49.465Z"
+    },
+    {
+      "id": "3f10bf79-cd1e-495f-8bfc-a1f9652bd03b",
+      "name": "Shop 5",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:42:54.189Z",
+      "updatedAt": "2026-10-26T08:42:54.189Z"
+    },
+    {
+      "id": "5ff61956-827c-429f-9a2a-d218bbdc16f5",
+      "name": "Unsafe Portal",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:42:58.867Z",
+      "updatedAt": "2026-10-26T08:42:58.867Z"
+    },
+    {
+      "id": "3c3991e7-29d3-4f14-86a7-e5194a4dee56",
+      "name": "Shop 7",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:43:07.104Z",
+      "updatedAt": "2026-10-26T08:43:07.104Z"
+    },
+    {
+      "id": "7b94849a-c2ad-49ff-814d-2e6a72b46702",
+      "name": "Shop 8",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices. Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "completed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:43:12.285Z",
+      "updatedAt": "2026-10-26T08:43:12.285Z"
+    }
+  ],
+  "failed": [
+    {
+      "id": "43aab866-5bf6-4576-8d45-ab5f28fc0715",
+      "name": "Outage 1",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "failed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:43:17.680Z",
+      "updatedAt": "2026-10-26T08:43:17.680Z"
+    },
+    {
+      "id": "21b1deff-3d20-4934-9436-c687831a3052",
+      "name": "Outage 2",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "failed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:44:18.572Z",
+      "updatedAt": "2026-10-26T08:44:18.572Z"
+    },
+    {
+      "id": "910fe6fc-8a83-4f89-81e3-0cf896492de1",
+      "name": "Outage 3",
+      "description": "Customers browse a catalog, place orders, cancel them before shipping and pay invoices.",
+      "goal": "Build an online shop where customers order, cancel and pay",
+      "status": "failed",
+      "budget": null,
+      "costAccrued": 0,
+      "createdById": "a59f39ed-de18-452c-8fc4-d365c9e4e140",
+      "createdAt": "2026-10-26T08:45:19.388Z",
+      "updatedAt": "2026-10-26T08:45:19.388Z"
+    }
+  ]
+}
