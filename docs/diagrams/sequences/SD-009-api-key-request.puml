@@ -1,0 +1,46 @@
+@startuml SD-009: Integration API request with an API key
+!theme plain
+skinparam sequenceMessageAlign center
+
+title SD-009: Integration API request with an API key (Tasks 20-22)
+
+actor "External system" as Ext
+participant "AuthenticationGuard" as AuthN #LightBlue
+participant "ApiKeyAuthenticator" as Keys #LightBlue
+participant "RateLimitGuard" as Rate #LightYellow
+participant "PermissionGuard" as Perm #LightBlue
+participant "IntegrationV1Controller" as V1 #LightGreen
+participant "AuthorizationService" as Owner #LightBlue
+participant "AuditLogService" as Audit #LightGray
+
+Ext -> AuthN: GET /api/v1/projects/:id/export?format=pdf\nx-api-key: aic_<id>_<secret>
+AuthN -> AuthN: route is @AllowApiKey?
+alt not an API key route
+  AuthN --> Ext: 401
+end
+AuthN -> Keys: authenticate(token)
+Keys -> Keys: ApiKey.parse(token)\nfind by id, matches(secret) (SHA-256, timing-safe)\nisUsable(): not revoked, not expired, owner active
+alt invalid
+  Keys --> Ext: 401
+end
+Keys --> AuthN: Principal.forApiKey(owner, key)\npermissions = scopes ∩ owner's role
+AuthN -> Rate: next guard
+Rate -> Rate: limiter.hit("key:<id>", API_RATE_LIMIT_PER_MINUTE, 60 s)
+alt over the limit
+  Rate --> Ext: 429 + Retry-After
+end
+Rate -> Perm: next guard
+Perm -> Perm: principal.can(PROJECT_EXPORT)?
+alt missing permission
+  Perm -> Audit: recordDenied(access.denied)
+  Perm --> Ext: 403
+end
+Perm -> V1: export(id, format)
+V1 -> Owner: assertProjectOwner(principal, id)
+alt not owner and not admin
+  Owner -> Audit: recordDenied
+  Owner --> Ext: 403
+end
+V1 --> Ext: 200 file (Content-Disposition)
+note over Audit: AuditInterceptor records project.export\nwith actor type api_key
+@enduml

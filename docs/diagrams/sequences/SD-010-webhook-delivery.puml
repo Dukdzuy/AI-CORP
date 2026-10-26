@@ -1,0 +1,41 @@
+@startuml SD-010: Webhook delivery
+!theme plain
+skinparam sequenceMessageAlign center
+
+title SD-010: Webhook delivery (Observer, Task 22)
+
+participant "WorkflowEngine /\nservices" as Src #Orange
+participant "EventBus" as Bus #LightYellow
+participant "WebhookDispatcher" as Disp #LightGreen
+participant "IWebhookRepository" as Repo #LightGray
+participant "WebhookDeliveryClient" as Client #LightGreen
+participant "WebhookUrl" as Url #White
+actor "Receiver" as Rcv
+
+Src -> Bus: publish(WorkflowCompletedEvent)
+Bus -> Disp: handle(event)
+Disp -> Disp: map to webhook event\n(workflow.completed) + payload
+Disp -> Repo: findActiveForEvent(event)
+loop each webhook where subscribesTo(event, projectId)
+  Disp ->> Client: deliver(url, secret, envelope)\n(in the background)
+  activate Client
+  loop attempt 1..WEBHOOK_MAX_ATTEMPTS
+    Client -> Url: resolve DNS, isPrivateAddress?
+    alt private / blocked address
+      Client --> Disp: outcome failed (final, no retry)
+    end
+    Client -> Client: signature = HMAC-SHA256(secret,\n"<timestamp>.<body>")
+    Client -> Rcv: POST body (timeout WEBHOOK_TIMEOUT_MS)\nX-AICorp-Event / Delivery / Timestamp / Signature
+    alt 2xx
+      Client --> Disp: outcome delivered
+    else 4xx (not 408/429)
+      Client --> Disp: outcome failed (no retry)
+    else 5xx, 408, 429, network error
+      Client -> Client: wait WEBHOOK_RETRY_BASE_MS × 2^(attempt-1)
+    end
+  end
+  deactivate Client
+  Disp -> Repo: recordDelivery(status, attempts,\nresponseCode, error, durationMs)
+end
+note over Bus: The publisher never waits for receivers:\na slow receiver cannot slow a workflow.
+@enduml

@@ -34,7 +34,8 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 | Phase 2.5 – OOAD Project Automation | Done (fixed) | Templates + skeleton (PR #3). Quality gate, traceability and metrics were not wired end-to-end; fixed in this audit |
 | Phase 3 – Agent System Enhancement | **Done** (2026-10-26) | Re-scoped below. Tasks 11–15 done; end-to-end run documented in `docs/phase3-e2e/` |
 | Phase 4 – Workflow Engine Enhancement | **Done** (2026-10-26) | Re-scoped below: sub-workflows as child runs, immutable versions + snapshot rollback, parallel with dependencies, typed templates; 5 engine defects fixed. End-to-end run in `docs/phase4-e2e/` |
-| Phases 5–7 | Not started | DevOps references removed |
+| Phase 5 – Enterprise Features & Security | **Done** (2026-10-26) | Re-scoped below: roles admin / board member / viewer plus project ownership, append-only audit log, API keys on `/api/v1`, signed webhooks, PDF/CSV/JSON export and a weekly workspace report instead of email; 5 defects fixed. End-to-end run in `docs/phase5-e2e/` |
+| Phases 6–7 | Not started | DevOps references removed |
 
 ### **Audit findings and fixes**
 
@@ -56,7 +57,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 **Verification**: `nest build` 0 errors, Jest 21/21 suites (351 tests), web `tsc` clean. Full workflow run end-to-end against PostgreSQL with a mock LLM: gate passed, 2 use-case tasks moved todo → review → done, every role logged usage, 28 files persisted in the workspace (an unsafe `../../etc/evil.ts` path from the "LLM" was rejected), traceability 80%, metrics endpoint correct, human approval → CEO close-out → `completed`.
 
-**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); ~~`EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing~~ (keyword fallback since Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); ~~generated tests are written but not executed yet~~ (executed since Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
+**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / ~~`AuditLogHandler`~~ / `NotificationHandler` are stubs (`AuditLogHandler` done in Phase 5; notifications are covered by webhooks); ~~`EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing~~ (keyword fallback since Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); ~~generated tests are written but not executed yet~~ (executed since Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
 
 ### **Agent role review**
 
@@ -1281,458 +1282,73 @@ _Status 2026-10-26: all met. `nest build` 0 errors, Jest 28/28 suites (452 passe
 
 ---
 
-### **Phase 5: Enterprise Features & Security (Week 5-6)**
+### **Phase 5: Enterprise Features & Security (Week 5-6)** — ✅ Done (2026-10-26)
+
+> **Re-scoped on 2026-10-26.** The tasks keep their numbers and goals, with these corrections against the original text:
+> - **No `AGENT` user role** (Task 20). Agents never call the HTTP API: they run inside the engine and their tools are already limited per role by `ToolRegistry` (NFR-SEC-004). The roles are `admin`, `board_member` and a new read-only `viewer`. Agent actions are still audited, with actor type `agent`.
+> - **Permissions alone were not enough**: any board member could change or approve any project. Changing a project, its tasks and milestones, controlling its runs and answering its approvals now also requires **owning the project** (admin is exempt). The permission list was merged to 13 permissions (`workflow:start/pause` → `workflow:control`, task and milestone writes → `task:manage`) so it can be shown and reasoned about as one matrix.
+> - **API keys only work on the versioned integration API** `/api/v1` (Task 22); everything else needs a user token. A key acts as its owner, limited to its scopes, and dies with the owner's account.
+> - **Email was dropped from the weekly report** (Task 23): the platform has no mail server and adding one is outside the OOAD scope. The weekly report is written as Markdown into each active project's workspace (visible in *Artifacts*) and announced through the `report.generated` webhook, which can feed any mail or chat tool.
+> - **The rate limiter is in memory** (fixed window, one API instance). It sits behind the `IRateLimiter` port, so a Redis implementation can replace it without touching the guard.
+> - OpenAPI documents the integration API (`/api/docs`), not every internal route. The schema is applied with `prisma db push` like in earlier phases.
+
+**Defects found and fixed during Phase 5**
+
+| # | Finding | Fix |
+|---|---------|-----|
+| C1 | `ApprovalRequestedEvent` was never raised: `ApprovalService.createApprovalRequest` was dead code and `HumanApprovalStrategy` created approvals directly | The strategy publishes the event (tested in `workflow-events.spec.ts`); it now reaches the audit log and the `approval.requested` webhook |
+| C2 | Nothing published a workflow failure | The engine raises `WorkflowFailedEvent` on a dead end or the loop limit |
+| C3 | `AuditLogHandler` was a stub, and `quality.gate.evaluated` / `agent.error` reached no audit or notification subscriber | The handler persists audit entries for 11 domain events |
+| C4 | Many read routes (project lists, cost, metrics, workflows) had no guard, and roles were only checked on a few routes with `@Roles` | One global guard chain; every route is authenticated unless marked `@Public` (health, login, register) and declares its permission |
+| C5 | Any authenticated user could approve any approval and edit or delete any project | Ownership and assignee checks (`AuthorizationService`), recorded as `access.denied` when refused |
 
 ---
 
-**Task 20: Implement Role-Based Access Control (RBAC)**
-- **Objective**: Granular permissions for users and agents
+**Task 20: Role-Based Access Control (RBAC)** — ✅ Done (2026-10-26)
+- **Objective**: Permissions per role, enforced on every request and reflected in the UI.
 - **Implementation**:
-  1. Define permission system:
-     ```typescript
-     enum Permission {
-       PROJECT_CREATE = 'project:create',
-       PROJECT_READ = 'project:read',
-       PROJECT_UPDATE = 'project:update',
-       PROJECT_DELETE = 'project:delete',
-       WORKFLOW_START = 'workflow:start',
-       WORKFLOW_PAUSE = 'workflow:pause',
-       APPROVAL_GRANT = 'approval:grant',
-       AGENT_CONFIGURE = 'agent:configure',
-       AUDIT_VIEW = 'audit:view'
-     }
-     
-     enum Role {
-       ADMIN = 'admin',
-       BOARD_MEMBER = 'board_member',
-       VIEWER = 'viewer',
-       AGENT = 'agent'
-     }
-     
-     const RolePermissions: Record<Role, Permission[]> = {
-       [Role.ADMIN]: [/* all permissions */],
-       [Role.BOARD_MEMBER]: [Permission.PROJECT_CREATE, Permission.PROJECT_READ, Permission.APPROVAL_GRANT, Permission.WORKFLOW_PAUSE],
-       [Role.VIEWER]: [Permission.PROJECT_READ],
-       [Role.AGENT]: [Permission.PROJECT_READ, Permission.WORKFLOW_START]
-     };
-     ```
-  2. Implement authorization service:
-     ```typescript
-     @Injectable()
-     class AuthorizationService {
-       hasPermission(user: User, permission: Permission): boolean {
-         const userPermissions = RolePermissions[user.role];
-         return userPermissions.includes(permission);
-       }
-       
-       async checkPermission(user: User, permission: Permission): Promise<void> {
-         if (!this.hasPermission(user, permission)) {
-           throw new ForbiddenException(`User lacks permission: ${permission}`);
-         }
-       }
-     }
-     ```
-  3. Create authorization guard:
-     ```typescript
-     @Injectable()
-     export class PermissionGuard implements CanActivate {
-       constructor(private readonly authService: AuthorizationService, private readonly reflector: Reflector) {}
-       
-       canActivate(context: ExecutionContext): boolean {
-         const requiredPermission = this.reflector.get<Permission>('permission', context.getHandler());
-         if (!requiredPermission) return true;
-         
-         const request = context.switchToHttp().getRequest();
-         const user = request.user;
-         
-         return this.authService.hasPermission(user, requiredPermission);
-       }
-     }
-     ```
-  4. Apply to controllers:
-     ```typescript
-     @Controller('projects')
-     export class ProjectsController {
-       @Post()
-       @RequirePermission(Permission.PROJECT_CREATE)
-       @UseGuards(JwtAuthGuard, PermissionGuard)
-       async createProject(@Body() dto: CreateProjectDto, @CurrentUser() user: User) {
-         return this.projectsService.create(dto, user.id);
-       }
-       
-       @Delete(':id')
-       @RequirePermission(Permission.PROJECT_DELETE)
-       @UseGuards(JwtAuthGuard, PermissionGuard)
-       async deleteProject(@Param('id') id: string) {
-         return this.projectsService.delete(id);
-       }
-     }
-     ```
-  5. Add permission management UI:
-     - Role management page
-     - User assignment to roles
-     - Permission matrix view
-- **Tests**:
-  - Unit test: Permission checking logic
-  - Integration test: Guard blocks unauthorized requests
-  - E2E test: User with VIEWER role cannot create projects
-- **Demo**: Login as different roles → Show different UI capabilities based on permissions
+  1. Shared contract (`packages/shared-types/src/security.types.ts`): `Permission` (13), `UserRoleName` (admin, board_member, viewer).
+  2. Domain (`domain/security`): `UserRole` value object, `RolePolicy` (the single permission matrix), `Principal` (user or API key; `can(permission)`, `owns(ownerId)`), `AccessDeniedError`.
+  3. Global guard chain (`modules/access`): `AuthenticationGuard` (JWT, or API key on `@AllowApiKey` routes) → `RateLimitGuard` → `PermissionGuard` (`@RequirePermission`). `AuthorizationService` checks project, run and approval ownership.
+  4. `User.isActive`; `UsersController`: `GET /api/users`, `GET /api/users/roles`, `PATCH /api/users/:id/role`, `PATCH /api/users/:id/active` (no change to oneself, the last active admin is protected). `GET /api/auth/me` returns the current permissions.
+  5. Web: `usePermission` hides or disables what the user cannot do (New Project, card actions, approval buttons, run controls, agent model selects), the menu is filtered, `RequirePermission` guards routes, new *Users & Roles* page with the matrix.
+- **Tests**: `security-domain.spec.ts` (policy, principal, key scopes ∩ role), `access-http.spec.ts` (a real Nest app: 401/403, public routes, ownership, API key only on `/v1`, rate limits), `services.spec.ts` (user admin rules), web `permissions.test.ts`.
+- **Use cases**: UC-029 (new). **Diagram**: `classes/enterprise-phase5.puml`.
 
----
-
-**Task 21: Implement Comprehensive Audit Logging**
-- **Objective**: Track all user and system actions for compliance
+**Task 21: Audit Logging** — ✅ Done (2026-10-26)
+- **Objective**: Who did what, when, from where, and what changed.
 - **Implementation**:
-  1. Define audit log schema:
-     ```prisma
-     model AuditLog {
-       id            String   @id @default(uuid())
-       timestamp     DateTime @default(now())
-       userId        String?
-       agentRole     String?
-       action        String   // "project.create", "workflow.start", "approval.grant"
-       resourceType  String   // "Project", "Workflow", "Task"
-       resourceId    String?
-       changes       Json?    // Before/after state
-       ipAddress     String?
-       userAgent     String?
-       success       Boolean  @default(true)
-       errorMessage  String?
-       
-       @@index([timestamp])
-       @@index([userId, timestamp])
-       @@index([action, timestamp])
-     }
-     ```
-  2. Implement audit logger:
-     ```typescript
-     @Injectable()
-     class AuditLogService {
-       async log(entry: AuditLogEntry): Promise<void> {
-         await this.prisma.auditLog.create({ data: entry });
-       }
-       
-       async logAction(
-         user: User | null,
-         action: string,
-         resourceType: string,
-         resourceId: string,
-         changes?: any,
-         request?: Request
-       ): Promise<void> {
-         await this.log({
-           userId: user?.id,
-           action,
-           resourceType,
-           resourceId,
-           changes,
-           ipAddress: request?.ip,
-           userAgent: request?.headers['user-agent'],
-           success: true
-         });
-       }
-       
-       async logError(
-         user: User | null,
-         action: string,
-         error: Error,
-         request?: Request
-       ): Promise<void> {
-         await this.log({
-           userId: user?.id,
-           action,
-           success: false,
-           errorMessage: error.message,
-           ipAddress: request?.ip,
-           userAgent: request?.headers['user-agent']
-         });
-       }
-     }
-     ```
-  3. Create audit interceptor:
-     ```typescript
-     @Injectable()
-     export class AuditInterceptor implements NestInterceptor {
-       constructor(private readonly auditService: AuditLogService) {}
-       
-       intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-         const request = context.switchToHttp().getRequest();
-         const user = request.user;
-         const action = `${request.method} ${request.url}`;
-         
-         return next.handle().pipe(
-           tap(() => {
-             this.auditService.logAction(user, action, 'HTTP', request.url, null, request);
-           }),
-           catchError(error => {
-             this.auditService.logError(user, action, error, request);
-             throw error;
-           })
-         );
-       }
-     }
-     ```
-  4. Apply to sensitive operations:
-     ```typescript
-     @Post()
-     @UseInterceptors(AuditInterceptor)
-     async createProject(@Body() dto: CreateProjectDto, @CurrentUser() user: User, @Req() request: Request) {
-       const project = await this.projectsService.create(dto, user.id);
-       await this.auditService.logAction(user, 'project.create', 'Project', project.id, { dto }, request);
-       return project;
-     }
-     ```
-  5. Add audit log UI:
-     - Filterable table by user, action, date range
-     - Export to CSV for compliance reports
-     - Anomaly detection (e.g., unusual access patterns)
-- **Tests**:
-  - Unit test: Audit log creation
-  - Integration test: Action creates audit log entry
-  - Test audit log query filtering
-  - Test anomaly detection (e.g., many failed login attempts)
-- **Demo**: Perform actions → Show audit log with before/after state → Export CSV
+  1. Domain (`domain/audit`): `AuditEntry` (append-only, secrets redacted), `ChangeSet` (before, after and per-field diff, `updatedAt` ignored), `IAuditLogRepository`, `AnomalyDetector` with `RepeatedFailedLoginRule` (5 in 15 min) and `AccessDeniedBurstRule` (10 in 10 min).
+  2. `AuditLog` table (`PrismaAuditLogRepository`); no update or delete path.
+  3. Three sources: `@Audited` controller actions through the global `AuditInterceptor`, which loads the resource before and after via `AuditSnapshotRegistry` (modules register loaders for projects, tasks, milestones, runs, approvals, agents and users); domain events through `AuditLogHandler` (Observer); `access.denied` from the guards and `AuthorizationService`. Logins are recorded both when they succeed and when they fail.
+  4. API: `GET /api/audit` (filters, pages), `GET /api/audit/export` (CSV with BOM), `GET /api/audit/anomalies`.
+  5. Web: *Audit Log* page with anomaly warnings, filters, expandable entries showing the field changes, CSV export.
+- **Tests**: `audit-domain.spec.ts` (diff, redaction, rules and windows), `services.spec.ts` (interceptor before/after, handler mapping, CSV), `access-http.spec.ts` (denials recorded).
+- **Use cases**: UC-030 (new).
 
----
-
-**Task 22: Implement Integration APIs**
-- **Objective**: Enable external tools to integrate with AI-CORP
+**Task 22: Integration APIs** — ✅ Done (2026-10-26)
+- **Objective**: External tools can drive and observe AI-CORP safely.
 - **Implementation**:
-  1. Design RESTful integration API:
-     ```typescript
-     @Controller('api/v1/integrations')
-     @UseGuards(ApiKeyAuthGuard)
-     export class IntegrationController {
-       @Post('/projects')
-       async createProject(@Body() dto: CreateProjectApiDto) {
-         return this.projectsService.create(dto);
-       }
-       
-       @Get('/projects/:id/status')
-       async getProjectStatus(@Param('id') id: string) {
-         return this.projectsService.getStatus(id);
-       }
-       
-       @Post('/projects/:id/webhooks')
-       async registerWebhook(@Param('id') projectId: string, @Body() dto: WebhookDto) {
-         return this.webhookService.register(projectId, dto.url, dto.events);
-       }
-     }
-     ```
-  2. Implement API key authentication:
-     ```typescript
-     @Injectable()
-     export class ApiKeyAuthGuard implements CanActivate {
-       canActivate(context: ExecutionContext): boolean {
-         const request = context.switchToHttp().getRequest();
-         const apiKey = request.headers['x-api-key'];
-         
-         if (!apiKey) return false;
-         
-         const valid = this.apiKeyService.validate(apiKey);
-         if (valid) {
-           request.user = this.apiKeyService.getUserByApiKey(apiKey);
-         }
-         return valid;
-       }
-     }
-     ```
-  3. Implement webhook system:
-     ```typescript
-     @Injectable()
-     class WebhookService {
-       async register(projectId: string, url: string, events: string[]): Promise<Webhook> {
-         return this.prisma.webhook.create({
-           data: { projectId, url, events }
-         });
-       }
-       
-       async trigger(event: string, projectId: string, payload: any): Promise<void> {
-         const webhooks = await this.prisma.webhook.findMany({
-           where: { projectId, events: { has: event } }
-         });
-         
-         await Promise.all(webhooks.map(webhook =>
-           this.httpService.post(webhook.url, { event, payload }).toPromise()
-         ));
-       }
-     }
-     
-     @Injectable()
-     class WebhookEventHandler implements IEventHandler<ProjectCompletedEvent> {
-       async handle(event: ProjectCompletedEvent): Promise<void> {
-         await this.webhookService.trigger('project.completed', event.projectId, event);
-       }
-     }
-     ```
-  4. Create OpenAPI documentation:
-     ```typescript
-     const config = new DocumentBuilder()
-       .setTitle('AI-CORP Integration API')
-       .setDescription('API for integrating external tools with AI-CORP')
-       .setVersion('1.0')
-       .addApiKey({ type: 'apiKey', name: 'x-api-key', in: 'header' }, 'api-key')
-       .build();
-     const document = SwaggerModule.createDocument(app, config);
-     SwaggerModule.setup('api/docs', app, document);
-     ```
-  5. Add rate limiting:
-     ```typescript
-     @Injectable()
-     export class RateLimitGuard implements CanActivate {
-       private readonly limiter = new Map<string, { count: number; resetAt: number }>();
-       
-       canActivate(context: ExecutionContext): boolean {
-         const request = context.switchToHttp().getRequest();
-         const apiKey = request.headers['x-api-key'];
-         
-         const limit = this.limiter.get(apiKey) || { count: 0, resetAt: Date.now() + 60000 };
-         if (Date.now() > limit.resetAt) {
-           limit.count = 0;
-           limit.resetAt = Date.now() + 60000;
-         }
-         
-         if (limit.count >= 100) { // 100 requests per minute
-           throw new TooManyRequestsException();
-         }
-         
-         limit.count++;
-         this.limiter.set(apiKey, limit);
-         return true;
-       }
-     }
-     ```
-- **Tests**:
-  - Unit test: API key validation
-  - Integration test: Webhook triggered on event
-  - Test rate limiting enforcement
-  - Test OpenAPI spec generation
-- **Demo**: Register webhook → Trigger event → Show webhook received payload
+  1. Domain (`domain/integration`): `ApiKey` (`aic_<id>_<secret>`, SHA-256 hash stored, timing-safe compare, scopes within the owner's role, expiry, revocation), `Webhook` + `WebhookUrl` (http(s) only, no credentials, private/loopback/link-local addresses refused, including IPv4-mapped IPv6), `WebhookSignature` (HMAC-SHA256 over `"<timestamp>.<body>"`), `FixedWindowRateLimiter`.
+  2. Tables `ApiKey`, `Webhook`, `WebhookDelivery` and their repositories.
+  3. `WebhookDispatcher` (Observer on the event bus) maps 8 events (`project.created`, `workflow.started/completed/failed`, `approval.requested`, `quality.gate.evaluated`, `agent.error`, `report.generated`) and delivers in the background: DNS re-checked at send time, retries with exponential backoff for 5xx/408/429/network errors, every delivery recorded.
+  4. `/api/v1` (`IntegrationV1Controller`): list/create projects, status, cost report, export, webhooks. OpenAPI at `/api/docs`. Rate limits: per API key (`API_RATE_LIMIT_PER_MINUTE`, default 100), login 10/min per IP + email, register 5/min per IP.
+  5. Management API `/api/integrations/{events,api-keys,webhooks}` with test delivery and delivery history; web *Integrations* page.
+- **Tests**: `integration-domain.spec.ts`, `webhooks.spec.ts` (a real HTTP receiver: signatures, retries, refusals, no retry on 4xx), `access-http.spec.ts`, `reporting.spec.ts` (OpenAPI document).
+- **Use cases**: UC-031, UC-032 (new). **Sequences**: `SD-009-api-key-request.puml`, `SD-010-webhook-delivery.puml`.
 
----
-
-**Task 23: Implement Data Export & Reporting**
-- **Objective**: Export project data and generate reports
+**Task 23: Data Export & Reporting** — ✅ Done (2026-10-26)
+- **Objective**: Reports for stakeholders and exports for other tools.
 - **Implementation**:
-  1. Implement export service:
-     ```typescript
-     @Injectable()
-     class ExportService {
-       async exportProject(projectId: string, format: 'json' | 'csv' | 'pdf'): Promise<Buffer> {
-         const project = await this.projectsService.getFullProject(projectId);
-         
-         switch (format) {
-           case 'json':
-             return Buffer.from(JSON.stringify(project, null, 2));
-           case 'csv':
-             return this.exportToCsv(project);
-           case 'pdf':
-             return this.exportToPdf(project);
-         }
-       }
-       
-       private exportToCsv(project: Project): Buffer {
-         const csv = [
-           ['Task ID', 'Title', 'Status', 'Assigned Agent', 'Cost'],
-           ...project.tasks.map(t => [t.id, t.title, t.status, t.assignedAgent, t.actualCost])
-         ].map(row => row.join(',')).join('\n');
-         return Buffer.from(csv);
-       }
-       
-       private async exportToPdf(project: Project): Promise<Buffer> {
-         const PDFDocument = require('pdfkit');
-         const doc = new PDFDocument();
-         const chunks: Buffer[] = [];
-         
-         doc.on('data', (chunk) => chunks.push(chunk));
-         doc.on('end', () => {});
-         
-         doc.fontSize(20).text(`Project: ${project.name}`, { align: 'center' });
-         doc.moveDown();
-         doc.fontSize(12).text(`Status: ${project.status}`);
-         doc.text(`Budget: $${project.budget}`);
-         doc.text(`Cost Accrued: $${project.costAccrued}`);
-         doc.moveDown();
-         doc.fontSize(14).text('Tasks:');
-         project.tasks.forEach(task => {
-           doc.fontSize(10).text(`- ${task.title} (${task.status})`);
-         });
-         
-         doc.end();
-         return Buffer.concat(chunks);
-       }
-     }
-     ```
-  2. Implement report generation:
-     ```typescript
-     @Injectable()
-     class ReportService {
-       async generateCostReport(projectId: string): Promise<CostReport> {
-         const logs = await this.prisma.apiUsageLog.findMany({ where: { projectId } });
-         
-         const byAgent = logs.reduce((acc, log) => {
-           acc[log.agentRole] = (acc[log.agentRole] || 0) + parseFloat(log.actualCost.toString());
-           return acc;
-         }, {} as Record<string, number>);
-         
-         const byModel = logs.reduce((acc, log) => {
-           acc[log.actualModelUsed] = (acc[log.actualModelUsed] || 0) + parseFloat(log.actualCost.toString());
-           return acc;
-         }, {} as Record<string, number>);
-         
-         return { byAgent, byModel, total: logs.reduce((sum, l) => sum + parseFloat(l.actualCost.toString()), 0) };
-       }
-       
-       async generatePerformanceReport(agentRole: AgentRole): Promise<PerformanceReport> {
-         const steps = await this.prisma.workflowStep.findMany({
-           where: { agentRole },
-           select: { durationMs: true, status: true }
-         });
-         
-         const successRate = steps.filter(s => s.status === 'completed').length / steps.length;
-         const avgDuration = steps.reduce((sum, s) => sum + (s.durationMs || 0), 0) / steps.length;
-         
-         return { agentRole, successRate, avgDuration, totalExecutions: steps.length };
-       }
-     }
-     ```
-  3. Add export endpoints:
-     ```typescript
-     @Get('/projects/:id/export')
-     @Header('Content-Type', 'application/octet-stream')
-     async exportProject(
-       @Param('id') id: string,
-       @Query('format') format: 'json' | 'csv' | 'pdf'
-     ): Promise<StreamableFile> {
-       const buffer = await this.exportService.exportProject(id, format);
-       return new StreamableFile(buffer);
-     }
-     
-     @Get('/reports/cost/:projectId')
-     async getCostReport(@Param('projectId') projectId: string) {
-       return this.reportService.generateCostReport(projectId);
-     }
-     ```
-  4. Add scheduled reports:
-     ```typescript
-     @Injectable()
-     class ScheduledReportService {
-       @Cron('0 0 * * MON') // Every Monday at midnight
-       async sendWeeklyReport() {
-         const projects = await this.prisma.project.findMany({ where: { status: 'active' } });
-         for (const project of projects) {
-           const report = await this.reportService.generateCostReport(project.id);
-           await this.emailService.send(project.createdBy.email, 'Weekly Cost Report', report);
-         }
-       }
-     }
-     ```
-- **Tests**:
-  - Unit test: CSV/PDF generation
-  - Integration test: Export endpoint returns valid file
-  - Test report accuracy with sample data
-  - Test scheduled report execution
-- **Demo**: Export project as PDF → Show formatted report with charts
+  1. Domain (`domain/reporting`): `CostReportBuilder` (by agent, model and day, budget used), `PerformanceReportBuilder` (runs, success rate, average and p95 duration, retries per role or node; success rate is empty, not 0, when no step finished), `IsoWeek`, `csvCell` (formula escaping).
+  2. Exporters (Strategy, `PROJECT_EXPORTERS` multi-provider): JSON (full snapshot), CSV (tasks), PDF (`pdfkit`: summary, OOAD quality, cost bar chart, performance, milestones, tasks, runs; Unicode font for Vietnamese via `PDF_FONT_PATH` or system fonts). Adding a format means adding one class.
+  3. `ProjectReportingService` (read side) and `ProjectExportService`. API: `GET /api/reports/projects/:id/cost`, `GET /api/reports/performance`, `GET /api/projects/:id/export?format=`.
+  4. `WeeklyReportScheduler`: once per ISO week per active project, writes `reports/weekly-<week>.md` and raises `ReportGeneratedEvent`; `POST /api/reports/weekly/run` for admins.
+  5. Web: *Reports* tab in Project Detail (export buttons, cost by agent and model, agent performance).
+- **Tests**: `reporting-domain.spec.ts` (builders, ISO weeks, CSV), `reporting.spec.ts` (each exporter, PDF fonts, scheduler idempotency, OpenAPI).
+- **Use cases**: UC-022 (rewritten, now implemented), UC-008 (viewer access). **Sequence**: `SD-011-project-export.puml`.
+
+**Phase 5 verification (2026-10-26)**: `nest build` 0 errors; API Jest 41/41 suites, 595 passed (15 skipped), up from 504; web `tsc` clean, Vitest 33/33, `vite build` OK. End-to-end run on PostgreSQL + Redis with the scripted LLM and a real webhook receiver: 44/44 checks, see `docs/phase5-e2e/README.md`. Traceability: FR-AUTH-003/005, FR-AUD-001–003, FR-INT-001–003, FR-REP-001–003, NFR-SEC-007–010 in `docs/requirements/traceability-matrix.md`; admin use-case diagram updated. PlantUML rendering is blocked in the build container, so the diagrams were not rendered here.
 
 ---
 

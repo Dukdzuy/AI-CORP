@@ -570,6 +570,8 @@ Board Member views real-time progress of an active workflow, including current n
 | **Priority** | Medium |
 | **Status** | Documented |
 
+> Phase 5: also available to the Viewer role (`report:view`), and as a JSON report in UC-022.
+
 **Brief Description:**  
 Board Member views cost analytics for a project, including token usage breakdown by agent, cost trends over time, and comparison against budget.
 
@@ -1416,47 +1418,43 @@ Board Member observes real-time agent-to-agent communication in a virtual office
 
 ### UC-022: Generate Project Report
 
+> Implemented 2026-10-26 (Phase 5, Task 23).
+
 | Field | Value |
 |-------|-------|
 | **ID** | UC-022 |
 | **Name** | Generate Project Report |
-| **Actors** | Board Member |
-| **Priority** | Low |
-| **Status** | Documented |
+| **Actors** | Board Member, Viewer (read only), External System (via UC-032), System (weekly scheduler) |
+| **Priority** | Medium |
+| **Status** | Implemented |
 
 **Brief Description:**  
-Board Member generates a comprehensive project report (PDF/Markdown) summarizing milestones, tasks, costs, and agent activities.
+A Board Member views the cost and agent performance report of a project and exports the project as a PDF report, a CSV of tasks or the full data as JSON. Every week the system also writes a Markdown summary into each active project's workspace.
 
 **Pre-conditions:**
-1. Project exists with completed milestones.
+1. The user is authenticated and has `report:view` (reading) or `project:export` and owns the project (exporting; admin can export any project).
 
 **Post-conditions:**
-1. Report file is generated and downloadable.
+1. Reading changes nothing. An export is recorded in the audit log (`project.export`).
 
 **Main Flow:**
-1. Board Member clicks "Generate Report" button.
-2. System aggregates data:
-   - Project metadata.
-   - Milestone/task summaries.
-   - Cost breakdown.
-   - Agent performance metrics.
-3. System renders Markdown template with data.
-4. System optionally converts to PDF (using library like puppeteer).
-5. System stores file in temporary storage.
-6. System returns download link.
+1. Board Member opens Project Detail and selects *Reports*.
+2. System returns the cost report (`GET /api/reports/projects/:id/cost`: total, budget used, cost and tokens by agent and by model, by day) and the performance report (`GET /api/reports/performance?projectId=`: runs, success rate, average and p95 duration and retries per role or node, from workflow steps).
+3. Board Member clicks *PDF report*, *Tasks (CSV)* or *Full data (JSON)*.
+4. System checks ownership, builds a `ProjectExportSnapshot` and hands it to the exporter for the format (Strategy, `PROJECT_EXPORTERS`).
+5. System returns the file as an attachment (`GET /api/projects/:id/export?format=pdf|csv|json`).
 
 **Alternative Flows:**
-- None.
+- **AF-1: Weekly report** — `WeeklyReportScheduler` runs every `REPORT_SCHEDULER_INTERVAL_MINUTES` (0 disables it), writes `reports/weekly-<ISO week>.md` once per week for each active project and raises `ReportGeneratedEvent` (audit + `report.generated` webhook). An admin can run it now with `POST /api/reports/weekly/run`. The file is listed in the *Artifacts* tab (UC-026).
+- **AF-2: No step finished yet** — success rate is shown as "–", not 0%.
 
 **Exception Flows:**
-- None.
+- **EF-1:** Unknown format → 400. **EF-2:** Not the owner → 403 (and `access.denied` in the audit log). **EF-3:** Unknown project → 404.
 
 **Special Requirements:**
-- **SR-1:** Report generation must complete within 30 seconds.
-- **SR-2:** Report must be professional-grade (suitable for stakeholder presentation).
-
-**Assumptions:**
-- Project has meaningful data to report.
+- **SR-1:** The PDF renders Vietnamese text when a Unicode font is found (`PDF_FONT_PATH` or common system fonts); otherwise diacritics are folded into Helvetica.
+- **SR-2:** CSV starts with a UTF-8 BOM (opens correctly in Excel) and cells starting with `= + - @` are escaped (CSV injection).
+- **SR-3:** Email delivery of the weekly report is out of scope (no mail server in the platform); it is delivered through the workspace and the webhook.
 
 ---
 
@@ -1655,6 +1653,149 @@ Board Member opens the *Artifacts* tab of a project to see what the agents produ
 
 ---
 
+### UC-029: Manage Users and Roles
+
+> Added 2026-10-26 (Phase 5, Task 20).
+
+| Field | Value |
+|-------|-------|
+| **ID** | UC-029 |
+| **Name** | Manage Users and Roles |
+| **Actors** | Admin |
+| **Priority** | High |
+| **Status** | Implemented |
+
+**Brief Description:**  
+Admin sees every user with their role and permissions, changes a user's role (admin, board member, viewer) and deactivates or reactivates an account.
+
+**Pre-conditions:**
+1. Admin is authenticated (`user:manage`).
+
+**Post-conditions:**
+1. The new role or access state applies from the user's next request. The change is in the audit log with before/after (`user.role_change`, `user.access_change`).
+
+**Main Flow:**
+1. Admin opens *Users & Roles*; System lists users (`GET /api/users`) and the permission matrix (`GET /api/users/roles`).
+2. Admin picks a new role; System saves it (`PATCH /api/users/:id/role`).
+3. Admin switches *Access* off; System deactivates the account (`PATCH /api/users/:id/active`). The user's token and API keys stop working at once.
+
+**Exception Flows:**
+- **EF-1:** Admin changes their own role or access → 400.
+- **EF-2:** The change would leave no active admin → 400.
+- **EF-3:** A non-admin calls the endpoints → 403 (`access.denied`).
+
+**Special Requirements:**
+- **SR-1:** Permissions are defined once (`RolePolicy`) and shared with the web app, which hides what the user cannot do; the API enforces them on every request.
+- **SR-2:** Changing a project, its tasks, runs or approvals also requires owning the project (admin is exempt).
+
+---
+
+### UC-030: Review Audit Log
+
+> Added 2026-10-26 (Phase 5, Task 21).
+
+| Field | Value |
+|-------|-------|
+| **ID** | UC-030 |
+| **Name** | Review Audit Log |
+| **Actors** | Admin |
+| **Priority** | High |
+| **Status** | Implemented |
+
+**Brief Description:**  
+Admin searches the record of user, agent and system actions, sees what each change did (before/after per field), exports the result to CSV and is warned about security anomalies.
+
+**Pre-conditions:**
+1. Admin is authenticated (`audit:view`).
+
+**Post-conditions:**
+1. Nothing is changed (the log is append-only; there is no update or delete endpoint).
+
+**Main Flow:**
+1. Admin opens *Audit Log*; System returns the latest entries (`GET /api/audit`) and anomalies (`GET /api/audit/anomalies`).
+2. Admin filters by text, action, result and date range.
+3. Admin expands an entry; System shows the actor, resource, IP, user agent and the field-level changes.
+4. Admin clicks *Export CSV* (`GET /api/audit/export`) with the same filters.
+
+**Alternative Flows:**
+- **AF-1: Anomaly** — five or more failed logins for one account or IP within 15 minutes, or ten or more denied requests by one actor within 10 minutes, are shown as warnings at the top.
+
+**Special Requirements:**
+- **SR-1:** Passwords, tokens, secrets and API keys are redacted before an entry is stored.
+- **SR-2:** Failing to write an audit entry never fails the user's action (it is logged instead).
+
+---
+
+### UC-031: Manage API Keys and Webhooks
+
+> Added 2026-10-26 (Phase 5, Task 22).
+
+| Field | Value |
+|-------|-------|
+| **ID** | UC-031 |
+| **Name** | Manage API Keys and Webhooks |
+| **Actors** | Board Member, Admin |
+| **Priority** | Medium |
+| **Status** | Implemented |
+
+**Brief Description:**  
+A user creates API keys for external tools (with scopes and an optional expiry) and registers webhooks that receive signed notifications about project events.
+
+**Pre-conditions:**
+1. The user is authenticated (`integration:manage`).
+
+**Post-conditions:**
+1. The key's secret is shown once and only its hash is stored. Webhook deliveries are recorded.
+
+**Main Flow:**
+1. User opens *Integrations*.
+2. User creates an API key: name, scopes (only permissions the user has), expiry. System shows `aic_<id>_<secret>` once (`POST /api/integrations/api-keys`).
+3. User registers a webhook: URL, events, optional project. System returns the signing secret (`POST /api/integrations/webhooks`).
+4. User clicks *Test*; System sends a signed `webhook.test` (`POST /api/integrations/webhooks/:id/test`) and shows the response code.
+5. User opens *Deliveries* to see each delivery's status, attempts and response code.
+6. User revokes a key or deletes a webhook.
+
+**Exception Flows:**
+- **EF-1:** Webhook URL is not http(s), has credentials, or points to a private, loopback or link-local address → 400 (re-checked after DNS at send time).
+- **EF-2:** Scope not held by the user → 400.
+
+**Special Requirements:**
+- **SR-1:** Signature header `X-AICorp-Signature: sha256=HMAC(secret, "<timestamp>.<body>")`; receivers should reject timestamps older than 5 minutes.
+- **SR-2:** Failed deliveries are retried with exponential backoff; the workflow never waits for receivers.
+
+---
+
+### UC-032: Call the Integration API
+
+> Added 2026-10-26 (Phase 5, Task 22).
+
+| Field | Value |
+|-------|-------|
+| **ID** | UC-032 |
+| **Name** | Call the Integration API |
+| **Actors** | External System |
+| **Priority** | Medium |
+| **Status** | Implemented |
+
+**Brief Description:**  
+An external tool (CI pipeline, BI tool) uses an API key to list and create projects, read a project's status and cost report, export it and manage its webhooks through the versioned `/api/v1` API, documented with OpenAPI at `/api/docs`.
+
+**Pre-conditions:**
+1. A usable API key exists (UC-031) and its owner is active.
+
+**Main Flow:**
+1. External System sends a request with header `x-api-key`.
+2. System authenticates the key, applies the per-key rate limit and checks the key's scopes (see SD-009).
+3. System runs the request as the key's owner, limited to the key's scopes, and audits it with actor type `api_key`.
+
+**Exception Flows:**
+- **EF-1:** Missing, unknown, revoked or expired key → 401.
+- **EF-2:** More than `API_RATE_LIMIT_PER_MINUTE` requests in a minute → 429 with `Retry-After`.
+- **EF-3:** Scope missing or project not owned → 403.
+- **EF-4:** An API key used on a route outside `/api/v1` → 401.
+
+---
+
 ## 4. Use Case Relationships
 
 ### Include Relationships
@@ -1686,6 +1827,11 @@ Board Member opens the *Artifacts* tab of a project to see what the agents produ
 | UC-023 | FR-AGENT-004 (QA Code Quality Analysis) | NFR-QUALITY-003 (Technical Debt Quantification) |
 | UC-024 | FR-AGENT-005 (ML-based Task Estimation) | NFR-ACCURACY-001 (Estimation Confidence Interval) |
 | UC-026 | FR-PROJ-008 (Generated Project Artifacts) | NFR-SEC (path confinement) |
+| UC-022 | FR-REP-001 (Cost & performance reports), FR-REP-002 (Project export), FR-REP-003 (Weekly report) | NFR-SEC-010 (CSV injection) |
+| UC-029 | FR-AUTH-003 (RBAC), FR-AUTH-005 (Account deactivation) | NFR-SEC-007 (Least privilege) |
+| UC-030 | FR-AUD-001 (Audit trail), FR-AUD-002 (Audit search & export), FR-AUD-003 (Anomaly detection) | NFR-SEC-008 (Secret redaction) |
+| UC-031 | FR-INT-001 (API keys), FR-INT-002 (Webhooks) | NFR-SEC-009 (SSRF & signatures) |
+| UC-032 | FR-INT-003 (Versioned integration API) | NFR-SEC-009, NFR-SEC-007 |
 
 ---
 
