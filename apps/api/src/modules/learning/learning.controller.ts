@@ -1,10 +1,11 @@
-import { Controller, Get, NotFoundException, Param, Query, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import { Permission } from '@ai-corp/shared-types';
+import { RequirePermission } from '../access/access.decorators';
 import { ROLE_PROFILES } from '../agents/profiles';
 import { LearningService } from './learning.service';
 
 @Controller('agents')
-@UseGuards(JwtAuthGuard)
+@RequirePermission(Permission.REPORT_VIEW)
 export class LearningController {
   constructor(private readonly learning: LearningService) {}
 

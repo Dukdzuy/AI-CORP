@@ -19,6 +19,11 @@ import { OoadMetricsModule } from './modules/ooad-metrics/ooad-metrics.module';
 import { ProjectArtifactsModule } from './modules/project-artifacts/project-artifacts.module';
 import { LearningModule } from './modules/learning/learning.module';
 import { EnvValidator } from './modules/security/env-validator';
+import { AccessModule } from './modules/access/access.module';
+import { AuditModule } from './modules/audit/audit.module';
+import { UsersModule } from './modules/users/users.module';
+import { ReportingModule } from './modules/reporting/reporting.module';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
 
 @Module({
   imports: [
@@ -44,6 +49,12 @@ import { EnvValidator } from './modules/security/env-validator';
     OoadMetricsModule,
     ProjectArtifactsModule,
     LearningModule,
+    // Phase 5: enterprise features & security
+    AuditModule,
+    AccessModule,
+    UsersModule,
+    ReportingModule,
+    IntegrationsModule,
   ],
   providers: [EnvValidator],
 })

@@ -18,13 +18,16 @@ model User {
   id            String    @id @default(uuid())
   email         String    @unique
   name          String
-  role          String    @default("board_member")
+  role          String    @default("board_member") // admin, board_member, viewer (Task 20: RolePolicy)
+  isActive      Boolean   @default(true)           // false = access revoked (UC-008-2)
   passwordHash  String
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   projects      Project[]
   approvals     Approval[]
+  apiKeys       ApiKey[]
+  webhooks      Webhook[]
 }
 
 // ============================================================================
@@ -327,4 +330,85 @@ model QualityGateLog {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, timestamp])
+}
+
+// ============================================================================
+// Enterprise features (Phase 5)
+// ============================================================================
+
+// Append-only audit trail (Task 21): user actions (HTTP), access denials and domain events
+model AuditLog {
+  id            String   @id @default(uuid())
+  timestamp     DateTime @default(now())
+  actorType     String   // user, api_key, agent, system, anonymous
+  userId        String?
+  actorLabel    String?  // email, key name or agent role, kept for readability after a user is deleted
+  apiKeyId      String?
+  agentRole     String?
+  action        String   // "project.create", "auth.login", "access.denied", "workflow.completed"
+  resourceType  String   // "Project", "User", "Workflow", "Auth"
+  resourceId    String?
+  projectId     String?
+  changes       Json?    // { before, after, diff } or the sanitised request
+  ipAddress     String?
+  userAgent     String?
+  success       Boolean  @default(true)
+  errorMessage  String?  @db.Text
+
+  @@index([timestamp])
+  @@index([userId, timestamp])
+  @@index([action, timestamp])
+  @@index([projectId, timestamp])
+}
+
+// Integration API keys (Task 22): only a SHA-256 hash of the secret is stored
+model ApiKey {
+  id          String    @id                // public key id, part of the token
+  name        String
+  ownerId     String
+  secretHash  String
+  scopes      String[]                     // permissions, a subset of the owner's role
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+// Outgoing webhooks (Task 22): signed with HMAC-SHA256 using `secret`
+model Webhook {
+  id          String    @id @default(uuid())
+  ownerId     String
+  projectId   String?   // null = every project the owner can read
+  url         String
+  events      String[]
+  secret      String
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+
+  @@index([ownerId])
+  @@index([projectId])
+}
+
+model WebhookDelivery {
+  id           String   @id @default(uuid())
+  webhookId    String
+  event        String
+  payload      Json
+  status       String   // delivered, failed
+  attempts     Int
+  responseCode Int?
+  error        String?  @db.Text
+  durationMs   Int
+  createdAt    DateTime @default(now())
+
+  webhook      Webhook  @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
 }

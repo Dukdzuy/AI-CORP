@@ -31,6 +31,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!user) {
       throw new UnauthorizedException('User no longer exists.');
     }
+    // Role and access changes take effect on the next request, not when the token expires
+    if (!user.isActive) {
+      throw new UnauthorizedException('This account has been deactivated.');
+    }
 
     return {
       id: user.id,

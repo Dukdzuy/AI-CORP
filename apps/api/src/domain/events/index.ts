@@ -20,3 +20,6 @@ export * from './TaskCompletedEvent';
 export * from './WorkflowStartedEvent';
 export * from './ApprovalRequestedEvent';
 export * from './QualityGateEvaluatedEvent';
+// Phase 5
+export * from './WorkflowFailedEvent';
+export * from './ReportGeneratedEvent';

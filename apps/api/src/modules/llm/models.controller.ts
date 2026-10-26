@@ -1,10 +1,19 @@
-import { Controller, Get, Patch, Param, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Patch, Param, Body } from '@nestjs/common';
+import { Permission } from '@ai-corp/shared-types';
+import { RequirePermission } from '../access/access.decorators';
+import { Audited } from '../audit/audit.decorators';
+import { AuditSnapshotRegistry } from '../audit/audit-snapshot.registry';
 import { PrismaService } from '../../prisma/prisma.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('models')
 export class ModelsController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, snapshots: AuditSnapshotRegistry) {
+    // Agent model changes are audited with before/after (Task 21)
+    snapshots.register('Agent', role => this.prisma.agent.findUnique({
+      where: { role: role.toUpperCase() },
+      select: { role: true, name: true, modelRouteConfig: true, isActive: true },
+    }));
+  }
 
   @Get()
   async listModels() {
@@ -41,8 +50,9 @@ export class ModelsController {
     ];
   }
 
-  @UseGuards(JwtAuthGuard)
   @Patch(':role')
+  @RequirePermission(Permission.AGENT_CONFIGURE)
+  @Audited({ action: 'agent.configure', resourceType: 'Agent', idParam: 'role' })
   async updateAgentModel(@Param('role') role: string, @Body() body: { model: string }) {
     const agent = await this.prisma.agent.findUnique({ where: { role: role.toUpperCase() } });
     if (!agent) {

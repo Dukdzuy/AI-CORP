@@ -1,9 +1,10 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Permission } from '@ai-corp/shared-types';
+import { RequirePermission } from '../access/access.decorators';
 import { OoadMetricsService } from './ooad-metrics.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('ooad-metrics')
-@UseGuards(JwtAuthGuard)
+@RequirePermission(Permission.REPORT_VIEW)
 export class OoadMetricsController {
   constructor(private readonly ooadMetricsService: OoadMetricsService) {}
 

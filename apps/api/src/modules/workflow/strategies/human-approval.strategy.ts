@@ -2,6 +2,8 @@ import { WorkflowNode, NodeResult } from '@ai-corp/shared-types';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { IWorkflowEngineRepository, WorkflowRunRecord } from '../persistence/workflow-engine.repository';
 import { NodeExecutionStrategy, NodeExecutionContext } from './node-execution-strategy';
+import { IEventPublisher } from '../../../domain/events/IEventPublisher';
+import { ApprovalRequestedEvent } from '../../../domain/events/ApprovalRequestedEvent';
 
 /**
  * Execute a human approval node
@@ -13,7 +15,8 @@ export class HumanApprovalStrategy implements NodeExecutionStrategy {
 
   constructor(
     private readonly repository: IWorkflowEngineRepository,
-    private readonly websocketGateway: AppWebSocketGateway
+    private readonly websocketGateway: AppWebSocketGateway,
+    private readonly events?: IEventPublisher
   ) {}
 
   async execute(node: WorkflowNode, run: WorkflowRunRecord, ctx: NodeExecutionContext): Promise<NodeResult> {
@@ -58,6 +61,12 @@ export class HumanApprovalStrategy implements NodeExecutionStrategy {
       timestamp: new Date()
     };
     this.websocketGateway.sendToProjectAndUser(run.projectId, project.createdById, approvalEvent);
+
+    // Phase 5: this is the path every workflow takes, so the domain event is raised here
+    // (audit trail + `approval.requested` webhook); before, nothing raised it at run time
+    await this.events
+      ?.publish(new ApprovalRequestedEvent(approval.id, run.projectId, run.id, project.createdById, approvalType, requestData))
+      .catch(err => ctx.logger.error(`Failed to publish ApprovalRequestedEvent: ${err.message}`));
 
     ctx.logger.log(`Approval request ${approval.id} created and notification sent to user ${project.createdById}`);
 

@@ -134,18 +134,19 @@ export function createEngine(script: AgentScript, repository = new InMemoryWorkf
   };
   const websocket = { sendToProject: jest.fn(), sendToProjectAndUser: jest.fn(), sendToUser: jest.fn() };
   const taskRepository = { findByStatus: jest.fn().mockResolvedValue([]), create: jest.fn(), update: jest.fn() };
+  const events = { publish: jest.fn().mockResolvedValue(undefined) };
   const engine = new WorkflowEngine(
     repository,
     websocket as any,
     orchestrator as any,
-    { publish: jest.fn().mockResolvedValue(undefined) } as any,
+    events as any,
     { create: jest.fn() } as any,
     taskRepository as any
   );
   // Sub-workflow nodes are registered by the Nest module at init; do the same here
   const subWorkflows = new SubWorkflowStrategy(engine, repository, websocket as any);
   subWorkflows.onModuleInit();
-  return { engine, repository, orchestrator, websocket, calls };
+  return { engine, repository, orchestrator, websocket, calls, events };
 }
 
 /** Wait until the run reaches one of the statuses (the engine runs nodes in the background) */

@@ -3,3 +3,4 @@ export * from './agent.types';
 export * from './task.types';
 export * from './workflow.types';
 export * from './websocket.types';
+export * from './security.types';

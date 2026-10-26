@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { WorkflowEngine } from './modules/workflow/workflow.engine';
+import { setupIntegrationDocs } from './modules/integrations/openapi';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -15,6 +16,9 @@ async function bootstrap() {
     forbidNonWhitelisted: true,
     transform: true,
   }));
+
+  // Integration API documentation (Phase 5, Task 22)
+  setupIntegrationDocs(app);
 
   // Recover any running workflows after restart
   try {

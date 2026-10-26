@@ -7,12 +7,13 @@ import { MilestoneApplicationService } from './milestone-application.service';
 import { MilestonesController } from './milestones.controller';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { WorkflowModule } from '../workflow/workflow.module';
+import { ProjectAuditSnapshots } from './project-audit-snapshots';
 import { InfrastructureModule } from '../../infrastructure/infrastructure.module';
 
 @Module({
   imports: [WebSocketModule, WorkflowModule, InfrastructureModule],
   controllers: [ProjectsController, TasksController, MilestonesController],
-  providers: [ProjectApplicationService, TaskApplicationService, MilestoneApplicationService],
+  providers: [ProjectApplicationService, TaskApplicationService, MilestoneApplicationService, ProjectAuditSnapshots],
   exports: [ProjectApplicationService, TaskApplicationService, MilestoneApplicationService],
 })
 export class ProjectsModule {}

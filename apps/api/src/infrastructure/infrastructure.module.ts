@@ -7,7 +7,12 @@ import {
   PrismaAgentRepository,
   PrismaWorkflowRepository,
   PrismaApprovalRepository,
+  PrismaAuditLogRepository,
+  PrismaApiKeyRepository,
+  PrismaWebhookRepository,
 } from './persistence';
+import { AUDIT_LOG_REPOSITORY } from '../domain/audit';
+import { API_KEY_REPOSITORY, WEBHOOK_REPOSITORY } from '../domain/integration';
 import {
   PROJECT_REPOSITORY,
   TASK_REPOSITORY,
@@ -60,6 +65,10 @@ export {
       provide: APPROVAL_REPOSITORY,
       useClass: PrismaApprovalRepository,
     },
+    // Phase 5
+    { provide: AUDIT_LOG_REPOSITORY, useClass: PrismaAuditLogRepository },
+    { provide: API_KEY_REPOSITORY, useClass: PrismaApiKeyRepository },
+    { provide: WEBHOOK_REPOSITORY, useClass: PrismaWebhookRepository },
   ],
   exports: [
     PROJECT_REPOSITORY,
@@ -68,6 +77,9 @@ export {
     AGENT_REPOSITORY,
     WORKFLOW_REPOSITORY,
     APPROVAL_REPOSITORY,
+    AUDIT_LOG_REPOSITORY,
+    API_KEY_REPOSITORY,
+    WEBHOOK_REPOSITORY,
   ],
 })
 export class InfrastructureModule {}
