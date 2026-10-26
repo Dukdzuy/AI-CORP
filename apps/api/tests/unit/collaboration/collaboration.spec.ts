@@ -5,7 +5,7 @@ import { AgentOrchestratorService } from '../../../src/modules/orchestrator/agen
 import { CollaborationContext, TurnOutput } from '../../../src/modules/workflow/collaboration/collaboration-strategy';
 import { CollaborationRegistry } from '../../../src/modules/workflow/collaboration/collaboration.registry';
 import { PairDevelopCollaboration } from '../../../src/modules/workflow/collaboration/pair-develop.collaboration';
-import { ReviewChainCollaboration } from '../../../src/modules/workflow/collaboration/review-chain.collaboration';
+import { ReviewChainCollaboration, ReviewHandler } from '../../../src/modules/workflow/collaboration/review-chain.collaboration';
 import { ClarificationLoopCollaboration } from '../../../src/modules/workflow/collaboration/clarification-loop.collaboration';
 import { AgentCollaborationStrategy } from '../../../src/modules/workflow/collaboration/agent-collaboration.strategy';
 import { DEFAULT_WORKFLOW_DEFINITION, PAIR_WORKFLOW_DEFINITION } from '../../../src/modules/workflow/default-workflow';
@@ -298,6 +298,12 @@ describe('review_chain (Chain of Responsibility)', () => {
     expect(log).toEqual(['PROPOSE DEV->ARCHITECT', 'turn ARCHITECT:reviewCode', 'REJECT ARCHITECT->DEV']);
     expect(result.edgeCondition).toBe('onFail');
     expect(result.output.rejectedBy).toEqual(['ARCHITECT']);
+  });
+
+  it('summarises QC figures and reviewer findings for the Meeting Room', () => {
+    expect(ReviewHandler.summarize({ testCoverage: 80, testsExecuted: true, failingUseCases: [], missingUseCases: ['UC-005'], output: '# table' }))
+      .toBe('Coverage 80% (tests executed); failing: none; missing: UC-005.');
+    expect(ReviewHandler.summarize({ output: '1. Layers respected\nVERDICT: PASS' })).toBe('1. Layers respected');
   });
 
   it('rejects a reviewer without a task type', () => {

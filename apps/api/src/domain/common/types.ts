@@ -72,6 +72,8 @@ export interface AgentContext {
   clarifications?: string[];
   /** The question a clarification REQUEST asks BA ("UC-xxx: question") */
   clarificationQuestion?: string;
+  /** Collaboration pattern this turn belongs to (set by agent_collaboration nodes) */
+  collaboration?: string;
 }
 
 /**

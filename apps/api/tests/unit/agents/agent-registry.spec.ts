@@ -103,6 +103,13 @@ describe('Agent registry (AGENTS token)', () => {
     }));
   });
 
+  it('leaves the announcement to the pattern for collaboration turns', async () => {
+    const moduleRef = await build([TestThinking, TestAction], [...AGENT_CLASSES, TestAgent]);
+    messages.sendMessage.mockClear();
+    await moduleRef.get(AgentOrchestratorService).invokeAgent('TEST', createMockAgentContext({ taskType: 'probe', collaboration: 'pair_develop' } as any));
+    expect(messages.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('refuses two agents for the same role', () => {
     const fake = (role: string) => ({ getRole: () => role }) as unknown as IAgent;
     expect(() => new AgentOrchestratorService([fake('CEO'), fake('CEO')], messages as any)).toThrow(/Duplicate agent registered for role CEO/);

@@ -59,6 +59,8 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
         code: workflowCtx.code || '',
         projectSummary: workflowCtx.projectSummary || workflowCtx.goal || '',
         ...vars,
+        // Set for turns of an agent_collaboration node: the pattern sends its own ACL messages
+        collaboration: metadata.collaboration,
       };
       const result = await this.orchestrator.invokeAgent(node.agentRole, agentInput);
 

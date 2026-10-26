@@ -41,13 +41,22 @@ export class ReviewHandler {
     return next;
   }
 
+  /** One line for the Meeting Room: QC's coverage figures, or the start of the reviewer's findings */
+  static summarize(output: Record<string, any>): string {
+    if (typeof output.testCoverage === 'number') {
+      const list = (v: unknown) => (Array.isArray(v) && v.length ? v.join(', ') : 'none');
+      return `Coverage ${output.testCoverage}%${output.testsExecuted ? ' (tests executed)' : ''}; failing: ${list(output.failingUseCases)}; missing: ${list(output.missingUseCases)}.`;
+    }
+    return brief(String(output.output || '').replace(/^\s*VERDICT\s*:.*$/gim, '').trim());
+  }
+
   async handle(ctx: CollaborationContext, proposal: AclMessage, outcomes: ReviewOutcome[] = []): Promise<ReviewOutcome[]> {
     const { role, taskType, verdictField, decides } = this.config;
     const output = await ctx.turn(role, taskType);
     const approved = output[verdictField] !== false;
     outcomes.push({ role, approved, decides });
 
-    const summary = brief(output.qcReport || output.output);
+    const summary = ReviewHandler.summarize(output);
     await ctx.say(approved ? Performative.ACCEPT : Performative.REJECT, role, proposal.sender, summary, proposal);
 
     if (!this.next || (decides && !approved)) {
@@ -57,7 +66,7 @@ export class ReviewHandler {
       Performative.PROPOSE,
       role,
       this.next.config.role,
-      `Please review the implementation. ${role} ${approved ? 'accepted' : 'rejected'} it: ${brief(output.output, 300)}`
+      `Please review the implementation. ${role} ${approved ? 'accepted' : 'rejected'} it: ${brief(ReviewHandler.summarize(output), 300)}`
     );
     return this.next.handle(ctx, forward, outcomes);
   }

@@ -47,8 +47,9 @@ export class AgentOrchestratorService {
     // Agent runs its think → act cycle
     const result = await agent.execute(context as AgentContext);
 
-    // Tell the team what was done: one INFORM through the message bus (Mediator)
-    if (result.action) {
+    // Tell the team what was done: one INFORM through the message bus (Mediator).
+    // Collaboration turns are skipped: their pattern already reports them as ACL messages.
+    if (result.action && !(context as AgentContext).collaboration) {
       try {
         await this.messageBus.send({
           performative: Performative.INFORM,
