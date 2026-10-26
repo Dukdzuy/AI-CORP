@@ -20,6 +20,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useNavigate } from 'react-router-dom';
 import { Project, ProjectStatus } from '@ai-corp/shared-types';
 import { CostDashboard } from '../components/cost/CostDashboard';
+import { DEFAULT_WORKFLOW, TemplatePicker } from '../components/workflow/TemplatePicker';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -211,9 +212,19 @@ export const Dashboard: React.FC = () => {
     }
   };
 
-  const handleCreateProject = async (values: { name: string; description: string; goal: string; budget?: number }) => {
+  const handleCreateProject = async (values: {
+    name: string;
+    description: string;
+    goal: string;
+    budget?: number;
+    templateId?: string;
+    templateParams?: Record<string, unknown>;
+  }) => {
     try {
-      await createProject.mutateAsync(values);
+      const { templateId, templateParams, ...project } = values;
+      await createProject.mutateAsync(
+        templateId && templateId !== DEFAULT_WORKFLOW ? { ...project, templateId, templateParams } : project
+      );
       message.success('Project created successfully!');
       setIsModalOpen(false);
       form.resetFields();
@@ -330,6 +341,8 @@ export const Dashboard: React.FC = () => {
               precision={2}
             />
           </Form.Item>
+
+          <TemplatePicker />
 
           <Form.Item style={{ marginBottom: 0, marginTop: 24 }}>
             <Space style={{ width: '100%', justifyContent: 'flex-end' }}>

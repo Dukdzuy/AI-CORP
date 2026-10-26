@@ -38,7 +38,7 @@ export const useProject = (id: string | null) => {
 export const useCreateProject = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (projectData: Partial<Project>) => {
+    mutationFn: async (projectData: Partial<Project> & { templateId?: string; templateParams?: Record<string, unknown> }) => {
       const { data } = await apiClient.post<Project>('/projects', projectData);
       return data;
     },

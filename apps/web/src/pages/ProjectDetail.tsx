@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Space, Card, Button, Spin, Skeleton, Tabs, Empty, Tag, Collapse, Timeline, Badge, Alert } from 'antd';
+import { Typography, Space, Card, Button, Spin, Skeleton, Tabs, Empty, Tag, Collapse, Badge, Alert } from 'antd';
 import { ArrowLeftOutlined, RocketOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, ThunderboltOutlined, FileTextOutlined, ExclamationCircleOutlined, FolderOpenOutlined, CodeOutlined } from '@ant-design/icons';
 import { Task, WebSocketEventType, TaskUpdatedEvent, ApprovalRequiredEvent } from '@ai-corp/shared-types';
 import { useProject } from '../lib/api/hooks/projects';
@@ -13,6 +13,7 @@ import socketClient from '../lib/websocket/socket-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArtifactsTab } from '../components/artifacts/ArtifactsTab';
 import { useQualityEvents } from '../components/artifacts/useQualityEvents';
+import { WorkflowRunView } from '../components/workflow/WorkflowRunView';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -343,6 +344,7 @@ export const ProjectDetail: React.FC = () => {
           {workflowRuns.map((run: any) => (
             <Collapse
               key={run.id}
+              destroyInactivePanel
               style={{ background: '#161b22', border: '1px solid #30363d', borderRadius: 8 }}
               items={[{
                 key: run.id,
@@ -353,6 +355,7 @@ export const ProjectDetail: React.FC = () => {
                       Run {run.id.slice(0, 8)}...
                     </Text>
                     <Tag color={STATUS_COLORS[run.status]}>{run.status}</Tag>
+                    <Tag color="purple">{run.workflowDefId}@{run.workflowDefVersion || 'latest'}</Tag>
                     <Text style={{ color: '#8b949e', fontSize: 12 }}>
                       {new Date(run.startedAt).toLocaleString()}
                     </Text>
@@ -363,45 +366,7 @@ export const ProjectDetail: React.FC = () => {
                     )}
                   </Space>
                 ),
-                children: (
-                  <Timeline
-                    items={(run.steps || []).map((step: any) => ({
-                      dot: STATUS_ICONS[step.status],
-                      children: (
-                        <div>
-                          <Space>
-                            <Tag>{step.nodeId}</Tag>
-                            {step.agentRole && <Tag color="blue">{step.agentRole}</Tag>}
-                            <Tag color={STATUS_COLORS[step.status]}>{step.status}</Tag>
-                            {step.durationMs && (
-                              <Text style={{ color: '#8b949e', fontSize: 12 }}>{step.durationMs}ms</Text>
-                            )}
-                          </Space>
-                          {step.output && (
-                            <pre style={{
-                              background: '#0d1117',
-                              border: '1px solid #30363d',
-                              borderRadius: 4,
-                              padding: 8,
-                              marginTop: 4,
-                              fontSize: 11,
-                              color: '#8b949e',
-                              maxHeight: 150,
-                              overflow: 'auto',
-                            }}>
-                              {typeof step.output === 'string' ? step.output : JSON.stringify(step.output, null, 2)}
-                            </pre>
-                          )}
-                          {step.error && (
-                            <Text style={{ color: '#ff4d4f', fontSize: 12, display: 'block', marginTop: 4 }}>
-                              Error: {step.error}
-                            </Text>
-                          )}
-                        </div>
-                      ),
-                    }))}
-                  />
-                ),
+                children: <WorkflowRunView runId={run.id} projectId={project.id} />,
               }]}
             />
           ))}

@@ -112,7 +112,10 @@ DECISION: REJECT`;
       : '';
 
     const goal = context.goal || context.projectContext?.goal || '';
-    const description = context.projectContext?.description || '';
+    // Constraints come from the workflow node (e.g. the database a template was instantiated with)
+    const description = [context.projectContext?.description || context.projectDescription || '', context.constraints ? `CONSTRAINTS: ${context.constraints}` : '']
+      .filter(Boolean)
+      .join('\n');
     const projectId = context.projectId || 'unknown';
 
     // Load use cases from DB

@@ -3,7 +3,7 @@
  * Business rules live in the domain entities; these only shape and pre-validate input.
  */
 
-import { IsString, IsNotEmpty, IsOptional, IsNumber, Min, MinLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsObject, Min, MinLength } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
@@ -24,6 +24,16 @@ export class CreateProjectDto {
   @IsNumber()
   @Min(1)
   budget?: number;
+
+  /** Workflow template to run (Task 19); without one the default workflow runs */
+  @IsOptional()
+  @IsString()
+  templateId?: string;
+
+  /** Values for the template's parameters; defaults fill the rest */
+  @IsOptional()
+  @IsObject()
+  templateParams?: Record<string, unknown>;
 }
 
 export class UpdateProjectDto {

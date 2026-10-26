@@ -22,6 +22,9 @@ export * from './agent/AgentOutputs';
 export * from './agent/learning/ExecutionOutcome';
 export * from './collaboration/AclMessage';
 
+// Workflow Domain (Phase 4)
+export * from './workflow';
+
 // Tool Domain
 export * from './tool/interfaces';
 

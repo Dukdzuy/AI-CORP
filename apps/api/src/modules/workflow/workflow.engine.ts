@@ -1,6 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { WorkflowDefinition, WorkflowNode, WorkflowContext, NodeResult, NodeType } from '@ai-corp/shared-types';
-import { WorkflowValidator } from './workflow-validator';
+import { WorkflowDefinitionRegistry } from './workflow-definition.registry';
+import { WorkflowGraph } from '../../domain/workflow/WorkflowGraph';
+import { WorkflowRunMemento } from '../../domain/workflow/WorkflowRunMemento';
+import { WorkflowSnapshotCaretaker, RollbackTarget } from './snapshots/workflow-snapshot.caretaker';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { WorkflowStateChangedEvent } from '@ai-corp/shared-types';
 import { AgentOrchestratorService } from '../orchestrator/agent-orchestrator.service';
@@ -43,7 +46,8 @@ interface CacheEntry<T> {
 @Injectable()
 export class WorkflowEngine {
   private readonly logger = new Logger(WorkflowEngine.name);
-  private definitions = new Map<string, WorkflowDefinition>();
+  private readonly definitions = new WorkflowDefinitionRegistry();
+  private readonly snapshots: WorkflowSnapshotCaretaker;
   private workflowQueue: Queue<WorkflowJobData> | null = null;
   private workflowWorker: Worker<WorkflowJobData> | null = null;
   private redisConnection: ConnectionOptions;
@@ -60,6 +64,8 @@ export class WorkflowEngine {
     @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: IMilestoneRepository,
     @Inject(TASK_REPOSITORY) private readonly taskRepository: ITaskRepository
   ) {
+    this.snapshots = new WorkflowSnapshotCaretaker(this.repository);
+
     // One strategy per node type (Strategy pattern)
     this.registerStrategy(new AgentTaskStrategy(
       this.repository,
@@ -103,7 +109,10 @@ export class WorkflowEngine {
       this.workflowWorker = new Worker<WorkflowJobData>(
         'workflow-execution',
         async (job: Job<WorkflowJobData>) => {
-          const result = await this.executeNodeJob(job.data);
+          // A node that still fails after its retries ends the job here, so the run follows its
+          // onFail edge or is marked failed instead of staying 'running' forever
+          const result: NodeResult = await this.executeNodeJob(job.data)
+            .catch((err: Error) => ({ status: 'failure' as const, error: err.message }));
           await this.handleJobCompletion(job.data.runId, job.data.nodeId, result);
           return result;
         },
@@ -143,26 +152,47 @@ export class WorkflowEngine {
   }
 
   /**
-   * Registers a workflow definition into memory.
+   * Registers a workflow definition (validated, immutable per id@version) and returns the
+   * registered form, whose sub-workflow references are pinned to a version.
    */
-  createWorkflow(def: WorkflowDefinition): void {
-    WorkflowValidator.validate(def);
-    this.definitions.set(def.id, def);
-    this.logger.log(`Registered workflow definition: ${def.id}`);
+  createWorkflow(def: WorkflowDefinition): WorkflowDefinition {
+    const registered = this.definitions.register(def);
+    this.logger.log(`Registered workflow definition: ${registered.id}@${registered.version}`);
+    return registered;
+  }
+
+  /** A registered definition; the latest version when none is given */
+  getDefinition(workflowDefId: string, version?: string | null): WorkflowDefinition | undefined {
+    return this.definitions.get(workflowDefId, version);
+  }
+
+  /** Latest version of every registered definition */
+  listDefinitions(): WorkflowDefinition[] {
+    return this.definitions.list();
+  }
+
+  versionsOf(workflowDefId: string): WorkflowDefinition[] {
+    return this.definitions.versionsOf(workflowDefId);
+  }
+
+  /** The definition a run executes: the version it was started with (latest for runs from before versioning) */
+  definitionOf(run: Pick<WorkflowRunRecord, 'workflowDefId' | 'workflowDefVersion'>): WorkflowDefinition | undefined {
+    return this.definitions.get(run.workflowDefId, run.workflowDefVersion);
   }
 
   /**
-   * Starts a new workflow execution run.
+   * Starts a new workflow execution run, pinned to `version` (or the latest registered version).
    */
-  async startWorkflow(projectId: string, workflowDefId: string, context: WorkflowContext) {
-    const def = this.definitions.get(workflowDefId);
+  async startWorkflow(projectId: string, workflowDefId: string, context: WorkflowContext, version?: string) {
+    const def = this.definitions.get(workflowDefId, version);
     if (!def) {
-      throw new Error(`Workflow definition ${workflowDefId} not found.`);
+      throw new Error(`Workflow definition ${workflowDefId}${version ? `@${version}` : ''} not found.`);
     }
 
     const run = await this.repository.createRun({
       projectId,
       workflowDefId,
+      workflowDefVersion: def.version,
       status: 'running',
       currentNodeId: def.startNode,
       context: context as any,
@@ -210,7 +240,7 @@ export class WorkflowEngine {
       return null;
     }
 
-    const def = this.definitions.get(run.workflowDefId);
+    const def = this.definitionOf(run);
     if (!def) {
       this.setCache(cacheKey, null);
       return null;
@@ -230,12 +260,13 @@ export class WorkflowEngine {
 
   /**
    * Transitions a running workflow to the next node based on conditions.
+   * After a failed node (nodeFailed) only an explicit onFail edge is followed; without one the run fails.
    */
-  async transitionToNextNode(runId: string, edgeCondition?: string): Promise<void> {
+  async transitionToNextNode(runId: string, edgeCondition?: string, nodeFailed = false): Promise<void> {
     const run = await this.repository.findRunById(runId);
     if (!run) throw new Error('Run not found');
 
-    const def = this.definitions.get(run.workflowDefId);
+    const def = this.definitionOf(run);
     if (!def) throw new Error('Workflow Definition not found');
 
     if (run.status !== 'running') {
@@ -245,7 +276,10 @@ export class WorkflowEngine {
     const currentNodeId = run.currentNodeId;
     if (!currentNodeId) return;
 
-    if (currentNodeId === def.endNode) {
+    const graph = new WorkflowGraph(def);
+    const transition = nodeFailed ? graph.nextAfterFailure(currentNodeId) : graph.next(currentNodeId, edgeCondition);
+
+    if (transition.kind === 'complete') {
       // Reached the end
       await this.repository.updateRun(runId, { status: 'completed', completedAt: new Date() });
 
@@ -271,23 +305,9 @@ export class WorkflowEngine {
       return;
     }
 
-    // Find valid outgoing edges
-    const outgoingEdges = def.edges.filter((e: any) => e.from === currentNodeId);
-    let nextNodeId: string | undefined;
-
-    if (outgoingEdges.length === 1 && !outgoingEdges[0].condition) {
-      nextNodeId = outgoingEdges[0].to;
-    } else {
-      // Find edge matching the evaluated condition
-      const matchedEdge = outgoingEdges.find((e: any) => e.condition === edgeCondition);
-      if (matchedEdge) {
-        nextNodeId = matchedEdge.to;
-      }
-    }
-
-    if (!nextNodeId) {
+    if (transition.kind === 'dead_end') {
       await this.repository.updateRun(runId, { status: 'failed', completedAt: new Date() });
-      this.logger.error(`Failed to transition run ${runId}: No valid next node found for condition '${edgeCondition}'`);
+      this.logger.error(`Failed to transition run ${runId}: ${transition.reason}`);
       
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,
@@ -299,6 +319,7 @@ export class WorkflowEngine {
       this.websocketGateway.sendToProject(run.projectId, { type: 'workflow:state_changed', data: event });
       return;
     }
+    const nextNodeId = transition.nodeId;
 
     // Track visited nodes to prevent infinite loops in conditional cycles (Task: loop protection)
     const MAX_NODE_VISITS = 3;
@@ -402,6 +423,61 @@ export class WorkflowEngine {
   }
 
   /**
+   * Snapshots of a run, oldest first (Task 17)
+   */
+  async listSnapshots(runId: string) {
+    return this.snapshots.list(runId);
+  }
+
+  /**
+   * Roll a paused or failed run back to a snapshot (Memento restore, Task 17).
+   * The run gets the node and context it had before that node ran, and is left paused so a person
+   * can look at it before resuming. Snapshots after the target are discarded (the target itself
+   * too: it is taken again when the node re-runs) and pending approvals of the run are cancelled.
+   */
+  async rollbackWorkflow(runId: string, target: RollbackTarget): Promise<{ run: WorkflowRunRecord; snapshot: WorkflowRunMemento; cancelledApprovals: number }> {
+    const run = await this.repository.findRunById(runId);
+    if (!run) throw new Error(`Workflow run ${runId} not found`);
+    if (run.parentRunId) {
+      throw new Error(`Run ${runId} is a sub-workflow run; roll back its parent run ${run.parentRunId} instead`);
+    }
+    if (run.status !== 'paused' && run.status !== 'failed') {
+      throw new Error(`Cannot roll back workflow ${runId} with status ${run.status}: pause it first (only paused or failed runs can be rolled back)`);
+    }
+
+    const memento = await this.snapshots.select(runId, target);
+    const def = this.definitionOf(run);
+    if (!def?.nodes.some(n => n.id === memento.nodeId)) {
+      throw new Error(`Snapshot node ${memento.nodeId} is not in workflow ${run.workflowDefId}@${run.workflowDefVersion}`);
+    }
+
+    await this.repository.updateRun(runId, {
+      status: 'paused',
+      currentNodeId: memento.nodeId,
+      context: memento.context() as any,
+      completedAt: null,
+    });
+    await this.snapshots.discardFrom(runId, memento.sequence);
+    const cancelledApprovals = await this.repository.cancelPendingApprovals(runId);
+    this.invalidateRunCache(runId);
+
+    this.logger.log(`Workflow run ${runId} rolled back to snapshot #${memento.sequence} (node ${memento.nodeId})`);
+
+    const event: WorkflowStateChangedEvent = {
+      workflowRunId: run.id,
+      projectId: run.projectId,
+      previousState: run.status,
+      currentState: 'paused',
+      currentNodeId: memento.nodeId,
+      timestamp: new Date()
+    };
+    this.websocketGateway.sendToProject(run.projectId, { type: 'workflow:state_changed', data: event });
+
+    const restored = await this.repository.findRunById(runId);
+    return { run: restored!, snapshot: memento, cancelledApprovals };
+  }
+
+  /**
    * Save workflow state for recovery
    */
   private async saveWorkflowState(runId: string): Promise<void> {
@@ -454,23 +530,33 @@ export class WorkflowEngine {
       throw new Error(`Workflow run ${runId} is not running`);
     }
 
-    const def = this.definitions.get(run.workflowDefId);
+    const def = this.definitionOf(run);
     if (!def) throw new Error(`Workflow definition ${run.workflowDefId} not found`);
 
     const node = def.nodes.find(n => n.id === nodeId);
     if (!node) throw new Error(`Node ${nodeId} not found in workflow definition`);
 
+    // Memento of the run before the node runs (once per node, not per retry) - Task 17
+    if (retryCount === 0) {
+      await this.snapshots.capture(run).catch(err =>
+        this.logger.warn(`Could not snapshot run ${runId} before node ${nodeId}: ${(err as Error).message}`)
+      );
+    }
+
     const maxRetries = node.maxRetries ?? 3;
     const timeout = node.timeout ?? 300000; // Default 5 minutes (Req 19)
 
     try {
-      // Execute with timeout (Req 19)
-      const result = await Promise.race([
-        this.executeNode(node, run),
-        this.createTimeoutPromise(timeout, `Node ${nodeId} execution timeout after ${timeout}ms`)
-      ]);
-
-      return result;
+      // Execute with timeout (Req 19); the timer is cleared once the node settles
+      let timer: NodeJS.Timeout | undefined;
+      try {
+        return await Promise.race([
+          this.executeNode(node, run),
+          this.createTimeoutPromise(timeout, `Node ${nodeId} execution timeout after ${timeout}ms`, t => (timer = t))
+        ]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     } catch (error) {
       const errorMessage = (error as Error).message;
       this.logger.error(`Node ${nodeId} execution failed (attempt ${retryCount + 1}/${maxRetries + 1}): ${errorMessage}`);
@@ -629,7 +715,8 @@ export class WorkflowEngine {
   private get nodeExecutionContext(): NodeExecutionContext {
     return {
       logger: this.logger,
-      getDefinition: (workflowDefId) => this.definitions.get(workflowDefId),
+      getDefinition: (workflowDefId, version) => this.definitions.get(workflowDefId, version),
+      definitionOf: (run) => this.definitionOf(run),
       executeNode: (node, run) => this.executeNode(node, run),
     };
   }
@@ -637,9 +724,10 @@ export class WorkflowEngine {
   /**
    * Create a timeout promise
    */
-  private createTimeoutPromise(ms: number, message: string): Promise<never> {
+  private createTimeoutPromise(ms: number, message: string, onTimer?: (timer: NodeJS.Timeout) => void): Promise<never> {
     return new Promise((_, reject) => {
-      setTimeout(() => reject(new Error(message)), ms);
+      const timer = setTimeout(() => reject(new Error(message)), ms);
+      onTimer?.(timer);
     });
   }
 
@@ -727,7 +815,7 @@ export class WorkflowEngine {
         edgeCondition = 'onFail';
       }
 
-      await this.transitionToNextNode(runId, edgeCondition);
+      await this.transitionToNextNode(runId, edgeCondition, result.status === 'failure');
       
       // Process next node by adding it to the queue
       await this.processCurrentNode(runId);

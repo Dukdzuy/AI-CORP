@@ -33,7 +33,8 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 | Phase 2 – Domain Layer Refactoring | Done (fixed) | Repositories, entities, application services (PR #2), engine strategies (PR #4), agent typing (PR #5) |
 | Phase 2.5 – OOAD Project Automation | Done (fixed) | Templates + skeleton (PR #3). Quality gate, traceability and metrics were not wired end-to-end; fixed in this audit |
 | Phase 3 – Agent System Enhancement | **Done** (2026-10-26) | Re-scoped below. Tasks 11–15 done; end-to-end run documented in `docs/phase3-e2e/` |
-| Phases 4–7 | Not started | DevOps references removed |
+| Phase 4 – Workflow Engine Enhancement | **Done** (2026-10-26) | Re-scoped below: sub-workflows as child runs, immutable versions + snapshot rollback, parallel with dependencies, typed templates; 5 engine defects fixed. End-to-end run in `docs/phase4-e2e/` |
+| Phases 5–7 | Not started | DevOps references removed |
 
 ### **Audit findings and fixes**
 
@@ -1207,371 +1208,76 @@ _Status 2026-10-26: all met. `nest build` 0 errors, Jest 28/28 suites (452 passe
 
 ---
 
-### **Phase 4: Workflow Engine Enhancement (Week 4-5)**
+### **Phase 4: Workflow Engine Enhancement (Week 4-5)** — ✅ Done (2026-10-26)
+
+> **Re-scoped on 2026-10-26.** The tasks keep their numbers and goals, with these corrections against the original text:
+> - **Sub-workflows run inline as child runs** (Task 16). The original idea of `startWorkflow` + `waitForCompletion` would make a queue job wait for other queue jobs (deadlock risk with BullMQ concurrency) and would need polling. A `sub_workflow` node is executed by its own strategy, which walks the child definition node by node; each child is a `WorkflowRun` with `parentRunId`/`parentNodeId`, so the hierarchy is in the database. `human_approval` is not allowed inside a sub-workflow, because a child cannot pause on its own.
+> - **Versioning means immutable definitions, not just a version string** (Task 17). Definitions are registered per `id@version`, runs are pinned to the version they started with, and definitions built from templates are stored in the database so their runs survive restarts. Rollback is **manual** (API/UI on a paused or failed run). Automatic rollback on failure was dropped: retries plus an explicit `onFail` edge already cover automatic recovery, and an automatic rewind would hide failures.
+> - **Templates only use the 8 existing roles** (Task 19). The `ml_pipeline` template (DataScientist, MLEngineer) was dropped: those roles don't exist and adding them is outside the OOAD scope. Templates build definitions from **typed parameters** (they can switch nodes on and off) instead of replacing `${param}` strings in JSON, and they are code (a `WORKFLOW_TEMPLATES` multi-provider), not database rows. What is stored is every *instantiated* definition. User-defined templates are not in scope.
+> - **Default behaviour is unchanged**: a project created without a template runs `default-project-workflow` (or the pair variant with `WORKFLOW_COLLABORATION=pair`). The web form proposes the *OOAD software project* template by default.
+
+**Engine defects found and fixed during Phase 4**
+
+| # | Finding | Fix |
+|---|---------|-----|
+| B1 | With Redis/BullMQ, a node that still failed after its retries threw inside the worker, so `handleJobCompletion` never ran and the run stayed `running` forever. Without Redis the opposite happened: the failure was passed on as `onFail`, and a node with a single unconditional edge then **continued down its success path** | The worker turns the error into a failure result; after a failed node only an explicit `onFail` edge is followed, otherwise the run is marked `failed` (`WorkflowGraph.nextAfterFailure`). A failed run can now be rolled back (Task 17) |
+| B2 | Every node execution left a 5-minute timeout timer running (`Promise.race` without `clearTimeout`) | The timer is cleared when the node settles |
+| B3 | Definitions lived only in memory: anything not hard-coded would be lost on restart | `WorkflowDefinitionVersion` table; stored versions are reloaded at startup, sub-workflows first |
+| B4 | A registered definition could be changed through the object reference | The registry stores a deep-frozen copy |
+| B5 | The Architect's design prompts always had an empty project description (`projectContext.description` is never set) | Falls back to the `projectDescription` variable, and node `constraints` are appended |
 
 ---
 
-**Task 16: Implement Sub-Workflows & Workflow Composition**
-- **Objective**: Support hierarchical workflows with reusable sub-workflows
+**Task 16: Sub-Workflows & Workflow Composition** — ✅ Done (2026-10-26)
+- **Objective**: Hierarchical workflows built from reusable sub-workflows (Composite pattern).
 - **Implementation**:
-  1. Extend WorkflowNode to support sub-workflows:
-     ```typescript
-     interface WorkflowNode {
-       id: string;
-       type: 'agent_task' | 'human_approval' | 'condition' | 'parallel' | 'sub_workflow'; // NEW
-       subWorkflowId?: string; // NEW
-       // ... other fields
-     }
-     ```
-  2. Implement CompositeWorkflow pattern:
-     ```typescript
-     class CompositeWorkflow implements IWorkflow {
-       constructor(
-         private readonly definition: WorkflowDefinition,
-         private readonly subWorkflows: Map<string, IWorkflow>
-       ) {}
-       
-       async execute(context: WorkflowContext): Promise<WorkflowResult> {
-         for (const node of this.definition.nodes) {
-           if (node.type === 'sub_workflow') {
-             const subWorkflow = this.subWorkflows.get(node.subWorkflowId);
-             const subResult = await subWorkflow.execute(context);
-             // Merge sub-workflow result into context
-             context.variables = { ...context.variables, ...subResult.output };
-           } else {
-             // Execute node normally
-             await this.executeNode(node, context);
-           }
-         }
-       }
-     }
-     ```
-  3. Create reusable sub-workflow templates:
-     ```typescript
-     const codeReviewSubWorkflow: WorkflowDefinition = {
-       id: 'code_review_sub',
-       name: 'Code Review Sub-Workflow',
-       nodes: [
-         { id: 'dev_implement', type: 'agent_task', agentRole: 'DEV' },
-         { id: 'qa_review', type: 'agent_task', agentRole: 'QA' },
-         { id: 'qa_condition', type: 'condition', conditions: { onSuccess: 'end', onFail: 'dev_implement' } },
-         { id: 'end', type: 'end' }
-       ],
-       edges: [...]
-     };
-     ```
-  4. Update WorkflowEngine to handle sub-workflows:
-     ```typescript
-     private async executeSubWorkflow(node: WorkflowNode, run: WorkflowRun): Promise<NodeResult> {
-       const subWorkflowDef = this.definitions.get(node.subWorkflowId);
-       const subWorkflowRun = await this.startWorkflow(run.projectId, node.subWorkflowId, run.context);
-       // Wait for sub-workflow completion
-       await this.waitForCompletion(subWorkflowRun.id);
-       // Retrieve sub-workflow result
-       const completedRun = await this.prisma.workflowRun.findUnique({ where: { id: subWorkflowRun.id } });
-       return { status: 'success', output: completedRun.context.variables };
-     }
-     ```
-  5. Add sub-workflow UI visualization:
-     - Nested workflow diagram with expand/collapse
-     - Breadcrumb navigation through workflow hierarchy
-- **Tests**:
-  - Unit test: Sub-workflow execution
-  - Integration test: Parent workflow invokes sub-workflow and receives result
-  - Test sub-workflow context isolation
-  - Test recursive sub-workflows (workflow calls itself)
-- **Demo**: Create project with sub-workflow → Show nested execution in Virtual Office
+  1. `NodeType` gains `sub_workflow`; `WorkflowNode` gains `subWorkflowId` and `subWorkflowVersion` (`packages/shared-types`).
+  2. `SubWorkflowStrategy` (self-registers with the engine like the quality gate, so the engine needs no change for it): creates a child `WorkflowRun` (`parentRunId`, `parentNodeId`, pinned version), runs each child node through the engine's `executeNode` (so every child node is a step of the child run, retried up to its `maxRetries`), follows the child's edges with `WorkflowGraph`, and limits loops to 3 visits per node like the engine.
+  3. **Context isolation**: the child starts with a deep copy of the parent's variables (only `metadata.inputs` when given) and returns its variables (only `metadata.outputs` when given) when it completes. A failed child changes nothing in the parent.
+  4. **Recursion**: the registry rejects a workflow that calls itself, requires referenced sub-workflows to be registered first and pins references to a version, so reference cycles can't be built. `MAX_DEPTH = 5` also guards nesting at run time.
+  5. `domain/workflow/WorkflowGraph` is now the one place that decides the next node, for the engine and for child runs. It also lets an end node loop back (an OOAD gate or QA condition can be the end of a sub-workflow).
+  6. Reusable sub-workflows (`modules/workflow/templates/sub-workflows.ts`): `ooad-analysis-design` (BA → Architect → OOAD gate, failed gate loops to the Architect), `ooad-build-verify` (DEV → QC → QA → condition, optional QA ‖ Marketing), `ooad-pair-build` (pair_develop → review_chain).
+  7. API: `GET /api/workflows/runs/:runId` returns the run with its steps and the tree of child runs (`WorkflowRunQueryService`). The project's run list only shows top-level runs.
+  8. UI (*Workflow Runs* tab): execution timeline with each sub-workflow step expandable/collapsible into the child run's steps, "open" to drill into a child run, breadcrumb back up (`components/workflow/WorkflowRunView.tsx`).
+- **Tests** (`tests/unit/workflow/sub-workflows.spec.ts`, real engine over an in-memory repository): child run created and pinned, child steps on the child run, variables returned; input/output isolation; loop inside the child then completion; failed child leaves the parent unchanged and fails the run; self-reference, unknown and pausing sub-workflows rejected; run-time depth guard.
+- **Demo**: create a project from the *OOAD software project* template → *Workflow Runs* shows `analysis_design` and `build` as nested sub-workflows.
 
----
-
-**Task 17: Implement Workflow Versioning & Rollback**
-- **Objective**: Support workflow versions with ability to rollback to previous state
+**Task 17: Workflow Versioning & Rollback** — ✅ Done (2026-10-26)
+- **Objective**: Changing a workflow never changes runs in flight, and a run can be put back to an earlier state.
 - **Implementation**:
-  1. Add version tracking to WorkflowDefinition:
-     ```typescript
-     interface WorkflowDefinition {
-       id: string;
-       version: string; // Semantic versioning: "1.0.0"
-       name: string;
-       // ... other fields
-     }
-     ```
-  2. Implement Memento pattern for workflow state:
-     ```typescript
-     class WorkflowSnapshot {
-       constructor(
-         readonly runId: string,
-         readonly nodeId: string,
-         readonly context: WorkflowContext,
-         readonly timestamp: Date
-       ) {}
-     }
-     
-     class WorkflowSnapshotManager {
-       private snapshots = new Map<string, WorkflowSnapshot[]>();
-       
-       createSnapshot(run: WorkflowRun): void {
-         const snapshot = new WorkflowSnapshot(run.id, run.currentNodeId, run.context, new Date());
-         const snapshots = this.snapshots.get(run.id) || [];
-         snapshots.push(snapshot);
-         this.snapshots.set(run.id, snapshots);
-       }
-       
-       rollback(runId: string, steps: number = 1): WorkflowSnapshot {
-         const snapshots = this.snapshots.get(runId) || [];
-         if (snapshots.length < steps + 1) throw new Error('Not enough snapshots');
-         return snapshots[snapshots.length - steps - 1];
-       }
-     }
-     ```
-  3. Integrate snapshot creation into WorkflowEngine:
-     ```typescript
-     private async executeNode(node: WorkflowNode, run: WorkflowRun): Promise<NodeResult> {
-       // Create snapshot before executing node
-       this.snapshotManager.createSnapshot(run);
-       
-       const result = await this.executeNodeByType(node, run);
-       
-       // If failed and rollback enabled
-       if (result.status === 'failure' && node.allowRollback) {
-         const snapshot = this.snapshotManager.rollback(run.id, 1);
-         await this.restoreSnapshot(run.id, snapshot);
-       }
-       
-       return result;
-     }
-     ```
-  4. Add rollback API endpoint:
-     ```typescript
-     @Post('/workflows/:runId/rollback')
-     async rollbackWorkflow(@Param('runId') runId: string, @Body() dto: RollbackDto) {
-       const snapshot = this.snapshotManager.rollback(runId, dto.steps);
-       await this.workflowEngine.restoreSnapshot(runId, snapshot);
-       return { message: `Rolled back ${dto.steps} steps`, currentNodeId: snapshot.nodeId };
-     }
-     ```
-  5. Store snapshots in database for persistence:
-     ```prisma
-     model WorkflowSnapshot {
-       id            String    @id @default(uuid())
-       workflowRunId String
-       nodeId        String
-       context       Json
-       createdAt     DateTime  @default(now())
-       
-       workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id])
-       @@index([workflowRunId, createdAt])
-     }
-     ```
-- **Tests**:
-  - Unit test: Snapshot creation and retrieval
-  - Integration test: Rollback workflow to previous node
-  - Test rollback with modified context
-  - Test snapshot persistence across server restarts
-- **Demo**: Execute workflow → Trigger error → Show rollback to previous node
+  1. `SemanticVersion` value object (`MAJOR.MINOR.PATCH[+build]`, build metadata ignored in ordering).
+  2. `WorkflowDefinitionRegistry` replaces the engine's map: definitions are immutable per `id@version` (same content again is a no-op, other content throws `WorkflowVersionConflictError`), "latest" is the highest precedence. `WorkflowRun.workflowDefVersion` pins each run; `startWorkflow(…, version?)`.
+  3. `WorkflowDefinitionVersion` table + `IWorkflowDefinitionRepository`: built-ins and instantiated templates are stored; on startup stored versions are reloaded. Built-ins in code win over a stored row with the same version but other content (that row means the code changed without a version bump).
+  4. **Memento**: `WorkflowRunMemento` (domain) deep-copies node, status and context; the engine (originator) captures one before every top-level node (once per node, not per retry) and restores it; `WorkflowSnapshotCaretaker` stores them in the new `WorkflowSnapshot` table.
+  5. `WorkflowEngine.rollbackWorkflow(runId, { snapshotId } | { steps })`: only paused or failed top-level runs; restores node and context, leaves the run **paused**, discards the target and later snapshots (the node is snapshotted again when it re-runs) and cancels pending approvals of the run.
+  6. API: `GET /api/workflows/runs/:runId/snapshots`, `POST …/rollback`, `POST …/pause`, `POST …/resume`, `GET /api/workflows/definitions[/:id?version=]`.
+  7. UI: snapshot list with *Roll back* (enabled when paused or failed) and *Resume*; the run header shows `id@version`.
+  8. Not part of the memento: files in the project workspace (re-run agents rewrite them). Sub-workflow runs are not snapshotted; rolling back the parent re-runs the whole `sub_workflow` node.
+- **Tests** (`parallel-and-rollback.spec.ts`, `sub-workflows.spec.ts`, `workflow-domain.spec.ts`): snapshot per node, kept across a "restart" (new engine, same storage); failed run → rollback 1 step → resume → completes; rollback 2 steps restores the earlier context and drops later snapshots; rollback to a chosen snapshot cancels the pending approval; refusals (running, sub-workflow run, no history); a paused v1 run keeps running v1 after v2 is registered; registry immutability, precedence, version pinning; memento isolation.
+- **Demo**: stop the LLM gateway → create a project → the run fails at `start` → restart the gateway → *Roll back* → *Resume* → the run completes (see `docs/phase4-e2e/`).
 
----
-
-**Task 18: Implement Parallel Execution Optimization**
-- **Objective**: Optimize parallel node execution with dependency resolution
+**Task 18: Parallel Execution with Dependencies** — ✅ Done (2026-10-26)
+- **Objective**: Parallel branches that may depend on each other, with a concurrency cap.
 - **Implementation**:
-  1. Enhance parallel node with dependency specification:
-     ```typescript
-     interface ParallelNode extends WorkflowNode {
-       type: 'parallel';
-       parallelBranches: {
-         nodeId: string;
-         dependencies?: string[]; // Node IDs that must complete first
-       }[];
-       concurrencyLimit?: number; // Max concurrent executions
-     }
-     ```
-  2. Implement topological sort for dependency resolution:
-     ```typescript
-     class DependencyResolver {
-       resolveDependencies(branches: ParallelBranch[]): string[][] {
-         // Build adjacency list
-         const graph = new Map<string, string[]>();
-         const inDegree = new Map<string, number>();
-         
-         for (const branch of branches) {
-           inDegree.set(branch.nodeId, branch.dependencies?.length || 0);
-           for (const dep of branch.dependencies || []) {
-             const edges = graph.get(dep) || [];
-             edges.push(branch.nodeId);
-             graph.set(dep, edges);
-           }
-         }
-         
-         // Topological sort (Kahn's algorithm)
-         const layers: string[][] = [];
-         const queue = branches.filter(b => (b.dependencies?.length || 0) === 0).map(b => b.nodeId);
-         
-         while (queue.length > 0) {
-           const currentLayer = [...queue];
-           layers.push(currentLayer);
-           queue.length = 0;
-           
-           for (const nodeId of currentLayer) {
-             for (const dependent of graph.get(nodeId) || []) {
-               inDegree.set(dependent, inDegree.get(dependent)! - 1);
-               if (inDegree.get(dependent) === 0) queue.push(dependent);
-             }
-           }
-         }
-         
-         return layers;
-       }
-     }
-     ```
-  3. Implement parallel execution with concurrency control:
-     ```typescript
-     private async executeParallel(node: ParallelNode, run: WorkflowRun): Promise<NodeResult> {
-       const resolver = new DependencyResolver();
-       const layers = resolver.resolveDependencies(node.parallelBranches);
-       const results = new Map<string, NodeResult>();
-       
-       // Execute layer by layer
-       for (const layer of layers) {
-         const limit = node.concurrencyLimit || Infinity;
-         const batches = this.createBatches(layer, limit);
-         
-         for (const batch of batches) {
-           const promises = batch.map(nodeId => {
-             const branchNode = this.getNodeById(nodeId, run);
-             return this.executeNode(branchNode, run);
-           });
-           
-           const batchResults = await Promise.all(promises);
-           batch.forEach((nodeId, i) => results.set(nodeId, batchResults[i]));
-         }
-       }
-       
-       // Check if all branches succeeded
-       const allSucceeded = Array.from(results.values()).every(r => r.status === 'success');
-       return { status: allSucceeded ? 'success' : 'failure', output: Object.fromEntries(results) };
-     }
-     ```
-  4. Add parallel execution visualization:
-     - Gantt chart showing parallel execution timeline
-     - Dependency graph visualization
-- **Tests**:
-  - Unit test: Dependency resolution (topological sort)
-  - Test cyclic dependency detection
-  - Integration test: Parallel execution with dependencies completes correctly
-  - Performance test: Parallel execution is faster than sequential
-- **Demo**: Show workflow with parallel branches → Display execution timeline in UI
+  1. Parallel node metadata `branches: [{ nodeId, dependsOn? }]` and `concurrencyLimit` (`ParallelBranch` in shared types); the old `parallelNodes` list still works.
+  2. `DependencyResolver` (domain): Kahn's algorithm for layers, `CyclicDependencyError` naming the nodes in the cycle, unknown/duplicate/self dependencies rejected. The validator checks every parallel node at registration.
+  3. `ParallelStrategy` schedules by readiness instead of layer by layer: a branch starts as soon as its dependencies succeeded and a slot is free (never waits for a slow branch in the same layer). Branches whose dependency failed are **skipped**. The output has `layers` and a per-branch timeline (`startedAt`, `finishedAt`, `durationMs`, `layer`, `status`).
+  4. Used by the *OOAD software project* template's *Announce while QA reviews* option: QA review and the Marketing announcement run as two branches after QC.
+  5. UI: the execution timeline is a Gantt chart of all steps; steps of the same run that overlapped are outlined.
+- **Tests**: dependency order, independent branches overlapping, layers and timeline in the step output, concurrency limit respected (max 2 active of 4), parallel faster than sequential (3 × 60 ms in < 170 ms), dependents of a failed branch skipped, cyclic definitions rejected; resolver unit tests.
 
----
-
-**Task 19: Implement Workflow Templates & Reusable Patterns**
-- **Objective**: Create library of workflow templates for common scenarios
+**Task 19: Workflow Templates** — ✅ Done (2026-10-26)
+- **Objective**: A library of parameterised workflows to start projects from.
 - **Implementation**:
-  1. Define workflow template schema:
-     ```typescript
-     interface WorkflowTemplate {
-       id: string;
-       name: string;
-       description: string;
-       category: 'software_development' | 'data_analysis' | 'marketing' | 'custom';
-       parameters: WorkflowParameter[];
-       definition: WorkflowDefinition;
-     }
-     
-     interface WorkflowParameter {
-       name: string;
-       type: 'string' | 'number' | 'boolean' | 'array';
-       description: string;
-       defaultValue?: any;
-       required: boolean;
-     }
-     ```
-  2. Create template library:
-     ```typescript
-     const templates: WorkflowTemplate[] = [
-       {
-         id: 'full_stack_web_app',
-         name: 'Full Stack Web Application',
-         description: 'Complete workflow for building full-stack web apps',
-         category: 'software_development',
-         parameters: [
-           { name: 'tech_stack', type: 'string', description: 'Technology stack (e.g., MERN, PERN)', required: true },
-           { name: 'has_auth', type: 'boolean', description: 'Include authentication', defaultValue: true, required: false }
-         ],
-         definition: { /* Workflow with BA → Architect → OOAD gate → DEV → QC → QA */ }
-       },
-       {
-         id: 'api_only',
-         name: 'REST API Backend',
-         description: 'Workflow for building REST API backend',
-         category: 'software_development',
-         parameters: [
-           { name: 'database', type: 'string', description: 'Database type (PostgreSQL, MongoDB)', required: true }
-         ],
-         definition: { /* Workflow with BA → Architect → DEV → QC → QA */ }
-       },
-       {
-         id: 'ml_pipeline',
-         name: 'ML Model Training Pipeline',
-         description: 'Workflow for training and deploying ML models',
-         category: 'data_analysis',
-         parameters: [
-           { name: 'model_type', type: 'string', description: 'Model type (classification, regression)', required: true }
-         ],
-         definition: { /* Workflow with BA → DataScientist → MLEngineer → QC */ }
-       }
-     ];
-     ```
-  3. Implement template instantiation:
-     ```typescript
-     class WorkflowTemplateService {
-       instantiateTemplate(templateId: string, params: Record<string, any>): WorkflowDefinition {
-         const template = this.templates.find(t => t.id === templateId);
-         if (!template) throw new Error('Template not found');
-         
-         // Validate parameters
-         this.validateParameters(template.parameters, params);
-         
-         // Replace placeholders in definition
-         const definition = this.replacePlaceholders(template.definition, params);
-         
-         return definition;
-       }
-       
-       private replacePlaceholders(definition: WorkflowDefinition, params: Record<string, any>): WorkflowDefinition {
-         // Deep clone and replace ${param_name} with actual values
-         const json = JSON.stringify(definition);
-         const replaced = json.replace(/\$\{(\w+)\}/g, (match, paramName) => {
-           return params[paramName] || match;
-         });
-         return JSON.parse(replaced);
-       }
-     }
-     ```
-  4. Add template selection UI:
-     - Template gallery with preview
-     - Parameter form
-     - Workflow visualization before creation
-  5. Store templates in database:
-     ```prisma
-     model WorkflowTemplate {
-       id          String   @id @default(uuid())
-       name        String
-       description String
-       category    String
-       parameters  Json
-       definition  Json
-       isPublic    Boolean  @default(true)
-       createdBy   String?
-       createdAt   DateTime @default(now())
-     }
-     ```
-- **Tests**:
-  - Unit test: Template instantiation with parameters
-  - Test parameter validation
-  - Integration test: Create project from template
-  - Test custom template creation by users
-- **Demo**: Select template → Fill parameters → Show instantiated workflow → Execute
+  1. `WorkflowTemplate` (domain, Template Method): `instantiate(params)` validates and coerces typed parameters (`string | number | boolean | enum`, required, min/max, options, unknown names rejected → `TemplateParameterError`), lets the subclass `build()` the main definition and its sub-workflows, then versions each definition as `<template version>+<content hash>`. Same content → same version (instantiating twice registers nothing new); a sub-workflow shared by two templates gets one version.
+  2. Templates (`WORKFLOW_TEMPLATES` multi-provider, `WorkflowTemplateCatalog`): **OOAD software project** (`collaboration` sequential/pair, `minUseCases`, `announcement`, `parallelMarketing`, `humanApproval`), **REST API backend** (`database` PostgreSQL/MongoDB/In-memory → passed to the Architect as a node `constraints` value, `minUseCases`), **OOAD analysis & design** (`minUseCases`, `humanApproval`).
+  3. `WorkflowDefinitionService.previewTemplate` (validates against a scratch registry, registers nothing) and `instantiateTemplate` (registers and stores sub-workflows first, then the main definition).
+  4. `POST /api/projects` accepts `templateId` and `templateParams`; a bad choice is rejected (400/404) **before** the project is created. The run is pinned to the instantiated version and records `workflowTemplate` in its variables.
+  5. API: `GET /api/workflows/templates`, `POST /api/workflows/templates/:id/preview`.
+  6. UI: the *New Project* form has a workflow picker with a parameter form generated from the template and a live preview of the nodes, with sub-workflows and parallel branches expanded (`components/workflow/TemplatePicker.tsx`).
+- **Tests** (`templates.spec.ts`): every built-in template instantiates into valid, pinned definitions; parameters switch nodes on/off and reach the gate criteria; parallel option; content-based versions; the database constraint reaches the Architect agent's input; parameter validation messages; 400/404 mapping; registration order and storage; reload after restart with rows out of order; full template run end to end through both sub-workflows. Project service: template instantiated and pinned, invalid choice rejected before anything is created.
+
+**Phase 4 verification (2026-10-26)**: `nest build` 0 errors; API Jest 32/32 suites, 504 passed (15 skipped), up from 452; web `tsc` clean, Vitest 29/29, `vite build` OK. End-to-end run on PostgreSQL + Redis (BullMQ) with the scripted LLM: see `docs/phase4-e2e/README.md`. Diagrams: `docs/diagrams/classes/workflow-engine-phase4.puml`, `sequences/SD-006-workflow-rollback.puml` (rewritten: it described a Saga/compensation service that was never built), `sequences/SD-008-sub-workflow-execution.puml`. PlantUML rendering is blocked in the build container, so the diagrams were not rendered here.
 
 ---
 

@@ -50,6 +50,11 @@ export class ProjectApplicationService {
    * Create a new project, raise ProjectCreatedEvent and start its workflow
    */
   async createProject(data: CreateProjectDto & { createdById: string }): Promise<ProjectDTO> {
+    // 0. Reject a bad template choice before anything is created (throws 404 / 400)
+    if (data.templateId) {
+      this.workflowDefinitionService.previewTemplate(data.templateId, data.templateParams || {});
+    }
+
     // 1. Create entity using factory method (enforces validation)
     const project = applyDomainRule(() =>
       Project.create({
@@ -84,7 +89,7 @@ export class ProjectApplicationService {
     ).catch(err => this.logger.error(`Failed to publish ProjectCreatedEvent: ${err.message}`));
 
     // 4. Kick off the default agent workflow
-    await this.startDefaultWorkflow(dto);
+    await this.startWorkflow(dto, data.templateId, data.templateParams);
 
     return dto;
   }
@@ -215,20 +220,30 @@ export class ProjectApplicationService {
     });
   }
 
-  private async startDefaultWorkflow(project: ProjectDTO): Promise<void> {
+  /**
+   * Start the project's workflow: the chosen template instantiated with its parameters (Task 19),
+   * or the default workflow. The run is pinned to the definition version it starts with (Task 17).
+   */
+  private async startWorkflow(project: ProjectDTO, templateId?: string, templateParams?: Record<string, unknown>): Promise<void> {
     try {
-      const workflowDef = this.workflowDefinitionService.getDefaultWorkflowDefinition();
+      const variables: Record<string, unknown> = {
+        projectName: project.name,
+        projectDescription: project.description,
+        budget: project.budget ?? undefined,
+      };
+      let workflowDef = this.workflowDefinitionService.getDefaultWorkflowDefinition();
+      if (templateId) {
+        const { definition, instance } = await this.workflowDefinitionService.instantiateTemplate(templateId, templateParams || {});
+        workflowDef = definition;
+        variables.workflowTemplate = { id: templateId, parameters: instance.parameters };
+      }
       const context: WorkflowContext = {
         projectId: project.id,
         goal: project.goal,
-        variables: {
-          projectName: project.name,
-          projectDescription: project.description,
-          budget: project.budget ?? undefined,
-        },
+        variables,
       };
-      await this.workflowEngine.startWorkflow(project.id, workflowDef.id, context);
-      this.logger.log(`Started workflow for project ${project.id}`);
+      await this.workflowEngine.startWorkflow(project.id, workflowDef.id, context, workflowDef.version);
+      this.logger.log(`Started workflow ${workflowDef.id}@${workflowDef.version} for project ${project.id}`);
     } catch (error) {
       this.logger.error(`Failed to start workflow for project ${project.id}: ${(error as Error).message}`);
     }

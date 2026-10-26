@@ -8,7 +8,9 @@ import { WorkflowRunRecord } from '../persistence/workflow-engine.repository';
  */
 export interface NodeExecutionContext {
   logger: Logger;
-  getDefinition(workflowDefId: string): WorkflowDefinition | undefined;
+  getDefinition(workflowDefId: string, version?: string | null): WorkflowDefinition | undefined;
+  /** The definition (pinned version) a run executes */
+  definitionOf(run: WorkflowRunRecord): WorkflowDefinition | undefined;
   /** Runs another node through the engine's full step lifecycle (used by parallel nodes). */
   executeNode(node: WorkflowNode, run: WorkflowRunRecord): Promise<NodeResult>;
 }
