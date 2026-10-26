@@ -7,7 +7,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 1. **Abandoned Domain Layer**: Well-designed domain interfaces (IAgent, IThinkingStrategy) exist but are unused by concrete implementations
 2. **SOLID Violations**: BaseAgent has 9 dependencies and multiple responsibilities; services mix business logic with data access
 3. **Missing Patterns**: No Repository pattern, no Domain Events, no CQRS separation
-4. **Limited Agent Capabilities**: Only 5 agents (CEO, PM, DEV, QA, Marketing); needs expansion to DevOps, BA, Architect
+4. **Limited Agent Capabilities**: Only 5 agents (CEO, PM, DEV, QA, Marketing); needs expansion to BA, Architect and QC (QA/QC split)
 5. **Incomplete Documentation**: No formal use case diagrams, sequence diagrams, or academic-grade specifications
 
 **Goal**: Transform AI-CORP into an exemplary academic thesis project by:
@@ -21,12 +21,80 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 ---
 
+## **Status & Audit (2026-10-26)**
+
+> Snapshot taken before starting Phase 3. Phases 1, 2 and 2.5 are complete; the audit below lists what was wrong in them and how it was fixed, the agent roster change, and the corrected direction for the remaining phases.
+
+### **Phase status**
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1 – Foundation & Documentation | Done | UML/use-case docs in `docs/`. Actor list updated: DevOps removed, QC added (see role review) |
+| Phase 2 – Domain Layer Refactoring | Done (fixed) | Repositories, entities, application services (PR #2), engine strategies (PR #4), agent typing (PR #5) |
+| Phase 2.5 – OOAD Project Automation | Done (fixed) | Templates + skeleton (PR #3). Quality gate, traceability and metrics were not wired end-to-end; fixed in this audit |
+| Phase 3 – Agent System Enhancement | **Ready to start** | Re-scoped below: BA/Architect were already delivered by Phase 2.5 |
+| Phases 4–7 | Not started | DevOps references removed |
+
+### **Audit findings and fixes**
+
+| # | Phase / Task | Finding | Fix |
+|---|--------------|---------|-----|
+| A1 | 2 / Task 8 | **API could not start**: `PmActionStrategy` and `MarketingActionStrategy` took `systemPrompt: string, modelConfig` constructor params, which Nest DI cannot resolve (`Nest can't resolve dependencies of the PmActionStrategy`) | Prompts/configs are class fields; app boots (verified) |
+| A2 | 2 / Task 8 | Only BA/Architect/Dev/DevOps used the Strategy pattern; CEO, PM, QA and Marketing still ran legacy `think()/act()`, so their strategies (incl. the Phase 2.5 traceability in `QaActionStrategy`) were dead code | All 8 agents now run through injected thinking/action strategies |
+| A3 | 2 / Task 10 | Budget enforcement for LLM cost bypassed the domain: `ApiUsageService` paused the project directly and never raised `BudgetExceededEvent`, so the running workflow was never paused | `ApiUsageService` publishes `BudgetExceededEvent` once when the budget is crossed; `BudgetExceededHandler` pauses the run |
+| A4 | 2.5 / Tasks 10.2–10.5 | Strategy-based agents called the LLM provider directly, so **their token cost was never tracked** (BA, Architect, Dev, DevOps) | `UsageTrackingLLMProvider` (Decorator) + `AgentLLMService` (Facade): every agent call is logged to `ApiUsageLog` and accrued to the project |
+| A5 | 2.5 / all | Artifacts were written into the Docker sandbox, which runs every command in a fresh container with no mounts, so **generated docs/code/tests were lost** after each command; the gate's file checks and QA's test scan could never succeed | New `ProjectWorkspace` (persistent store under `PROJECTS_WORKSPACE_DIR/projects/<id>/`, path-traversal safe). BA, Architect, Dev and QC write there; the sandbox is only for running commands |
+| A6 | 2.5 / Task 10.4 | `QualityGateHandler` existed but was **never registered or used**: no `quality_gate` node type, no gate in the default workflow | `quality_gate` node type + `QualityGateStrategy` (self-registers with the engine, OCP). Default workflow: `design → ooad_gate → breakdown` (pass) / `→ design` (fail) |
+| A7 | 2.5 / Task 10.4 | Workflow order contradicted OOAD: CEO → **PM** → BA → Architect → Dev (tasks planned before requirements existed) | CEO → BA → Architect → OOAD gate → PM → Dev → QC → QA → Marketing → approval → CEO close-out. PM now plans one task per approved use case |
+| A8 | 2.5 / Task 10.6 | Traceability could never report coverage > 0% (nobody wrote tests; test files lived in throwaway containers) | QC agent writes acceptance tests per use case and builds the traceability matrix (use case → classes → implementation → tests) from the workspace |
+| A9 | 2.5 / Task 10.7 | OOAD metrics controller was mounted at `/api/api/ooad-metrics` (`@Controller('api/ooad-metrics')` + global prefix) | `@Controller('ooad-metrics')` → `/api/ooad-metrics/...` |
+| A10 | Phase 2 / Task 32.2 legacy | Kanban updates were broken: QA moved `in_progress → done` (invalid transition), QA approval was read from a field that never existed, nothing moved tasks out of `todo` | DEV: todo/in_progress → review; QA approve: review → done; QA reject: review → in_progress (via `Task.transitionTo`) |
+| A11 | Workflow end node | CEO's `complete_project` step re-ran milestone planning and created duplicate milestones | CEO strategy branches on `taskType`; close-out writes a report, no milestones |
+| A12 | Seed / UI | BA and Architect had no `Agent` rows (no memories, no model config in Agent Settings) and were missing from the Virtual Office | Seed adds BA, ARCHITECT, QC (DEVOPS deactivated); web role maps and Virtual Office list all 8 roles |
+| A13 | Web | 5 TypeScript errors (`tsc --noEmit`) in Dashboard, ProjectDetail, VirtualOffice | Fixed; `tsc` and `vite build` clean |
+
+**Verification**: `nest build` 0 errors, Jest 21/21 suites (351 tests), web `tsc` clean. Full workflow run end-to-end against PostgreSQL with a mock LLM: gate passed, 2 use-case tasks moved todo → review → done, every role logged usage, 28 files persisted in the workspace (an unsafe `../../etc/evil.ts` path from the "LLM" was rejected), traceability 80%, metrics endpoint correct, human approval → CEO close-out → `completed`.
+
+**Known gaps carried into later phases** (not regressions): `domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies (Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); `EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing (Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); generated tests are written but not executed yet (Task 12). Phase 1 class/sequence/activity diagrams still mention DevOps (Task 11, step 6).
+
+### **Agent role review**
+
+**DevOps – removed.** AI-CORP's product is the *designed and implemented* project (OOAD artifacts + layered code + tests), not a running deployment. The DevOps agent was never part of the workflow, only produced LLM text that nothing consumed, and there is no deployment target in the platform (the sandbox has no network and no persistent volume). Keeping it would add a role with no verifiable output and pull the thesis scope towards CI/CD/IaC, away from OOAD. Deploying the *platform itself* (Task 32) is unaffected. If deployable output is wanted later, the Architect's skeleton can emit a Dockerfile template instead of a separate agent.
+
+**QC – added, and QA re-focused.** In software quality management, *Quality Assurance* is process-oriented (prevent defects: standards, reviews, gates) and *Quality Control* is product-oriented (detect defects: test, inspect, measure). The old QA agent mixed both and in practice did neither well. The split maps directly onto OOAD's traceability chain:
+
+| Role | Owns | Output |
+|------|------|--------|
+| **QA** (process) | OOAD quality gate after design; review of code against use cases, domain model, patterns, layering | `qa_approved` verdict that drives the QA condition (loop back to DEV on fail) |
+| **QC** (product) | Acceptance tests derived from each use case; traceability matrix; coverage | `tests/UC-xxx.spec.ts`, `docs/traceability-matrix.md`, `ooadMetadata.testCoverage`, `qc_passed` |
+
+**Current roster (8)**: CEO, BA, Architect, PM, DEV, QC, QA, Marketing.
+
+**Current default workflow** (`apps/api/src/modules/workflow/default-workflow.ts`, v2.0.0):
+
+```
+CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patterns, skeleton)
+  → [quality_gate: OOAD gate] ─fail→ Architect
+  → PM (one task per use case) → DEV (implementation) → QC (acceptance tests + traceability)
+  → QA (design conformance) → [condition qa_approved] ─fail→ DEV
+  → Marketing → [human approval] → CEO (close-out)
+```
+
+### **Direction corrections for the remaining plan**
+
+1. **Phase 3 no longer re-implements BA and Architect** (done in 2.5). It focuses on what makes the agent system itself OOAD-clean and verifiable: registry/OCP, executable QC, artifact visibility, learning, collaboration.
+2. **Generated projects are first-class artifacts**: everything an agent produces lives in the project workspace and must be viewable/downloadable (Task 13) — this is the main thesis evidence.
+3. **Quality is measured, not asserted**: QC executes tests (Task 12), so traceability coverage reflects passing tests, and Phase 6's analytics can use real data.
+4. Recommendation (not applied): NFR2.1's 90% global unit coverage is very ambitious for the remaining weeks; consider gating 90% on `src/domain` + application services/strategies and reporting the rest.
+
+---
+
 ## **Requirements**
 
 ### **Functional Requirements (FR)**
 
 **FR1. Enhanced Multi-Agent System**
-- FR1.1: Add new agent roles: Business Analyst (BA), Software Architect, DevOps Engineer
+- FR1.1: Add new agent roles: Business Analyst (BA), Software Architect, Quality Control (QC) Engineer (DevOps dropped on 2026-10-26, see Status & Audit)
 - FR1.2: Implement agent learning capability through memory refinement
 - FR1.3: Support agent collaboration patterns (pair programming, code review chains)
 - FR1.4: Enable agent delegation and sub-task assignment
@@ -275,14 +343,14 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 **Task 1: Requirements Analysis & Use Case Modeling**
 - **Objective**: Create comprehensive use case documentation for all system actors
 - **Implementation**:
-  1. Identify all actors: Board Member, Admin, AI Agents (CEO, PM, DEV, QA, Marketing, BA, Architect, DevOps)
+  1. Identify all actors: Board Member, Admin, AI Agents (CEO, PM, DEV, QA, QC, Marketing, BA, Architect)
   2. Document use cases with templates:
      - **UC-001**: Create Project (Actor: Board Member)
      - **UC-002**: Approve Workflow Step (Actor: Board Member)
      - **UC-003**: Execute Development Task (Actor: DEV Agent)
      - **UC-004**: Analyze Requirements (Actor: BA Agent) [NEW]
      - **UC-005**: Design Architecture (Actor: Architect Agent) [NEW]
-     - **UC-006**: Deploy Application (Actor: DevOps Agent) [NEW]
+     - **UC-006**: Verify Implementation against Use Cases (Actor: QC Agent) [NEW, replaces Deploy Application]
      - ... (continue for all 25+ use cases)
   3. Create use case diagrams in PlantUML format
   4. Document pre-conditions, post-conditions, main flow, alternative flows, exception flows
@@ -467,6 +535,8 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 ---
 
 **Task 8: Implement Agent Strategy Pattern (IThinkingStrategy & IActionStrategy)**
+
+> **2026-10-26:** completed for all 8 roles (CEO/PM/QA/Marketing were still on the legacy path). LLM access goes through `AgentLLMService` (Facade) and `UsageTrackingLLMProvider` (Decorator).
 - **Objective**: Connect existing domain strategy interfaces to concrete agent implementations
 - **Implementation**:
   1. Ensure strategy interfaces are complete in `src/domain/agent/strategies/`:
@@ -597,6 +667,8 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 ---
 
 **Task 10: Implement Domain Event System**
+
+> **2026-10-26:** `ApiUsageService` now raises `BudgetExceededEvent` when LLM cost crosses the budget, so `BudgetExceededHandler` pauses the running workflow.
 - **Objective**: Decouple domain logic with event-driven communication
 - **Implementation**:
   1. Create event base class:
@@ -824,6 +896,8 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 ---
 
 **Task 10.4: Add OOAD Quality Gate to Workflow**
+
+> **2026-10-26:** the handler existed but was never wired. Now implemented as node type `quality_gate` (`QualityGateStrategy`, self-registered with the engine), node id `ooad_gate` between `design` and `breakdown` in `default-workflow.ts`; required artifacts are checked in `ProjectWorkspace`; results are stored in `QualityGateLog`. The gate is owned by QA (process role).
 - **Objective**: Insert a `quality_gate` node between the Architect step and PM step in the default workflow DAG. Gate blocks progress until all 5 OOAD artifacts exist and minimum counts are met; on failure it loops back to the Architect.
 - **Implementation**:
   1. Add `quality_gate` node to the default workflow in `apps/api/src/modules/workflow/workflow-definitions.ts`:
@@ -859,6 +933,8 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 ---
 
 **Task 10.5: Update DEV Agent to Consume OOAD Artifacts**
+
+> **2026-10-26:** DEV builds its design context from `ooadMetadata` (via `OOADArtifactService.buildImplementationContext`) and writes code to `ProjectWorkspace`; the gate guarantees the design exists before DEV runs.
 - **Objective**: Inject OOAD design artifacts (use cases, domain model, architecture) into DEV Agent context so every implementation follows the approved design.
 - **Implementation**:
   1. Update `apps/api/src/modules/agents/strategies/DevActionStrategy.ts`:
@@ -907,7 +983,9 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 ---
 
-**Task 10.6: Add Traceability Matrix Generation (QA Agent)**
+**Task 10.6: Add Traceability Matrix Generation (QC Agent)**
+
+> **2026-10-26:** moved from QA to the new QC agent (`QcActionStrategy` + `TraceabilityService`). Files are read from `ProjectWorkspace`, not the sandbox; QC also writes the acceptance tests the matrix needs.
 - **Objective**: Update `QaActionStrategy` to cross-reference use cases, domain entities, and test files into a traceability matrix, and alert when coverage drops below 80%.
 - **Implementation**:
   1. Update `apps/api/src/modules/agents/strategies/QaActionStrategy.ts`:
@@ -927,6 +1005,8 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 ---
 
 **Task 10.7: Add OOAD Metrics Dashboard**
+
+> **2026-10-26:** route fixed to `/api/ooad-metrics/...` (it was double-prefixed as `/api/api/ooad-metrics`). Coverage is read from `ooadMetadata.testCoverage`, written by QC.
 - **Objective**: Expose API endpoints and an aggregate dashboard for OOAD quality metrics across all projects — usable directly as thesis evidence.
 - **Implementation**:
   1. Create `apps/api/src/modules/ooad/ooad-metrics.service.ts`:
@@ -979,334 +1059,109 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 ### **Phase 3: Agent System Enhancement (Week 3-4)**
 
----
+> **Re-scoped on 2026-10-26.** The original Tasks 11–13 (BA, Architect, DevOps agents) are obsolete: BA and Architect were delivered with structured OOAD output in Phase 2.5, and DevOps was removed (see *Agent role review*). Phase 3 now makes the agent system itself clean OOAD (open for new roles, one agent contract), makes QC's verification real, exposes the generated projects, and then adds learning and collaboration on that base. Task numbers 11–15 are kept so later phases' references stay valid.
 
-**Task 11: Implement Business Analyst (BA) Agent**
-- **Objective**: Add new BA agent role for requirements analysis
-- **Implementation**:
-  1. Define BA capabilities:
-     - Analyze user stories and extract requirements
-     - Create use case descriptions
-     - Identify functional and non-functional requirements
-     - Validate requirements completeness
-  2. Implement BAThinkingStrategy:
-     ```typescript
-     class BAThinkingStrategy implements IThinkingStrategy {
-       async think(context: AgentContext): Promise<ThinkingResult> {
-         const prompt = `Analyze this project goal: "${context.goal}"
-                        Extract:
-                        1. User stories (As a... I want... So that...)
-                        2. Functional requirements
-                        3. Non-functional requirements
-                        4. Acceptance criteria`;
-         const result = await this.llmProvider.chat({ messages: [{ role: 'user', content: prompt }] });
-         return { analysis: result.content, confidence: 0.9 };
-       }
-     }
-     ```
-  3. Implement BAActionStrategy:
-     ```typescript
-     class BAActionStrategy implements IActionStrategy {
-       async act(thought: ThinkingResult, context: AgentContext): Promise<ActionResult> {
-         // Save requirements to project metadata
-         const requirements = this.parseRequirements(thought.analysis);
-         await this.projectRepository.updateMetadata(context.projectId, { requirements });
-         // Create memory of analysis
-         await this.memoryService.saveMemory(context.agentId, 'requirements_analysis', thought.analysis);
-         return { success: true, output: requirements };
-       }
-     }
-     ```
-  4. Add BA to workflow definition:
-     ```typescript
-     const defaultWorkflow = {
-       nodes: [
-         { id: 'start', type: 'agent_task', agentRole: 'CEO', taskType: 'planMilestones' },
-         { id: 'ba_analyze', type: 'agent_task', agentRole: 'BA', taskType: 'analyzeRequirements' }, // NEW
-         { id: 'pm_breakdown', type: 'agent_task', agentRole: 'PM', taskType: 'breakdownTasks' },
-         // ...
-       ],
-       edges: [
-         { from: 'start', to: 'ba_analyze' }, // NEW
-         { from: 'ba_analyze', to: 'pm_breakdown' }, // NEW
-         // ...
-       ]
-     };
-     ```
-  5. Update Prisma schema and seed:
-     ```typescript
-     await prisma.agent.create({
-       data: {
-         role: 'BA',
-         name: 'Business Analyst',
-         systemPrompt: 'You are a senior business analyst...',
-         modelRouteConfig: { provider: 'ninerouter', model: 'groq/llama-3.3-70b-versatile' }
-       }
-     });
-     ```
-- **Tests**:
-  - Unit tests for BA strategies
-  - Integration test: BA agent extracts requirements from project goal
-  - E2E test: Full workflow with BA step produces requirements metadata
-- **Demo**: Create project → BA analyzes goal → Show extracted requirements in UI
+**Phase 3 entry checklist (all done in the 2026-10-26 audit)**
+- [x] API boots; all 8 agents run through injected strategies
+- [x] Every agent LLM call is cost-tracked (`AgentLLMService` → `UsageTrackingLLMProvider`)
+- [x] Generated projects persist in `ProjectWorkspace` (`PROJECTS_WORKSPACE_DIR`, default `apps/api/workspace/`)
+- [x] OOAD quality gate wired; workflow CEO → BA → Architect → gate → PM → DEV → QC → QA → Marketing → approval → CEO
+- [x] QC agent + traceability; QA re-focused on design conformance
+- [x] Baseline green: `nest build`, Jest 21/21, web `tsc`; end-to-end run verified with a mock LLM
+
+**Environment notes for Phase 3 work**: the repo has no lockfile and pins `pnpm@8.0.0` (fails on Node 22): install with `npx -y pnpm@8.15.9 install --no-frozen-lockfile`, then `npx prisma generate` in `apps/api` and `npx tsc -p packages/shared-types` (delete a stale `packages/shared-types/tsconfig.tsbuildinfo` first if `nest build` reports TS6305).
 
 ---
 
-**Task 12: Implement Software Architect Agent**
-- **Objective**: Add Architect agent for system design
+**Task 11: Agent Registry & Uniform Agent Contract**
+- **Objective**: Adding a role must not require editing the orchestrator, the module and the base class (OCP), and every agent must follow one contract.
 - **Implementation**:
-  1. Define Architect capabilities:
-     - Design system architecture from requirements
-     - Select technology stack
-     - Create component diagrams and API contracts
-     - Identify design patterns to apply
-  2. Implement ArchitectThinkingStrategy:
+  1. Introduce an `AGENTS` multi-provider token; each agent class declares its `role`. `AgentOrchestratorService` builds its `Map<AgentRole, IAgent>` from the injected array instead of 8 constructor parameters:
      ```typescript
-     class ArchitectThinkingStrategy implements IThinkingStrategy {
-       async think(context: AgentContext): Promise<ThinkingResult> {
-         const requirements = context.projectMetadata.requirements;
-         const prompt = `Given these requirements: ${JSON.stringify(requirements)}
-                        Design:
-                        1. System architecture (layered, microservices, etc.)
-                        2. Technology stack
-                        3. Component breakdown
-                        4. API contracts (endpoints, payloads)
-                        5. Design patterns to apply`;
-         const result = await this.llmProvider.chat({ messages: [{ role: 'user', content: prompt }] });
-         return { design: result.content, confidence: 0.85 };
-       }
-     }
+     { provide: AGENTS, useFactory: (...agents: BaseAgent[]) => agents, inject: [CeoAgent, BaAgent, /* ... */] }
      ```
-  3. Implement ArchitectActionStrategy:
-     ```typescript
-     class ArchitectActionStrategy implements IActionStrategy {
-       async act(thought: ThinkingResult, context: AgentContext): Promise<ActionResult> {
-         const design = this.parseDesign(thought.design);
-         await this.projectRepository.updateMetadata(context.projectId, { architecture: design });
-         // Create skeleton files based on design
-         const files = this.generateSkeletonFiles(design);
-         await this.sandboxExecutor.createFiles(files);
-         return { success: true, output: design };
-       }
-     }
-     ```
-  4. Add Architect to workflow after BA:
-     ```typescript
-     edges: [
-       { from: 'ba_analyze', to: 'architect_design' }, // NEW
-       { from: 'architect_design', to: 'pm_breakdown' }
-     ]
-     ```
-  5. Create Architect tools:
-     ```typescript
-     const architectTools = [
-       { name: 'generate_api_contract', description: 'Generate OpenAPI spec from requirements' },
-       { name: 'select_tech_stack', description: 'Recommend technology stack' }
-     ];
-     ```
+  2. Introduce a `RoleProfile` value object (role, display name, system prompt, default `ModelRouteConfig`, memory namespaces) so the per-role defaults that are now repeated in agent classes, strategies and `seed.ts` live in one place (`agents/profiles/*.ts`). Seed reads the same profiles.
+  3. Slim `BaseAgent`: remove the legacy abstract `think()/act()` fallback path and the unused `llmFactory`, `toolRegistry`, `apiUsageService` constructor arguments (they now live in strategies / `AgentLLMService`). `execute()` keeps the Template Method + State Machine flow.
+  4. Make `AgentContext.taskType` drive strategy behaviour (as the CEO already does) and type `AgentActionResult.output` per role (`BaOutput`, `QcOutput`, ...) instead of `unknown`.
+  5. Delete the duplicate `domain/agent/strategies/ThinkingStrategy.ts` classes and port their spec to the module strategies.
+  6. Refresh the Phase 1 design docs that still show DevOps and the old QA-only flow: `docs/design/*.md`, class diagrams (`agent-aggregate`, `domain-model-overview`, `patterns-factory`, `patterns-strategy`), `AD-001`, `AD-002`, `component-diagram`, `package-diagram`, `SD-003`, `SD-004` (use case docs, use case diagrams and the requirements traceability matrix were already updated on 2026-10-26).
 - **Tests**:
-  - Unit tests for Architect strategies
-  - Integration test: Architect generates API contracts from requirements
-  - Test skeleton file generation
-- **Demo**: Show Architect designing system → Display architecture diagram in UI
+  - Orchestrator resolves all 8 roles from the token; unknown role error lists available roles
+  - Adding a fake `TestAgent` via the token works without touching orchestrator code
+  - `BaseAgent.execute()` state transitions (IDLE→THINKING→ACTING→COMPLETED→IDLE, ERROR path) with mocked strategies
+  - Unit tests for each action strategy with a mocked `AgentLLMService` (prompt contains design context, output shape)
+- **Demo**: Show the class diagram before/after: orchestrator depends on `IAgent[]`, not on 8 concrete classes.
 
 ---
 
-**Task 13: Implement DevOps Agent**
-- **Objective**: Add DevOps agent for deployment and CI/CD
+**Task 12: Executable QC Verification**
+- **Objective**: QC runs the generated acceptance tests, so traceability reports *passing* use cases, not just *existing* tests.
 - **Implementation**:
-  1. Define DevOps capabilities:
-     - Create Dockerfile and docker-compose.yml
-     - Set up CI/CD pipeline configuration (GitHub Actions, GitLab CI)
-     - Configure deployment scripts
-     - Monitor application health
-  2. Implement DevOpsThinkingStrategy:
-     ```typescript
-     class DevOpsThinkingStrategy implements IThinkingStrategy {
-       async think(context: AgentContext): Promise<ThinkingResult> {
-         const techStack = context.projectMetadata.architecture.techStack;
-         const prompt = `For this tech stack: ${JSON.stringify(techStack)}
-                        Create:
-                        1. Dockerfile
-                        2. docker-compose.yml with all services
-                        3. CI/CD pipeline (GitHub Actions YAML)
-                        4. Deployment script (deploy.sh)`;
-         const result = await this.llmProvider.chat({ messages: [{ role: 'user', content: prompt }] });
-         return { plan: result.content, confidence: 0.8 };
-       }
-     }
-     ```
-  3. Implement DevOpsActionStrategy:
-     ```typescript
-     class DevOpsActionStrategy implements IActionStrategy {
-       async act(thought: ThinkingResult, context: AgentContext): Promise<ActionResult> {
-         const files = this.parseDeploymentFiles(thought.plan);
-         await this.sandboxExecutor.writeFiles(files); // Write Dockerfile, etc.
-         // Optionally: Actually build and deploy if sandbox supports
-         // const buildResult = await this.sandboxExecutor.executeCommand('docker build -t app .');
-         return { success: true, output: files };
-       }
-     }
-     ```
-  4. Add DevOps to workflow (after DEV completes):
-     ```typescript
-     edges: [
-       { from: 'dev_implement', to: 'qa_review' },
-       { from: 'qa_review', to: 'devops_deploy', condition: 'qa_approved' }, // NEW
-       { from: 'devops_deploy', to: 'marketing_announce' }
-     ]
-     ```
+  1. Extend the Architect skeleton with `package.json`, `tsconfig.json` and `jest.config.js` templates for the generated project.
+  2. Add `SandboxExecutor.runInWorkspace(projectId, command, limits)`: mounts `projects/<id>` **read-only** at `/workspace` plus a tmpfs for `node_modules`/output, network disabled except for an optional package-registry allowlist; returns stdout and the Jest JSON report.
+  3. `QcActionStrategy`: after writing tests, run `npx jest --json`; map results by `UC-xxx` in test names; traceability coverage becomes `Passing | Failing | Missing`; persist pass/fail counts to `ooadMetadata.traceability`.
+  4. `qc_passed` requires coverage ≥ 80% **and** no failing High-priority use case; QA's prompt receives the failing tests.
+  5. Optional: add a `qc_condition` so failing tests loop back to DEV before QA.
 - **Tests**:
-  - Unit tests for DevOps strategies
-  - Integration test: DevOps generates valid Dockerfile
-  - Test CI/CD YAML syntax validation
-- **Demo**: Show DevOps creating deployment files → Optionally build Docker image
+  - Workspace mount is read-only and confined to the project folder
+  - Jest JSON → per-use-case status mapping
+  - Coverage/`qc_passed` rules (all pass, one High failing, missing tests)
+- **Demo**: Break `OrderService.placeOrder`, rerun: traceability shows UC-001 *Failing*, QA rejects, DEV fixes, QC passes.
 
 ---
 
-**Task 14: Implement Agent Learning & Memory Refinement**
-- **Objective**: Enable agents to learn from past executions
+**Task 13: Generated Project Artifacts API & UI**
+- **Objective**: Make every artifact the agents produce visible — this is the thesis evidence for "OOAD applied to every project the agents create".
 - **Implementation**:
-  1. Enhance MemoryService with learning capabilities:
-     ```typescript
-     class MemoryService {
-       async refineMemory(agentRole: AgentRole, taskType: string): Promise<void> {
-         // Retrieve all memories for this task type
-         const memories = await this.searchMemories(agentRole, taskType, '', 100);
-         // Analyze patterns (e.g., which approaches succeeded vs failed)
-         const successPatterns = memories.filter(m => m.metadata.success).map(m => m.content);
-         const failurePatterns = memories.filter(m => !m.metadata.success).map(m => m.content);
-         // Generate insights using LLM
-         const prompt = `Analyze these past executions:
-                        Successes: ${successPatterns.join('\n')}
-                        Failures: ${failurePatterns.join('\n')}
-                        Extract lessons learned and best practices.`;
-         const insights = await this.llmProvider.chat({ messages: [{ role: 'user', content: prompt }] });
-         // Save refined memory with high importance
-         await this.saveMemory(agentRole, 'lessons_learned', insights.content, { importance: 10 });
-       }
-     }
-     ```
-  2. Implement learning triggers:
-     ```typescript
-     @Injectable()
-     class AgentLearningHandler implements IEventHandler<AgentCompletedTaskEvent> {
-       async handle(event: AgentCompletedTaskEvent): Promise<void> {
-         // Save memory of execution
-         await this.memoryService.saveMemory(
-           event.agentId,
-           `task_execution:${event.taskId}`,
-           JSON.stringify(event.result),
-           { success: event.result.success, taskType: event.result.taskType }
-         );
-         // Periodically refine (e.g., every 10 executions)
-         const executionCount = await this.getExecutionCount(event.agentId);
-         if (executionCount % 10 === 0) {
-           await this.memoryService.refineMemory(event.agentId, event.result.taskType);
-         }
-       }
-     }
-     ```
-  3. Update strategies to load lessons learned:
-     ```typescript
-     class CEOThinkingStrategy implements IThinkingStrategy {
-       async think(context: AgentContext): Promise<ThinkingResult> {
-         // Load relevant memories including lessons learned
-         const memories = await this.memoryService.searchMemories('planning', context.goal, 10);
-         const lessons = await this.memoryService.searchMemories('lessons_learned', context.goal, 5);
-         // Inject into LLM prompt
-         const prompt = `Past lessons: ${lessons.map(l => l.content).join('\n')}
-                        Now plan milestones for: ${context.goal}`;
-         // ...
-       }
-     }
-     ```
-  4. Add learning analytics UI:
-     - Display agent learning curves (success rate over time)
-     - Show top lessons learned per agent
+  1. `ProjectArtifactsController`: `GET /api/projects/:id/files` (tree), `GET /api/projects/:id/files/*path` (content), `GET /api/projects/:id/archive` (zip download); reads through `ProjectWorkspace` only.
+  2. Web: *Artifacts* tab in Project Detail — file tree, Markdown rendering for `use-cases.md` / `architecture-patterns.md` / `traceability-matrix.md`, PlantUML rendering (PlantUML server or `plantuml-encoder` + image) for `*.puml`, code viewer for `src/**`.
+  3. Show `quality_gate_result` (checklist) and `quality_warning` WebSocket events in Project Detail / Virtual Office (they are emitted today but not rendered).
+  4. Show `ooadMetadata` summary (use cases, entities, patterns, coverage) from `/api/ooad-metrics/project/:id`.
 - **Tests**:
-  - Unit test: Memory refinement extracts patterns
-  - Integration test: Agent performance improves after learning (mock LLM responses)
-  - Test learning trigger on N-th execution
-- **Demo**: Run same task 10 times → Show learning refinement → Demonstrate improved performance
+  - Controller rejects traversal (`../`), unknown project → 404, auth required
+  - Zip contains docs/, src/, tests/
+  - Web component tests for the file tree and gate checklist
+- **Demo**: Open a finished project: browse use case diagram, class diagram, generated code, tests and the traceability matrix; download the zip.
 
 ---
 
-**Task 15: Implement Agent Collaboration Patterns**
-- **Objective**: Enable agents to collaborate (pair programming, code review chains)
+**Task 14: Agent Learning & Memory Refinement**
+- **Objective**: Agents improve from past executions, using the quality signals the workflow now produces.
 - **Implementation**:
-  1. **Pair Programming Pattern**:
-     ```typescript
-     class PairProgrammingCollaboration {
-       async execute(task: Task, driver: IAgent, navigator: IAgent): Promise<CollaborationResult> {
-         // Navigator thinks first
-         const navigatorPlan = await navigator.think({ ...context, role: 'navigator' });
-         // Driver implements with navigator's guidance
-         const driverAction = await driver.act({ ...context, guidance: navigatorPlan });
-         // Navigator reviews
-         const review = await navigator.think({ ...context, code: driverAction.output, role: 'reviewer' });
-         return { code: driverAction.output, review };
-       }
-     }
-     ```
-  2. **Code Review Chain Pattern**:
-     ```typescript
-     class CodeReviewChain {
-       async execute(code: string, reviewers: IAgent[]): Promise<ReviewResult> {
-         let currentCode = code;
-         const reviews = [];
-         for (const reviewer of reviewers) {
-           const review = await reviewer.think({ code: currentCode, role: 'reviewer' });
-           reviews.push(review);
-           if (review.suggestions.length > 0) {
-             // Apply suggestions
-             currentCode = this.applySuggestions(currentCode, review.suggestions);
-           }
-         }
-         return { finalCode: currentCode, reviews };
-       }
-     }
-     ```
-  3. **Agent Delegation Pattern**:
-     ```typescript
-     class AgentDelegationChain implements IAgent {
-       constructor(private agents: IAgent[]) {}
-       
-       async execute(context: AgentContext): Promise<AgentResult> {
-         for (const agent of this.agents) {
-           if (await agent.canHandle(context)) {
-             return agent.execute(context);
-           }
-         }
-         throw new Error('No agent can handle this task');
-       }
-     }
-     ```
-  4. Add collaboration workflow nodes:
-     ```typescript
-     {
-       id: 'pair_program',
-       type: 'agent_collaboration',
-       collaborationType: 'pair_programming',
-       agents: ['DEV', 'ARCHITECT']
-     }
-     ```
-  5. Implement collaboration orchestration:
-     ```typescript
-     class CollaborationOrchestrator {
-       async executeCollaboration(node: CollaborationNode, context: WorkflowContext): Promise<NodeResult> {
-         const strategy = this.collaborationRegistry.get(node.collaborationType);
-         const agents = node.agents.map(role => this.agentFactory.createAgent(role));
-         const result = await strategy.execute(context, agents);
-         return { status: 'success', output: result };
-       }
-     }
-     ```
+  1. `AgentLearningHandler` (subscribes to `AgentCompletedTaskEvent`) stores an execution memory per agent with the outcome signal: gate result for BA/Architect, QC coverage for DEV, QA verdict for DEV/QC.
+  2. `MemoryService.refineMemory(role, namespace)` every N executions: LLM summarises successes vs failures into a high-importance `lessons_learned` memory (via `AgentLLMService`, so it is costed).
+  3. Thinking strategies load `lessons_learned` alongside their namespace memories and pass them to the action prompt (they already pass `thought.memories`).
+  4. Fallback when `OPENAI_API_KEY` is missing: keyword/recency search instead of returning nothing, so learning works in local demos.
+  5. Agent Detail page: success rate over time, top lessons.
 - **Tests**:
-  - Unit tests for each collaboration pattern
-  - Integration test: Pair programming produces better code than solo (mock quality metric)
-  - Test delegation chain routes to correct agent
-- **Demo**: Show pair programming between DEV and Architect → Display collaboration transcript
+  - Refinement triggers on the N-th execution only
+  - Lessons appear in the next prompt (mock LLM captures prompt)
+  - Keyword fallback returns memories without embeddings
+- **Demo**: Run the same project type 3 times; show the Architect's gate failures decrease and the lessons it learned.
+
+---
+
+**Task 15: Agent Collaboration Patterns**
+- **Objective**: Model agent collaboration explicitly (Mediator + collaboration strategies) instead of only sequential hand-offs.
+- **Implementation**:
+  1. `AgentMessageBus` (Mediator) with FIPA-ACL performatives (REQUEST, INFORM, PROPOSE, ACCEPT, REJECT) replacing ad-hoc `AgentMessage` text; messages persisted and streamed to the Meeting Room.
+  2. `agent_collaboration` node type + `CollaborationStrategy` registry (registers like `QualityGateStrategy`):
+     - **Pair design/implementation**: Architect (navigator) reviews DEV's plan before code is written, then reviews the diff
+     - **Review chain**: QC → QA as a Chain of Responsibility (already sequential in the workflow; formalise it so more reviewers can be added)
+     - **Clarification loop**: DEV/QC can send a REQUEST to BA when a use case is ambiguous; BA answers with INFORM and updates the use case
+  3. Default workflow option to replace `develop` with a `pair_develop` collaboration node.
+- **Tests**:
+  - Each collaboration strategy with mocked agents (message order, final output)
+  - Message bus delivers, persists and validates performatives
+- **Demo**: Meeting Room transcript of Architect ↔ DEV pairing, and a BA clarification answered mid-run.
+
+---
+
+**Phase 3 Definition of Done**
+- Adding a 9th role touches only its profile, strategies and one provider entry
+- QC coverage is based on executed tests; QA decisions reference real failures
+- Every generated project can be browsed and downloaded from the UI
+- `nest build`, Jest (new specs for every task) and web `tsc` stay green; one end-to-end run documented with screenshots for the thesis
 
 ---
 
@@ -1601,7 +1456,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
            { name: 'tech_stack', type: 'string', description: 'Technology stack (e.g., MERN, PERN)', required: true },
            { name: 'has_auth', type: 'boolean', description: 'Include authentication', defaultValue: true, required: false }
          ],
-         definition: { /* Workflow with BA → Architect → DEV → QA → DevOps */ }
+         definition: { /* Workflow with BA → Architect → OOAD gate → DEV → QC → QA */ }
        },
        {
          id: 'api_only',
@@ -1611,7 +1466,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
          parameters: [
            { name: 'database', type: 'string', description: 'Database type (PostgreSQL, MongoDB)', required: true }
          ],
-         definition: { /* Workflow with BA → Architect → DEV → QA */ }
+         definition: { /* Workflow with BA → Architect → DEV → QC → QA */ }
        },
        {
          id: 'ml_pipeline',
@@ -1621,7 +1476,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
          parameters: [
            { name: 'model_type', type: 'string', description: 'Model type (classification, regression)', required: true }
          ],
-         definition: { /* Workflow with DataScientist → MLEngineer → DevOps */ }
+         definition: { /* Workflow with BA → DataScientist → MLEngineer → QC */ }
        }
      ];
      ```
@@ -2966,7 +2821,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
        - UML diagrams for each pattern
      - Section 4.3: Agent System Implementation
        - BaseAgent refactoring
-       - New agent roles (BA, Architect, DevOps)
+       - New agent roles (BA, Architect, QC) and the QA/QC split
        - Agent learning and memory system
      - Section 4.4: Workflow Engine Implementation
        - Sub-workflows and composition
@@ -3213,7 +3068,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
      ## Live Demo Part 1: Project Creation (3 min)
      1. Login as board member
      2. Create new project: "E-commerce Platform"
-     3. Show workflow visualization with new agents (BA, Architect, DevOps)
+     3. Show workflow visualization with new agents (BA, Architect, QC) and the OOAD quality gate
      4. Real-time Virtual Office showing agents thinking/acting
      5. Watch BA agent extract requirements
      6. Watch Architect agent design system
@@ -3222,7 +3077,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
      1. Show pair programming between DEV and Architect
      2. Display collaboration transcript in Meeting Room
      3. Show code quality metrics (complexity, maintainability)
-     4. Watch QA agent review code
+     4. Watch QC agent write use-case tests and QA agent review design conformance
      5. Show auto-refinement when quality score low
      
      ## Live Demo Part 3: Enterprise Features (2 min)

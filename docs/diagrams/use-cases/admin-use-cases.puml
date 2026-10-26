@@ -109,7 +109,7 @@ note right of UC003
   
   Admin can configure LLM model for each
   agent role (CEO, PM, DEV, QA, MARKETING,
-  BA, ARCHITECT, DEVOPS)
+  BA, ARCHITECT, QC)
   
   **Configuration Fields:**
   - Provider: opencode, anthropic, openai
