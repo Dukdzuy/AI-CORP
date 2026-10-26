@@ -157,7 +157,7 @@ deactivate WS
 == Continue Workflow Execution ==
 
 Engine -> Engine: processCurrentNode(runId)
-note right of Engine: **Asynchronous Processing:**\nWorkflow continues with next node\n(e.g., DevOps deployment step)
+note right of Engine: **Asynchronous Processing:**\nWorkflow continues with next node\n(e.g., CEO close-out step)
 
 Engine --> ApprovalSvc: Success
 deactivate Engine

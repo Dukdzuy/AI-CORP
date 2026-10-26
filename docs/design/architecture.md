@@ -34,7 +34,7 @@ The architecture documentation covers structural decisions, rationale behind tec
 
 The AI-CORP platform operates in the domain of AI-assisted software project management. It provides:
 
-- **Automated multi-agent workflows**: A DAG-based engine orchestrates 8+ specialized AI agents (CEO, PM, DEV, QA, Marketing, BA, Architect, DevOps).
+- **Automated multi-agent workflows**: A DAG-based engine orchestrates 8+ specialized AI agents (CEO, BA, Architect, PM, DEV, QC, QA, Marketing).
 - **Human-in-the-loop governance**: Board members approve critical workflow steps before execution proceeds.
 - **Real-time visibility**: WebSocket-based live updates to a React dashboard showing agent activities, Kanban boards, and cost dashboards.
 - **LLM-agnostic inference**: A unified gateway routes LLM requests to multiple providers (OpenAI, Anthropic, Gemini) with circuit breaker protection.
@@ -158,7 +158,7 @@ export class AgentEntity extends Entity<AgentProps> {
 
 Value Objects are immutable objects defined by their attributes, not identity.
 
-- `AgentRole` — Enum: CEO, PM, DEV, QA, MARKETING, BA, ARCHITECT, DEVOPS
+- `AgentRole` — Enum: CEO, PM, DEV, QA, QC, MARKETING, BA, ARCHITECT
 - `WorkflowNodeVO` — Node definition (type, agent, config, edges)
 - `CostRecord` — Token usage + cost calculation
 - `EmbeddingVector` — 1536-dimension float array for semantic search
@@ -467,7 +467,7 @@ Implement the **Repository Pattern** with domain-defined interfaces and infrastr
 | **Deciders** | Development Team |
 
 **Context:**  
-Eight specialized agent roles (CEO, PM, DEV, QA, Marketing, BA, Architect, DevOps) share common infrastructure (LLM access, memory, tools) but differ in system prompts, tool access, and task processing logic. Options considered: switch/case on role, separate independent classes, inheritance hierarchy with Strategy.
+Eight specialized agent roles (CEO, BA, Architect, PM, DEV, QC, QA, Marketing) share common infrastructure (LLM access, memory, tools) but differ in system prompts, tool access, and task processing logic. Options considered: switch/case on role, separate independent classes, inheritance hierarchy with Strategy.
 
 **Decision:**  
 Use a **Strategy Pattern** with `BaseAgent` abstract class and role-specific concrete classes.

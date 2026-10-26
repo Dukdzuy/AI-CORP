@@ -97,7 +97,7 @@ Entities are the core domain objects with unique identity and lifecycle manageme
 
 **Attributes**:
 - `id: string` - Unique identifier
-- `role: AgentRole` - Agent role (CEO, PM, DEV, QA, MARKETING, BA, ARCHITECT, DEVOPS)
+- `role: AgentRole` - Agent role (CEO, PM, DEV, QA, QC, MARKETING, BA, ARCHITECT)
 - `name: string` - Human-readable agent name
 - `systemPrompt: string` - LLM system prompt defining agent behavior
 - `modelRouteConfig: ModelRouteConfig` - LLM provider configuration
@@ -537,27 +537,20 @@ Entities are the core domain objects with unique identity and lifecycle manageme
 
 ---
 
-#### 2.13.3 DeploymentJob
+#### 2.13.3 TraceabilityReport
 
-**Purpose**: DevOps deployment job execution tracking.
+**Purpose**: QC's verification result for a generated project (use case → domain classes → implementation files → tests).
 
 **Attributes**:
-- `id: string` - Unique identifier
-- `projectId: string` - Associated project
-- `environment: string` - Target environment (dev, staging, prod)
-- `deploymentType: string` - Type (full, incremental, rollback)
-- `status: JobStatus` - Status (pending, running, success, failed)
-- `triggeredBy: string` - DevOps agent ID
-- `artifacts: Artifact[]` - Deployed artifacts
-- `logs: string` - Deployment logs
-- `startedAt: DateTime`
-- `completedAt: DateTime?`
-- `rollbackJobId: string?` - Rollback job reference
+- `rows: TraceRow[]` - One row per use case (domain classes, implementation files, test cases, coverage `Covered | Missing`)
+- `coveredCount: number` / `totalCount: number`
+- `coveragePercent: number` - Covered use cases / all use cases
+- `missingUseCases: string[]` - Use case ids without tests
+- `markdown: string` - Rendered `docs/traceability-matrix.md`
 
 **Invariants**:
-1. Cannot deploy to production without approval
-2. Must have valid artifacts
-3. Rollback must reference valid previous deployment
+1. Every use case of the project appears exactly once
+2. `qc_passed` requires coverage ≥ 80% (Task 12 adds: no failing High-priority use case)
 
 ---
 
@@ -573,11 +566,11 @@ Value objects are immutable objects defined by their attributes rather than iden
 - `CEO` - Chief Executive Officer (strategic planning, delegation)
 - `PM` - Project Manager (task breakdown, coordination)
 - `DEV` - Developer (code implementation)
-- `QA` - Quality Assurance (testing, verification)
+- `QA` - Quality Assurance (process: OOAD gate, design-conformance review)
+- `QC` - Quality Control (product: acceptance tests, traceability, coverage)
 - `MARKETING` - Marketing Specialist (campaigns, content)
 - `BA` - Business Analyst (requirements, specifications)
 - `ARCHITECT` - Software Architect (design, patterns)
-- `DEVOPS` - DevOps Engineer (deployment, infrastructure)
 
 **Characteristics**:
 - Immutable

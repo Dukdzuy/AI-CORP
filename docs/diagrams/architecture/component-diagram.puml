@@ -62,8 +62,9 @@ package "Presentation Layer" as PRESENTATION #EBF5FB {
 package "Application Layer" as APPLICATION #EBF5FB {
 
   package "Agent Module" as AGENT_MOD {
-    [Agent Registry] as REGISTRY
-    [Agent Factory] as FACTORY
+    [AGENTS token (IAgent[])] as REGISTRY
+    [agentsProvider factory] as FACTORY
+    [Role Profiles] as PROFILES
     [CEO Agent] as CEO
     [PM Agent] as PM
     [DEV Agent] as DEV
@@ -71,7 +72,7 @@ package "Application Layer" as APPLICATION #EBF5FB {
     [Marketing Agent] as MKTG
     [BA Agent] as BA
     [Architect Agent] as ARCH
-    [DevOps Agent] as DEVOPS
+    [QC Agent] as QC
   }
 
   package "Workflow Module" as WF_MOD {
@@ -226,7 +227,12 @@ FACTORY ..> CEO : creates
 FACTORY ..> PM : creates
 FACTORY ..> DEV : creates
 FACTORY ..> QA : creates
-ORCH --> REGISTRY : lookupAgent()
+FACTORY ..> QC : creates
+FACTORY ..> BA : creates
+FACTORY ..> ARCH : creates
+FACTORY ..> MKTG : creates
+CEO ..> PROFILES : reads its RoleProfile
+ORCH --> REGISTRY : @Inject(AGENTS) → Map<role, IAgent>
 CEO ..> I_LLM : requires
 PM ..> I_LLM : requires
 DEV ..> I_LLM : requires

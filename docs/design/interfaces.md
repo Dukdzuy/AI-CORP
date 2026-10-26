@@ -62,7 +62,7 @@ interface IAgent {
 
 #### `getRole(): AgentRole`
 - **Purpose**: Get agent's functional role
-- **Returns**: AgentRole enum value (CEO, PM, DEV, QA, MARKETING, BA, ARCHITECT, DEVOPS)
+- **Returns**: AgentRole enum value (CEO, PM, DEV, QA, QC, MARKETING, BA, ARCHITECT)
 - **Postcondition**: Always returns valid role
 
 #### `getState(): AgentState`
@@ -98,7 +98,7 @@ interface IAgent {
 
 **Implementing Classes**:
 - `BaseAgent` (abstract)
-- `CEOAgent`, `PMAgent`, `DevAgent`, `QAAgent`, `MarketingAgent`, `BAAgent`, `ArchitectAgent`, `DevOpsAgent`
+- `CeoAgent`, `BaAgent`, `ArchitectAgent`, `PmAgent`, `DevAgent`, `QcAgent`, `QaAgent`, `MarketingAgent` (all extend `BaseAgent`, collected by the `AGENTS` token)
 
 **Example Usage**:
 ```typescript

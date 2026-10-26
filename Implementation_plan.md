@@ -32,7 +32,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 | Phase 1 – Foundation & Documentation | Done | UML/use-case docs in `docs/`. Actor list updated: DevOps removed, QC added (see role review) |
 | Phase 2 – Domain Layer Refactoring | Done (fixed) | Repositories, entities, application services (PR #2), engine strategies (PR #4), agent typing (PR #5) |
 | Phase 2.5 – OOAD Project Automation | Done (fixed) | Templates + skeleton (PR #3). Quality gate, traceability and metrics were not wired end-to-end; fixed in this audit |
-| Phase 3 – Agent System Enhancement | **Ready to start** | Re-scoped below: BA/Architect were already delivered by Phase 2.5 |
+| Phase 3 – Agent System Enhancement | **In progress** | Re-scoped below. Task 11 done (2026-10-26); Tasks 12–15 next |
 | Phases 4–7 | Not started | DevOps references removed |
 
 ### **Audit findings and fixes**
@@ -55,7 +55,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 **Verification**: `nest build` 0 errors, Jest 21/21 suites (351 tests), web `tsc` clean. Full workflow run end-to-end against PostgreSQL with a mock LLM: gate passed, 2 use-case tasks moved todo → review → done, every role logged usage, 28 files persisted in the workspace (an unsafe `../../etc/evil.ts` path from the "LLM" was rejected), traceability 80%, metrics endpoint correct, human approval → CEO close-out → `completed`.
 
-**Known gaps carried into later phases** (not regressions): `domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies (Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); `EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing (Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); generated tests are written but not executed yet (Task 12). Phase 1 class/sequence/activity diagrams still mention DevOps (Task 11, step 6).
+**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); `EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing (Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); generated tests are written but not executed yet (Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
 
 ### **Agent role review**
 
@@ -1073,7 +1073,7 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
 
 ---
 
-**Task 11: Agent Registry & Uniform Agent Contract**
+**Task 11: Agent Registry & Uniform Agent Contract** — ✅ Done (2026-10-26)
 - **Objective**: Adding a role must not require editing the orchestrator, the module and the base class (OCP), and every agent must follow one contract.
 - **Implementation**:
   1. Introduce an `AGENTS` multi-provider token; each agent class declares its `role`. `AgentOrchestratorService` builds its `Map<AgentRole, IAgent>` from the injected array instead of 8 constructor parameters:
@@ -1091,6 +1091,14 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - `BaseAgent.execute()` state transitions (IDLE→THINKING→ACTING→COMPLETED→IDLE, ERROR path) with mocked strategies
   - Unit tests for each action strategy with a mocked `AgentLLMService` (prompt contains design context, output shape)
 - **Demo**: Show the class diagram before/after: orchestrator depends on `IAgent[]`, not on 8 concrete classes.
+- **Result (2026-10-26)**:
+  1. `agents/agents.registry.ts`: `AGENTS` token, `AGENT_CLASSES` (the only list of concrete agents) and `agentsProvider()`; `AgentOrchestratorService` takes `@Inject(AGENTS) agents: IAgent[]` and rejects duplicate roles.
+  2. `agents/profiles/`: `RoleProfile` value object (role, display name, system prompt, default model, memory namespaces, task types) and one profile per role. Strategies get model + persona from `AgentLLMService.providerFor(profile)`; thinking strategies recall `profile.primaryNamespace`; `prisma/seed.ts` builds the Agent rows from `ROLE_PROFILES`. Side fix: QA used to read `testing_patterns` but write `review_checklist`, so it never recalled its own memories.
+  3. `BaseAgent<TOutput>` implements `IAgent` with constructor `(profile, thinkingStrategy, actionStrategy, websocketGateway, eventBus)`; the abstract `think()/act()`, `callLLM`, `executeTool`, `loadMemory/saveMemory` and the `memoryService/llmFactory/toolRegistry/sandboxExecutor/apiUsageService` arguments are gone. Concrete agents are 15-line classes. Observers now also receive `thinkingCompleted` / `actionCompleted`.
+  4. `BaseAgent` resolves `context.taskType` against the profile (unknown → role default, logged). `AgentActionResult<TOutput>` / `IActionStrategy<TOutput>` are generic; outputs are typed in `domain/agent/AgentOutputs.ts` (`CeoOutput`, `BaOutput`, ..., `QcOutput`).
+  5. `domain/agent/strategies/` and its spec deleted; replaced by specs for the module strategies.
+  6. Diagrams refreshed: `agent-aggregate`, `domain-model-overview`, `patterns-factory` (registry before/after), `patterns-strategy`, `AD-001`, `AD-002`, `SD-003`, `SD-004`, `component-diagram`, `package-diagram`; `docs/design/*.md` and the traceability matrix (FR-AGENT-013 added, status summary recounted).
+  - **Verification**: `nest build` 0 errors; Jest 24/24 suites, 374 tests (new: `role-profile`, `agent-registry` incl. a 9th `TestAgent`, `base-agent`, `agent-strategies` for all 16 strategies); the API boots and resolves `AgentsModule`/`OrchestratorModule` through the token.
 
 ---
 
