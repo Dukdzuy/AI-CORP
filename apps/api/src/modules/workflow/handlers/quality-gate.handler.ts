@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { SandboxExecutor } from '../../tools/sandbox.executor';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
@@ -116,7 +117,7 @@ export class QualityGateHandler {
         projectId,
         gateId,
         passed: allPassed,
-        checklist: checklist,
+        checklist: checklist as unknown as Prisma.InputJsonValue,
         timestamp: new Date()
       }
     });

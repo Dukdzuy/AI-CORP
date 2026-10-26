@@ -38,7 +38,7 @@ export class BudgetExceededHandler implements IEventHandler<BudgetExceededEvent>
           projectId: event.projectId,
           status: 'running'
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { startedAt: 'desc' }
       });
 
       if (activeRun) {

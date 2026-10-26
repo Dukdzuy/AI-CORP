@@ -25,7 +25,7 @@ export class QaThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          expectedOutcome: 'Review code and determine PASS/FAIL verdict'
+          rationale: 'Review code and determine PASS/FAIL verdict'
         }
       ],
       confidence: 0.9,

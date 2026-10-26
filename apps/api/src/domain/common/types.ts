@@ -41,6 +41,17 @@ export interface AgentContext {
   
   /** Additional variables from workflow or previous steps */
   variables?: Record<string, unknown>;
+
+  /**
+   * Workflow variables flattened onto the context by the workflow engine
+   * (see AgentTaskStrategy). Earlier agents' outputs reach later agents here.
+   */
+  goal?: string;
+  projectName?: string;
+  projectSummary?: string;
+  milestone?: string;
+  code?: string;
+  architecture?: string;
 }
 
 /**
@@ -55,6 +66,9 @@ export interface AgentThought {
   
   /** Confidence level (0-1) */
   confidence: number;
+
+  /** Memory contents recalled while thinking, handed to the action phase */
+  memories?: string[];
   
   /** Additional metadata */
   metadata?: Record<string, unknown>;

@@ -26,7 +26,7 @@ export class DevThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'write_file',
           parameters: {},
-          expectedOutcome: 'Generate complete, working code files'
+          rationale: 'Generate complete, working code files'
         }
       ],
       confidence: 0.8,

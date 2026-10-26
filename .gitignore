@@ -48,3 +48,4 @@ coverage/
 !USER_GUIDE.md
 # OOAD templates the agents render into generated projects
 !apps/api/src/modules/agents/templates/**/*.md
+*.tsbuildinfo

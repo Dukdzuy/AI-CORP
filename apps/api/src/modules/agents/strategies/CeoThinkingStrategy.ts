@@ -31,7 +31,7 @@ export class CeoThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          expectedOutcome: 'Generate 2-4 strategic milestones'
+          rationale: 'Generate 2-4 strategic milestones'
         }
       ],
       confidence: 0.9,

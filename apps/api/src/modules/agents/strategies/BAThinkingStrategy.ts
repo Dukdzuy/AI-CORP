@@ -25,7 +25,7 @@ export class BAThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          expectedOutcome: 'Generate user stories (As a...I want...So that...) and functional requirements'
+          rationale: 'Generate user stories (As a...I want...So that...) and functional requirements'
         }
       ],
       confidence: 0.88,

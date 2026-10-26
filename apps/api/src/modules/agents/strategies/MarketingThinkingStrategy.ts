@@ -25,7 +25,7 @@ export class MarketingThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          expectedOutcome: 'Draft compelling release announcement'
+          rationale: 'Draft compelling release announcement'
         }
       ],
       confidence: 0.85,

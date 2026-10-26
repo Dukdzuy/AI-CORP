@@ -77,7 +77,7 @@ Output ONLY valid JSON, no additional text.`;
       ],
       model: actualModelConfig.model,
       maxTokens: 3000,
-      response_format: { type: 'json_object' } as any
+      responseFormat: { type: 'json_object' }
     });
 
     // Parse and validate JSON
@@ -154,7 +154,6 @@ Output ONLY valid JSON, no additional text.`;
         actors: useCaseData.actors,
         filesWritten
       },
-      errors: []
     };
   }
 

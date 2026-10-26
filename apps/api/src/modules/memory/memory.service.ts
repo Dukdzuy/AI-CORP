@@ -237,23 +237,24 @@ export class MemoryService {
         const similarity = normQ && normM ? dot / (normQ * normM) : 0;
         return { ...m, similarity, embedding: undefined };
       })
-      .filter((r) => r.similarity >= this.SIMILARITY_THRESHOLD)
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, limit);
+      .filter((r) => r.similarity >= this.SIMILARITY_THRESHOLD);
 
-    // Cast results to MemorySearchResult with ranking
-    const rankedResults: MemorySearchResult[] = results.map((r: any) => ({
-      id: r.id,
-      agentRole: r.agentRole,
-      namespace: r.namespace,
-      content: r.content,
-      importance: r.importance,
-      similarity: r.similarity,
-      rank:
-        r.similarity * this.SIMILARITY_WEIGHT +
-        (r.importance / this.MAX_IMPORTANCE) * this.IMPORTANCE_WEIGHT,
-      createdAt: r.createdAt,
-    }));
+    // Rank by combined similarity + importance score, then apply the limit
+    const rankedResults: MemorySearchResult[] = results
+      .map((r) => ({
+        id: r.id,
+        agentRole: r.agentRole,
+        namespace: r.namespace,
+        content: r.content,
+        importance: r.importance,
+        similarity: r.similarity,
+        rank:
+          r.similarity * this.SIMILARITY_WEIGHT +
+          (r.importance / this.MAX_IMPORTANCE) * this.IMPORTANCE_WEIGHT,
+        createdAt: r.createdAt,
+      }))
+      .sort((a, b) => b.rank - a.rank)
+      .slice(0, limit);
 
     // Structured logging for memory search
     this.logger.log(JSON.stringify({

@@ -78,7 +78,6 @@ Be specific and actionable. Each milestone should be completable in a reasonable
     return {
       success: true,
       output: { action: 'planMilestones', output: result.content },
-      errors: []
     };
   }
 }

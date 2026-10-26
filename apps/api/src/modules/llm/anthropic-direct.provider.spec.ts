@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnthropicDirectProvider } from './anthropic-direct.provider';
 import { ChatParams, ChatResult } from '@ai-corp/shared-types';
@@ -17,7 +18,6 @@ jest.mock('@anthropic-ai/sdk', () => {
 
 describe('AnthropicDirectProvider', () => {
   let provider: AnthropicDirectProvider;
-  let mockAnthropicClient: any;
 
   beforeEach(async () => {
     // Set environment variable for tests
@@ -46,13 +46,14 @@ describe('AnthropicDirectProvider', () => {
 
     it('should warn when ANTHROPIC_API_KEY is not set', () => {
       delete process.env.ANTHROPIC_API_KEY;
-      const loggerWarnSpy = jest.spyOn(
-        AnthropicDirectProvider.prototype as any,
-        'logger',
-      );
+      const loggerWarnSpy = jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
       const newProvider = new AnthropicDirectProvider();
       expect(newProvider).toBeDefined();
+      expect(loggerWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('ANTHROPIC_API_KEY not set'),
+      );
+      loggerWarnSpy.mockRestore();
     });
   });
 
@@ -152,7 +153,7 @@ describe('AnthropicDirectProvider', () => {
       await provider.chat(mockChatParams);
 
       // Verify that system message was extracted
-      expect(mockAnthropicClient.messages.create).toHaveBeenCalledWith(
+      expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           system: 'You are a helpful assistant.',
           messages: [{ role: 'user', content: 'Hello, how are you?' }],
@@ -176,7 +177,7 @@ describe('AnthropicDirectProvider', () => {
 
       await provider.chat(paramsWithoutSystem);
 
-      expect(mockAnthropicClient.messages.create).toHaveBeenCalledWith(
+      expect(mockCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           system: '',
         }),
@@ -270,7 +271,7 @@ describe('AnthropicDirectProvider', () => {
     });
 
     it('should return false when API call fails', async () => {
-      mockAnthropicClient.messages.create.mockRejectedValue(
+      mockCreate.mockRejectedValue(
         new Error('Authentication failed'),
       );
 

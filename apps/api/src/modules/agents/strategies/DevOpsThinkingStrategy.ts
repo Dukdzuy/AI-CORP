@@ -25,7 +25,7 @@ export class DevOpsThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          expectedOutcome: 'Generate deployment configs, Dockerfiles, CI/CD pipeline definitions'
+          rationale: 'Generate deployment configs, Dockerfiles, CI/CD pipeline definitions'
         }
       ],
       confidence: 0.87,

@@ -89,7 +89,7 @@ export class NotificationHandler implements IEventHandler {
 
   private async handleWorkflowCompleted(event: WorkflowCompletedEvent): Promise<void> {
     this.logger.log(
-      `🎉 [NOTIFICATION] Workflow Completed: Run ID ${event.workflowRunId} (Project: ${event.projectId})`
+      `🎉 [NOTIFICATION] Workflow Completed: Workflow ID ${event.workflowId} (Project: ${event.projectId})`
     );
     // TODO: Send workflow completion notification
     // TODO: Generate workflow summary report

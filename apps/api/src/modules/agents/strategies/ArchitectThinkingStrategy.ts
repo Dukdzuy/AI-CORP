@@ -25,7 +25,7 @@ export class ArchitectThinkingStrategy implements IThinkingStrategy {
         {
           toolName: 'llm',
           parameters: {},
-          expectedOutcome: 'Design system architecture, choose patterns (MVC, Microservices, Layered, etc.)'
+          rationale: 'Design system architecture, choose patterns (MVC, Microservices, Layered, etc.)'
         }
       ],
       confidence: 0.92,
