@@ -121,6 +121,8 @@ Requirements are organized into 7 subsystems:
 | FR-MEM-003 | Memory Importance | System shall validate memory importance ∈ [1, 10] (Requirement 17.3) | UC-017 | MemoryService validation | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-008 | Implemented |
 | FR-MEM-004 | Memory Namespace | System shall organize memories by namespace (e.g., "requirements_patterns", "coding_conventions") | UC-017 | Schema: AgentMemory.namespace field | apps/api/prisma/schema.prisma | TEST-MEM-009 | Implemented |
 | FR-MEM-005 | Memory Pruning | System shall prune old low-importance memories when agent exceeds 1000 memories | UC-017 | Class: MemoryService (pruneMemories method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-010 | Planned |
+| FR-MEM-006 | Agent Learning from Outcomes | Agents shall learn from the workflow's quality signals: OOAD gate (BA, Architect), QC tests (DEV) and QA verdict (DEV, QC) are stored as graded outcomes and refined every N outcomes into lessons_learned that thinking strategies recall first; Agent Detail shows success rate over time and top lessons | UC-017 | Class: AgentLearningHandler, OutcomeSignalPolicy, LearningService, ExecutionOutcome, QualityGateEvaluatedEvent, MemoryService.refineMemory/recall; Web: LearningPanel | apps/api/src/modules/learning/, apps/api/src/modules/memory/memory.service.ts | apps/api/tests/unit/learning/learning.spec.ts | Implemented |
+| FR-MEM-007 | Memory Search without Embeddings | Memory search shall fall back to keyword/recency ranking when no embedding provider is configured | UC-017 | Class: MemoryService.keywordSearch, EmbeddingService.isEnabled | apps/api/src/modules/memory/memory.service.ts | apps/api/tests/unit/learning/learning.spec.ts | Implemented |
 
 ---
 
@@ -293,12 +295,12 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Implemented | 76 | 88.4% |
-| Partial | 1 | 1.2% |
-| Planned | 9 | 10.5% |
-| **TOTAL** | **86** | **100%** |
+| Implemented | 78 | 88.6% |
+| Partial | 1 | 1.1% |
+| Planned | 9 | 10.2% |
+| **TOTAL** | **88** | **100%** |
 
-_Recounted 2026-10-26 (Phase 3, Task 13: FR-PROJ-008 added) from the tables above._
+_Recounted 2026-10-26 (Phase 3, Tasks 13–14: FR-PROJ-008, FR-MEM-006/007 added) from the tables above._
 
 ### Planned Requirements (Priority for Next Sprint)
 1. FR-WF-008 (Workflow Rollback)

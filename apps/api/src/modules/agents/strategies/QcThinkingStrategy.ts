@@ -9,7 +9,7 @@ export class QcThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    const memories = await this.memoryService.searchMemories(
+    const memories = await this.memoryService.recall(
       QC_PROFILE.role,
       QC_PROFILE.primaryNamespace,
       context.goal || context.task || '',
@@ -31,7 +31,7 @@ export class QcThinkingStrategy implements IThinkingStrategy {
         },
       ],
       confidence: 0.85,
-      memories: memories.map(m => m.content),
+      memories,
     };
   }
 }

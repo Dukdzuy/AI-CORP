@@ -9,8 +9,8 @@ export class PmThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load task breakdown memories
-    const memories = await this.memoryService.searchMemories(
+    // Load lessons_learned, then task breakdown memories
+    const memories = await this.memoryService.recall(
       PM_PROFILE.role,
       PM_PROFILE.primaryNamespace,
       JSON.stringify(context),
@@ -29,7 +29,7 @@ export class PmThinkingStrategy implements IThinkingStrategy {
         }
       ],
       confidence: 0.85,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

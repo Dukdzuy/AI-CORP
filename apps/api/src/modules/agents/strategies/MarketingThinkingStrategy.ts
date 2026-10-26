@@ -9,8 +9,8 @@ export class MarketingThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load brand voice memories
-    const memories = await this.memoryService.searchMemories(
+    // Load lessons_learned, then brand voice memories
+    const memories = await this.memoryService.recall(
       MARKETING_PROFILE.role,
       MARKETING_PROFILE.primaryNamespace,
       JSON.stringify(context),
@@ -29,7 +29,7 @@ export class MarketingThinkingStrategy implements IThinkingStrategy {
         }
       ],
       confidence: 0.85,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

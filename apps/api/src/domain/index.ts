@@ -19,6 +19,7 @@ export * from './agent/AgentStateMachine';
 export * from './agent/AgentEventEmitter';
 export * from './agent/interfaces';
 export * from './agent/AgentOutputs';
+export * from './agent/learning/ExecutionOutcome';
 
 // Tool Domain
 export * from './tool/interfaces';

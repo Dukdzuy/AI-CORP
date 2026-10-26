@@ -55,7 +55,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 **Verification**: `nest build` 0 errors, Jest 21/21 suites (351 tests), web `tsc` clean. Full workflow run end-to-end against PostgreSQL with a mock LLM: gate passed, 2 use-case tasks moved todo → review → done, every role logged usage, 28 files persisted in the workspace (an unsafe `../../etc/evil.ts` path from the "LLM" was rejected), traceability 80%, metrics endpoint correct, human approval → CEO close-out → `completed`.
 
-**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); `EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing (Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); ~~generated tests are written but not executed yet~~ (executed since Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
+**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); ~~`EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing~~ (keyword fallback since Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); ~~generated tests are written but not executed yet~~ (executed since Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
 
 ### **Agent role review**
 
@@ -1149,7 +1149,7 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
 
 ---
 
-**Task 14: Agent Learning & Memory Refinement**
+**Task 14: Agent Learning & Memory Refinement** — ✅ Done (2026-10-26)
 - **Objective**: Agents improve from past executions, using the quality signals the workflow now produces.
 - **Implementation**:
   1. `AgentLearningHandler` (subscribes to `AgentCompletedTaskEvent`) stores an execution memory per agent with the outcome signal: gate result for BA/Architect, QC coverage for DEV, QA verdict for DEV/QC.
@@ -1162,6 +1162,14 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Lessons appear in the next prompt (mock LLM captures prompt)
   - Keyword fallback returns memories without embeddings
 - **Demo**: Run the same project type 3 times; show the Architect's gate failures decrease and the lessons it learned.
+- **Result (2026-10-26)**:
+  1. The outcome signals arrive *after* the graded execution (the gate runs after the Architect, QC after DEV, QA after QC). So `AgentLearningHandler` (new `modules/learning/`, subscribed to the global `EventBus`) grades on the signal events, not on the agent's own completion. `QualityGateHandler` now publishes a `QualityGateEvaluatedEvent` (→ BA and Architect). QC's `AgentCompletedTaskEvent` (`qc_passed`, coverage, failing use cases) → DEV. QA's (`qa_approved` plus the first findings) → DEV and QC. The mapping is the pure `OutcomeSignalPolicy`. Each `ExecutionOutcome` (value object, `domain/agent/learning/`) is stored as a memory in `execution_outcomes`, with the structured outcome in its metadata; failures get importance 7, successes 4.
+  2. `MemoryService.refineMemory(role, namespace, summarize)` selects the last 20 memories and stores the summary as a `lessons_learned` memory (importance 9). The summariser is passed in, so the memory module does not depend on agents. `LearningService.refine` supplies an LLM summariser through `AgentLLMService.providerFor(profile)`, so the call is costed. It runs every `LEARNING_REFINE_EVERY` (default 3) outcomes of a role, in the background, because `EventBus.publish` awaits its handlers.
+  3. All thinking strategies use `MemoryService.recall()`: the role's top 3 lessons first (prefixed `Lesson learned:`), then the namespace search. Every action prompt already includes `thought.memories`.
+  4. Without an embedding provider (`EmbeddingService.isEnabled()`), memories are saved without a vector and `searchMemories` ranks by keyword overlap × 0.7 + importance × 0.3, falling back to importance and recency when nothing matches.
+  5. `GET /api/agents/:role/learning` returns the success rate, a per-day timeline, per-signal counts, the top lessons and recent outcomes. Agent Detail shows them in a *Learning* card (stat tiles, a single-series line chart with tooltip, lessons, outcomes).
+  - Docs: FR-MEM-006/007 (matrix recount: 78 / 1 / 9 of 88), class diagram `docs/diagrams/classes/learning-loop.puml`.
+  - **Verification**: `nest build` 0 errors. Jest 27/27 suites, 419 tests. The new `learning.spec.ts` covers the policy for every signal and ignored case, refinement on the N-th outcome only (and `LEARNING_REFINE_EVERY`), a lesson refined from outcomes appearing in the next action prompt (the mock LLM captures it), the keyword fallback without embeddings, lessons recalled first with role isolation, and the stats timeline. Web `tsc` and build pass, and the Learning card was checked in a Playwright screenshot.
 
 ---
 

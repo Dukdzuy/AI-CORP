@@ -12,8 +12,8 @@ export class CeoThinkingStrategy implements IThinkingStrategy {
     const goal = context.projectContext?.goal || context.goal || '';
     const completing = context.taskType === 'complete_project';
 
-    // Load relevant strategic memories
-    const memories = await this.memoryService.searchMemories(
+    // Load lessons_learned, then relevant strategic memories
+    const memories = await this.memoryService.recall(
       CEO_PROFILE.role,
       CEO_PROFILE.primaryNamespace,
       goal,
@@ -34,7 +34,7 @@ export class CeoThinkingStrategy implements IThinkingStrategy {
         }
       ],
       confidence: 0.9,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

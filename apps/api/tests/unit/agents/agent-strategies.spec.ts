@@ -37,7 +37,7 @@ function harness(replies: string[] = []) {
     providerFor: jest.fn(async (profile: RoleProfile) => ({ provider: { chat }, model: profile.defaultModel.model, systemPrompt: profile.systemPrompt })),
   };
   const memory = {
-    searchMemories: jest.fn().mockResolvedValue([{ content: 'past lesson' }]),
+    recall: jest.fn().mockResolvedValue(['past lesson']),
     getAgentIdByRole: jest.fn().mockResolvedValue('agent-1'),
     saveMemory: jest.fn().mockResolvedValue('m-1'),
   };
@@ -77,7 +77,7 @@ describe('Thinking strategies', () => {
     const { memory } = harness();
     const result = await new Strategy(memory).think(ctx());
 
-    expect(memory.searchMemories).toHaveBeenCalledWith(role, profileOf(role).primaryNamespace, expect.any(String), expect.any(Number));
+    expect(memory.recall).toHaveBeenCalledWith(role, profileOf(role).primaryNamespace, expect.any(String), expect.any(Number));
     expect(result.reasoning.length).toBeGreaterThan(0);
     expect(result.plannedActions.length).toBeGreaterThan(0);
     expect(result.confidence).toBeGreaterThan(0);
@@ -88,7 +88,7 @@ describe('Thinking strategies', () => {
   it('QA reads the same namespace QA writes to', async () => {
     const { memory } = harness();
     await new QaThinkingStrategy(memory as any).think(ctx());
-    expect(memory.searchMemories.mock.calls[0][1]).toBe('review_checklist');
+    expect(memory.recall.mock.calls[0][1]).toBe('review_checklist');
   });
 
   it('CEO thinking follows the task type', async () => {

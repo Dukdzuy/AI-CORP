@@ -9,8 +9,8 @@ export class QaThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load review checklist memories (same namespace QaActionStrategy saves to)
-    const memories = await this.memoryService.searchMemories(
+    // Load lessons_learned, then review checklist memories (same namespace QaActionStrategy saves to)
+    const memories = await this.memoryService.recall(
       QA_PROFILE.role,
       QA_PROFILE.primaryNamespace,
       JSON.stringify(context),
@@ -29,7 +29,7 @@ export class QaThinkingStrategy implements IThinkingStrategy {
         }
       ],
       confidence: 0.9,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

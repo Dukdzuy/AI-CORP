@@ -9,6 +9,27 @@ export interface MemoryMetadata {
   projectId?: string;
   importance?: number; // 1-10 scale (default 5)
   tags?: string[];
+  /** Structured outcome of an execution (namespace execution_outcomes, Task 14) */
+  outcome?: Record<string, unknown>;
+}
+
+/** Namespace of the refined lessons every role recalls first (Task 14) */
+export const LESSONS_NAMESPACE = 'lessons_learned';
+
+/** Recall label put in front of lessons, so prompts can tell them from plain memories */
+export const LESSON_PREFIX = 'Lesson learned: ';
+
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'are', 'was', 'were', 'has', 'have', 'not', 'but',
+  'all', 'any', 'can', 'will', 'into', 'its', 'our', 'you', 'your', 'their', 'there', 'when', 'what', 'which',
+  'null', 'true', 'false', 'undefined',
+]);
+
+/** Lower-case word tokens (3+ chars, no stopwords) used by the keyword fallback */
+export function keywordTokens(text: string): Set<string> {
+  return new Set(
+    (text.toLowerCase().match(/[\p{L}\p{N}_-]{3,}/gu) || []).filter(t => !STOPWORDS.has(t))
+  );
 }
 
 /**
@@ -114,9 +135,9 @@ export class MemoryService {
       );
     }
 
-    // Generate embedding for the content
+    // Generate embedding for the content (none without a provider: keyword search reads the text)
     const startTime = Date.now();
-    const embedding = await this.embeddingService.generateEmbedding(content);
+    const embedding = this.embeddingsEnabled() ? await this.embeddingService.generateEmbedding(content) : null;
     const embeddingTimeMs = Date.now() - startTime;
 
     // Create memory record
@@ -127,12 +148,13 @@ export class MemoryService {
           agentRole,
           namespace,
           content,
-          embedding: JSON.stringify(embedding), // stored as JSON float array (pgvector wrapper in production)
+          embedding: embedding ? JSON.stringify(embedding) : null, // JSON float array (pgvector wrapper in production)
           importance,
           metadata: {
             projectId: metadata?.projectId,
             timestamp: new Date().toISOString(),
             tags: metadata?.tags || [],
+            ...(metadata?.outcome ? { outcome: metadata.outcome } : {}),
           },
         } as any,
       });
@@ -204,6 +226,10 @@ export class MemoryService {
       throw new Error('agentRole, namespace, query are required and limit must be > 0');
     }
 
+    if (!this.embeddingsEnabled()) {
+      return this.keywordSearch(agentRole, namespace, query, limit);
+    }
+
     // Generate query embedding
     const queryEmbedding = await this.embeddingService.generateEmbedding(query);
 
@@ -269,6 +295,118 @@ export class MemoryService {
     }));
 
     return rankedResults;
+  }
+
+  /**
+   * Keyword/recency fallback used when no embedding provider is configured, so agents still
+   * recall memories in local demos. similarity = share of the memory's keywords found in the
+   * query; memories that share no keyword are still returned by importance and recency when
+   * nothing matches, because lessons and checklists are short and general.
+   */
+  async keywordSearch(agentRole: string, namespace: string, query: string, limit = 10): Promise<MemorySearchResult[]> {
+    const memories = await this.prisma.agentMemory.findMany({
+      where: { agentRole, namespace },
+      select: { id: true, agentRole: true, namespace: true, content: true, importance: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    const queryTokens = keywordTokens(query);
+    const scored = memories.map((m, index) => {
+      const tokens = keywordTokens(m.content);
+      let hits = 0;
+      tokens.forEach(t => queryTokens.has(t) && hits++);
+      const similarity = tokens.size ? hits / tokens.size : 0;
+      const recency = 1 - index / Math.max(memories.length, 1);
+      return {
+        id: m.id,
+        agentRole: m.agentRole,
+        namespace: m.namespace,
+        content: m.content,
+        importance: m.importance,
+        similarity,
+        rank: similarity * this.SIMILARITY_WEIGHT + (m.importance / this.MAX_IMPORTANCE) * this.IMPORTANCE_WEIGHT + recency * 0.01,
+        createdAt: m.createdAt,
+      };
+    });
+    const matching = scored.filter(r => r.similarity > 0);
+    const results = (matching.length ? matching : scored).sort((a, b) => b.rank - a.rank).slice(0, limit);
+
+    this.logger.log(JSON.stringify({
+      event: 'memory_search',
+      mode: 'keyword',
+      agentRole,
+      namespace,
+      resultCount: results.length,
+      matched: matching.length,
+    }));
+    return results;
+  }
+
+  /**
+   * What a thinking strategy recalls: the role's refined lessons first (most important, newest),
+   * then the memories of its namespace that match the task. Returns plain text for the prompt.
+   */
+  async recall(agentRole: string, namespace: string, query: string, limit = 5, lessonLimit = 3): Promise<string[]> {
+    const [lessons, memories] = await Promise.all([
+      namespace === LESSONS_NAMESPACE
+        ? Promise.resolve([])
+        : this.prisma.agentMemory.findMany({
+            where: { agentRole, namespace: LESSONS_NAMESPACE },
+            orderBy: [{ importance: 'desc' }, { createdAt: 'desc' }],
+            take: lessonLimit,
+            select: { content: true },
+          }),
+      this.searchMemories(agentRole, namespace, query || namespace, limit),
+    ]);
+    return [...lessons.map(l => `${LESSON_PREFIX}${l.content}`), ...memories.map(m => m.content)];
+  }
+
+  async countMemories(agentRole: string, namespace: string): Promise<number> {
+    return this.prisma.agentMemory.count({ where: { agentRole, namespace } });
+  }
+
+  /**
+   * Refine the recent memories of a namespace into one high-importance lesson.
+   *
+   * The summariser is passed in (the agents module provides an LLM-backed one through
+   * AgentLLMService, so the call is costed); this service only selects the memories and
+   * stores the result under lessons_learned.
+   *
+   * @returns the id of the saved lesson, or null when there was nothing to refine
+   */
+  async refineMemory(
+    agentRole: string,
+    namespace: string,
+    summarize: (memories: Array<{ content: string; importance: number; createdAt: Date; metadata: unknown }>) => Promise<string>,
+    window = 20
+  ): Promise<string | null> {
+    const recent = await this.prisma.agentMemory.findMany({
+      where: { agentRole, namespace },
+      orderBy: { createdAt: 'desc' },
+      take: window,
+      select: { content: true, importance: true, createdAt: true, metadata: true },
+    });
+    if (recent.length === 0) return null;
+
+    const lesson = (await summarize(recent.reverse())).trim();
+    if (!lesson) return null;
+
+    const agentId = await this.getAgentIdByRole(agentRole);
+    if (!agentId) {
+      this.logger.warn(`Cannot store refined lesson: no agent row for role ${agentRole}`);
+      return null;
+    }
+    const id = await this.saveMemory(agentId, agentRole, LESSONS_NAMESPACE, lesson, {
+      importance: 9,
+      tags: ['refined', namespace],
+    });
+    this.logger.log(JSON.stringify({ event: 'memory_refined', agentRole, namespace, sourceCount: recent.length, lessonId: id }));
+    return id;
+  }
+
+  private embeddingsEnabled(): boolean {
+    // Mocks and older providers without isEnabled() count as enabled
+    return typeof this.embeddingService.isEnabled !== 'function' || this.embeddingService.isEnabled();
   }
 
   /**

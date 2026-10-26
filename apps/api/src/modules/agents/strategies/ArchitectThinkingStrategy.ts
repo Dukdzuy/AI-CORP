@@ -9,8 +9,8 @@ export class ArchitectThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load architecture patterns memories
-    const memories = await this.memoryService.searchMemories(
+    // Load lessons_learned, then architecture patterns memories
+    const memories = await this.memoryService.recall(
       ARCHITECT_PROFILE.role,
       ARCHITECT_PROFILE.primaryNamespace,
       JSON.stringify(context),
@@ -29,7 +29,7 @@ export class ArchitectThinkingStrategy implements IThinkingStrategy {
         }
       ],
       confidence: 0.92,
-      memories: memories.map(m => m.content)
+      memories
     };
   }
 }

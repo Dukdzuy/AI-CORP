@@ -19,3 +19,4 @@ export * from './TaskAssignedEvent';
 export * from './TaskCompletedEvent';
 export * from './WorkflowStartedEvent';
 export * from './ApprovalRequestedEvent';
+export * from './QualityGateEvaluatedEvent';

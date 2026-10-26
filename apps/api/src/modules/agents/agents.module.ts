@@ -64,6 +64,6 @@ import {
     ...AGENT_CLASSES,
     agentsProvider(),
   ],
-  exports: [TemplateService, OOADArtifactService, AGENTS],
+  exports: [TemplateService, OOADArtifactService, AgentLLMService, AGENTS],
 })
 export class AgentsModule {}
