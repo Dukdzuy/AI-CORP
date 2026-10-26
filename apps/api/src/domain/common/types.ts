@@ -66,6 +66,12 @@ export interface AgentContext {
   qcReport?: string;
   /** Failing acceptance tests reported by QC, read by QA */
   failingTests?: string[];
+  /** Collaboration (Task 15): DEV's accepted plan, the Architect's feedback, BA's answers */
+  implementationPlan?: string;
+  designFeedback?: string;
+  clarifications?: string[];
+  /** The question a clarification REQUEST asks BA ("UC-xxx: question") */
+  clarificationQuestion?: string;
 }
 
 /**

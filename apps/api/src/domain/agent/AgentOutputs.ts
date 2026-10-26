@@ -75,13 +75,39 @@ export interface MarketingOutput extends BaseAgentOutput {
   action: 'draftAnnouncement';
 }
 
+/** DEV's plan, proposed to the Architect before any code is written (pair_develop, Task 15) */
+export interface DevPlanOutput extends BaseAgentOutput {
+  action: 'planImplementation';
+  implementationPlan: string;
+  /** "UC-xxx: question" for use cases DEV finds ambiguous (clarification_loop) */
+  questions: string[];
+}
+
+/** Architect's answer to a DEV plan or implementation (pair_develop navigator) */
+export interface ArchitectReviewOutput extends BaseAgentOutput {
+  action: 'reviewPlan' | 'reviewCode';
+  design_approved: boolean;
+  designFeedback: string;
+}
+
+/** BA's answer to a clarification REQUEST; the use case is updated in place */
+export interface BaClarifyOutput extends BaseAgentOutput {
+  action: 'clarifyUseCase';
+  clarification: string;
+  updatedUseCaseId?: string;
+}
+
+export type DevAgentOutput = DevOutput | DevPlanOutput;
+export type ArchitectAgentOutput = ArchitectOutput | ArchitectReviewOutput;
+export type BaAgentOutput = BaOutput | BaClarifyOutput;
+
 /** Output type per role, for callers that know which role they invoked */
 export interface AgentOutputByRole {
   CEO: CeoOutput;
   PM: PmOutput;
-  BA: BaOutput;
-  ARCHITECT: ArchitectOutput;
-  DEV: DevOutput;
+  BA: BaAgentOutput;
+  ARCHITECT: ArchitectAgentOutput;
+  DEV: DevAgentOutput;
   QC: QcOutput;
   QA: QaOutput;
   MARKETING: MarketingOutput;

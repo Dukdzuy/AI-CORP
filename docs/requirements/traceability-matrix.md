@@ -73,8 +73,9 @@ Requirements are organized into 7 subsystems:
 | FR-AGENT-009 | Sandbox Execution | Agents shall execute tools in isolated Docker containers with resource limits | UC-012, UC-028 | Class: SandboxExecutor | apps/api/src/modules/tools/sandbox.executor.ts | TEST-SANDBOX-001, TEST-SANDBOX-002 | Implemented |
 | FR-AGENT-010 | Tool Authorization | System shall enforce tool authorization per agent role (e.g., DEV can run_code, CEO cannot) | UC-028 | Class: ToolRegistry (isToolAuthorizedForRole method) | apps/api/src/modules/tools/tool.registry.ts | TEST-TOOLS-001 | Implemented |
 | FR-AGENT-011 | Agent Configuration | Admin shall configure agent LLM models (provider, model, fallback) | UC-003 | Class: AgentsService (updateConfig method) | apps/api/src/modules/agents/agents.service.ts | TEST-AGENT-CONFIG-001 | Implemented |
-| FR-AGENT-012 | Agent Communication | Agents shall broadcast messages to Virtual Office meeting room | UC-021, UC-024 | Class: BaseAgent (emitMessage method), AppWebSocketGateway | apps/api/src/modules/agents/base.agent.ts, apps/api/src/modules/websocket/websocket.gateway.ts | TEST-AGENT-MSG-001 | Implemented |
+| FR-AGENT-012 | Agent Communication | Agents shall broadcast messages to Virtual Office meeting room (task results as an ACL INFORM through AgentMessageBus since Task 15) | UC-021, UC-024 | Class: BaseAgent (emitMessage method), AgentOrchestratorService, AgentMessageBus, AppWebSocketGateway | apps/api/src/modules/agents/base.agent.ts, apps/api/src/modules/orchestrator/agent-orchestrator.service.ts, apps/api/src/modules/websocket/websocket.gateway.ts | apps/api/tests/unit/agents/agent-registry.spec.ts, apps/api/tests/unit/collaboration/collaboration.spec.ts | Implemented |
 | FR-AGENT-013 | Agent Registry & Role Profiles | Adding a role shall only require its RoleProfile, its strategies and one entry in AGENT_CLASSES; the orchestrator resolves agents from the AGENTS token | UC-004, UC-009-016 | Registry (AGENTS token), RoleProfile value object, IAgent | apps/api/src/modules/agents/agents.registry.ts, apps/api/src/modules/agents/profiles/, apps/api/src/modules/orchestrator/agent-orchestrator.service.ts | apps/api/tests/unit/agents/agent-registry.spec.ts, apps/api/tests/unit/agents/role-profile.spec.ts | Implemented |
+| FR-AGENT-014 | Agent-to-Agent Messaging (FIPA-ACL) | Agents shall talk only through a message bus using the performatives REQUEST, INFORM, PROPOSE, ACCEPT, REJECT; replies are validated against the conversation, persisted and shown in the Meeting Room with their performative | UC-021 | Mediator: AgentMessageBus; Value Object: AclMessage, AclProtocol; Web: MeetingRoom performative tags | apps/api/src/domain/collaboration/AclMessage.ts, apps/api/src/modules/orchestrator/agent-message.bus.ts, apps/web/src/components/virtual-office/ | apps/api/tests/unit/collaboration/collaboration.spec.ts, apps/web/src/components/virtual-office/performatives.test.ts | Implemented |
 
 ### 3.4 Workflow Orchestration Subsystem
 
@@ -90,6 +91,7 @@ Requirements are organized into 7 subsystems:
 | FR-WF-008 | Workflow Rollback | System shall rollback workflow to previous checkpoint with rollback handlers | UC-019 | Class: WorkflowEngine (rollback method), Memento pattern | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-009 | Planned |
 | FR-WF-009 | Workflow Pause/Resume | Board Member shall pause and resume workflows manually | UC-004 | Class: WorkflowEngine (pauseWorkflow, resumeWorkflow methods) | apps/api/src/modules/workflow/workflow.engine.ts | TEST-WF-010 | Implemented |
 | FR-WF-010 | Workflow Status Tracking | System shall track workflow status: running, paused, completed, failed, cancelled | UC-004, UC-007 | Enum: WorkflowStatus in schema.prisma | apps/api/prisma/schema.prisma | TEST-WF-011 | Implemented |
+| FR-WF-011 | Agent Collaboration Nodes | An agent_collaboration node shall run a named collaboration pattern: pair_develop (Architect reviews DEV's plan and code), review_chain (QC → QA, more reviewers by metadata), clarification_loop (DEV/QC ask BA, BA updates the use case); WORKFLOW_COLLABORATION=pair starts projects on the collaborative workflow | UC-004, UC-012, UC-016 | Strategy: AgentCollaborationStrategy, CollaborationStrategy; Registry: CollaborationRegistry; Chain of Responsibility: ReviewHandler; SD-007 | apps/api/src/modules/workflow/collaboration/, apps/api/src/modules/workflow/default-workflow.ts | apps/api/tests/unit/collaboration/collaboration.spec.ts, apps/api/tests/unit/agents/agent-strategies.spec.ts | Implemented |
 
 ### 3.5 Approval System Subsystem
 
@@ -295,12 +297,12 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Implemented | 78 | 88.6% |
+| Implemented | 80 | 88.9% |
 | Partial | 1 | 1.1% |
-| Planned | 9 | 10.2% |
-| **TOTAL** | **88** | **100%** |
+| Planned | 9 | 10.0% |
+| **TOTAL** | **90** | **100%** |
 
-_Recounted 2026-10-26 (Phase 3, Tasks 13–14: FR-PROJ-008, FR-MEM-006/007 added) from the tables above._
+_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above._
 
 ### Planned Requirements (Priority for Next Sprint)
 1. FR-WF-008 (Workflow Rollback)

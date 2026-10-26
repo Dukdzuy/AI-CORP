@@ -170,3 +170,55 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
     { from: 'approval', to: 'end', condition: 'onApprove' },
   ],
 };
+
+/** Nodes of the default workflow that the collaborative variant replaces */
+const SEQUENTIAL_BUILD_NODES = new Set(['develop', 'test', 'review', 'qa_condition']);
+
+/**
+ * Collaborative variant (Task 15), selected with WORKFLOW_COLLABORATION=pair:
+ * ... → PM → pair_develop (DEV + Architect navigator, BA clarifications) → review_chain (QC → QA)
+ * → Marketing → approval → CEO. A rejected review sends the pair back to work.
+ */
+export const PAIR_WORKFLOW_DEFINITION: WorkflowDefinition = {
+  id: 'pair-project-workflow',
+  name: 'Collaborative Project Workflow',
+  version: '2.1.0',
+  startNode: 'start',
+  endNode: 'end',
+  nodes: [
+    ...DEFAULT_WORKFLOW_DEFINITION.nodes.filter(n => !SEQUENTIAL_BUILD_NODES.has(n.id)),
+    {
+      id: 'pair_develop',
+      type: 'agent_collaboration',
+      maxRetries: 2,
+      timeout: 1800000,
+      metadata: {
+        pattern: 'pair_develop',
+        navigator: 'ARCHITECT',
+        maxRounds: 2,
+        description: 'DEV implements with the Architect as navigator (plan review, code review) and asks BA about unclear use cases',
+      },
+    },
+    {
+      id: 'review_chain',
+      type: 'agent_collaboration',
+      maxRetries: 2,
+      timeout: 900000,
+      metadata: {
+        pattern: 'review_chain',
+        reviewers: [
+          { role: 'QC', taskType: 'verify', verdictField: 'qc_passed', decides: false },
+          { role: 'QA', taskType: 'review', verdictField: 'qa_approved', decides: true },
+        ],
+        description: 'QC (executed acceptance tests) then QA (design conformance) review the implementation',
+      },
+    },
+  ],
+  edges: [
+    ...DEFAULT_WORKFLOW_DEFINITION.edges.filter(e => !SEQUENTIAL_BUILD_NODES.has(e.from) && !SEQUENTIAL_BUILD_NODES.has(e.to)),
+    { from: 'breakdown', to: 'pair_develop' },
+    { from: 'pair_develop', to: 'review_chain' },
+    { from: 'review_chain', to: 'market', condition: 'onSuccess' },
+    { from: 'review_chain', to: 'pair_develop', condition: 'onFail' },
+  ],
+};

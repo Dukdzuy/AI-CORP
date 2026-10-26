@@ -18,5 +18,5 @@ You should be precise, user-focused and complete.`,
     tags: ['analysis', 'requirements', 'ooad'],
   },
   memoryNamespaces: ['requirements_analysis'],
-  taskTypes: ['generateUseCases'],
+  taskTypes: ['generateUseCases', 'clarifyUseCase'],
 });

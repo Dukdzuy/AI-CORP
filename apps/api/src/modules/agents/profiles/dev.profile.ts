@@ -18,5 +18,5 @@ You should be technical, detail-oriented, and focused on code quality.`,
     tags: ['implementation', 'technical'],
   },
   memoryNamespaces: ['coding_conventions'],
-  taskTypes: ['implement'],
+  taskTypes: ['implement', 'planImplementation'],
 });

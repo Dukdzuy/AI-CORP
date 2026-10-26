@@ -4,7 +4,7 @@ import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/c
 import { MemoryService } from '../../memory/memory.service';
 import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
-import { ArchitectOutput } from '../../../domain/agent/AgentOutputs';
+import { ArchitectAgentOutput, ArchitectOutput, ArchitectReviewOutput } from '../../../domain/agent/AgentOutputs';
 import { ARCHITECT_PROFILE } from '../profiles';
 import { OOADArtifactService } from '../services/ooad-artifact.service';
 import { defaultSequenceDiagram } from '../services/ooad-view-model';
@@ -22,9 +22,11 @@ import {
   UseCaseItem
 } from '../schemas/ooad.schema';
 import { OOADSchemaValidationError } from '../errors/OOADSchemaValidationError';
+import { summarizeDesign } from '../services/design-summary';
+import { parseVerdict, stripMarkers } from '../services/collaboration-replies';
 
 @Injectable()
-export class ArchitectActionStrategy implements IActionStrategy<ArchitectOutput> {
+export class ArchitectActionStrategy implements IActionStrategy<ArchitectAgentOutput> {
   private readonly logger = new Logger(ArchitectActionStrategy.name);
 
   constructor(
@@ -35,7 +37,75 @@ export class ArchitectActionStrategy implements IActionStrategy<ArchitectOutput>
     private readonly prisma: PrismaService
   ) {}
 
-  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<ArchitectOutput>> {
+  /** Code shown to the reviewer is cut to keep the prompt inside the model's context */
+  static readonly MAX_REVIEW_CODE_CHARS = 12000;
+
+  async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<ArchitectAgentOutput>> {
+    if (context.taskType === 'reviewPlan' || context.taskType === 'reviewCode') {
+      return this.review(context, thought, context.taskType);
+    }
+    return this.design(context, thought);
+  }
+
+  /**
+   * pair_develop navigator (Task 15): checks DEV's plan or code against the approved design
+   * and answers ACCEPT or REJECT with concrete feedback.
+   */
+  private async review(
+    context: AgentContext,
+    thought: AgentThought,
+    kind: ArchitectReviewOutput['action']
+  ): Promise<AgentActionResult<ArchitectReviewOutput>> {
+    const project = context.projectId
+      ? await this.prisma.project.findUnique({ where: { id: context.projectId }, select: { ooadMetadata: true } })
+      : null;
+    const design = summarizeDesign(project?.ooadMetadata);
+    const memories = thought.memories || [];
+    const subject = kind === 'reviewPlan'
+      ? `DEV'S IMPLEMENTATION PLAN:\n${context.implementationPlan || '(no plan given)'}`
+      : `DEV'S CODE:\n${(context.code || '(no code given)').slice(0, ArchitectActionStrategy.MAX_REVIEW_CODE_CHARS)}`;
+
+    const prompt = `You are the navigator in a pair: review the developer's ${kind === 'reviewPlan' ? 'plan' : 'code'} against the approved design.
+
+APPROVED DESIGN:
+${design || '(no design recorded)'}
+${memories.length ? `\nRelevant architecture patterns:\n${memories.join('\n')}\n` : ''}
+${subject}
+
+Check: every use case is covered, classes sit in the right layer, the domain layer imports nothing from outer layers,
+and the design patterns are applied where the design says. List at most 5 concrete findings.
+Reject only for real design violations or missing use cases, not for style.
+
+End with exactly one line:
+DECISION: ACCEPT
+or
+DECISION: REJECT`;
+
+    const { provider, model, systemPrompt } = await this.agentLLM.providerFor(ARCHITECT_PROFILE, context.projectId);
+    const result = await provider.chat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt }
+      ],
+      model,
+      maxTokens: 900
+    });
+
+    const text = result.content || '';
+    const approved = parseVerdict(text);
+    const feedback = stripMarkers(text);
+    return {
+      success: true,
+      output: {
+        action: kind,
+        output: feedback,
+        design_approved: approved,
+        designFeedback: approved ? '' : feedback,
+      },
+    };
+  }
+
+  private async design(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<ArchitectOutput>> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
       ? `\n\nRelevant architecture patterns:\n${memories.join('\n')}`

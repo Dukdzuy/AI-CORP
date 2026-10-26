@@ -3,7 +3,8 @@ import { AgentContext as SharedAgentContext } from '@ai-corp/shared-types';
 import { IAgent } from '../../domain/agent/interfaces/IAgent.interface';
 import { AgentContext, AgentResult } from '../../domain/common/types';
 import { AGENTS } from '../agents/agents.registry';
-import { AgentMessageService } from './agent-message.service';
+import { AgentMessageBus } from './agent-message.bus';
+import { Performative } from '../../domain/collaboration/AclMessage';
 
 /**
  * AgentOrchestratorService
@@ -21,7 +22,7 @@ export class AgentOrchestratorService {
 
   constructor(
     @Inject(AGENTS) agents: IAgent[],
-    private readonly messageService: AgentMessageService,
+    private readonly messageBus: AgentMessageBus,
   ) {
     for (const agent of agents) {
       const role = agent.getRole();
@@ -46,21 +47,39 @@ export class AgentOrchestratorService {
     // Agent runs its think → act cycle
     const result = await agent.execute(context as AgentContext);
 
-    // Broadcast a summary message from the agent to the project
+    // Tell the team what was done: one INFORM through the message bus (Mediator)
     if (result.action) {
-      await this.messageService.sendMessage({
-        projectId: context.projectId || 'unknown_project',
-        fromRole: role,
-        message: `I have completed the task. Action taken: ${JSON.stringify(result.action)}`,
-        messageType: 'action',
-        metadata: {
-          taskId: context.taskId,
-          action: result.action,
-        }
-      });
+      try {
+        await this.messageBus.send({
+          performative: Performative.INFORM,
+          sender: role,
+          receiver: 'all',
+          content: AgentOrchestratorService.summarize(result.action),
+          projectId: context.projectId || 'unknown_project',
+          conversationId: context.workflowRunId || context.taskId || `${role}-${Date.now()}`,
+          protocol: 'task_result',
+        });
+      } catch (err: any) {
+        this.logger.warn(`Could not announce ${role}'s result: ${err.message}`);
+      }
     }
 
     return result;
+  }
+
+  /** One readable line for the Meeting Room: the task type and the first line of the result */
+  static summarize(action: any): string {
+    const payload = action && typeof action === 'object' && typeof action.success === 'boolean'
+      ? action.output
+      : action;
+    if (!payload || typeof payload !== 'object') {
+      return `Completed the task: ${String(payload ?? '').slice(0, 200) || 'no output'}`;
+    }
+    const detail = [payload.toolOutput, payload.output]
+      .find(v => typeof v === 'string' && v.trim())
+      ?.trim().split('\n').find((line: string) => line.trim())?.trim() || 'done';
+    const clipped = detail.length > 200 ? `${detail.slice(0, 197)}...` : detail;
+    return `Completed ${payload.action || 'the task'}: ${clipped}`;
   }
 
   /**

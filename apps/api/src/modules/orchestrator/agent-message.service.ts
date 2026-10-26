@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
-import { WebSocketEventType } from '@ai-corp/shared-types';
+import { AgentMessageEvent, AgentRole, WebSocketEventType } from '@ai-corp/shared-types';
 
 export interface SendMessageParams {
   projectId: string;
@@ -47,10 +47,28 @@ export class AgentMessageService {
       },
     });
 
-    // Emit WebSocket event
+    // Emit WebSocket event in the AgentMessageEvent shape the Meeting Room reads
+    const metadata = (record.metadata || {}) as Record<string, any>;
+    const event: AgentMessageEvent = {
+      id: record.id,
+      projectId: record.projectId,
+      agentId: agent.id,
+      agentRole: record.fromRole as AgentRole,
+      fromAgent: record.fromRole as AgentRole,
+      toAgent: (record.toRole as AgentRole) || 'all',
+      message: record.message,
+      messageType: record.messageType as AgentMessageEvent['messageType'],
+      timestamp: record.createdAt,
+      ...(metadata.performative ? {
+        performative: metadata.performative,
+        conversationId: metadata.conversationId,
+        inReplyTo: metadata.inReplyTo,
+        protocol: metadata.protocol,
+      } : {}),
+    };
     this.websocketGateway.sendToProject(params.projectId, {
       type: WebSocketEventType.AGENT_MESSAGE,
-      data: record,
+      data: event,
       timestamp: new Date(),
     } as any);
 

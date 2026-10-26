@@ -1044,6 +1044,45 @@ This is the most complex error-handling diagram, essential for enterprise-grade 
 
 ---
 
+## SD-007: Pair Develop with Clarification
+
+### Overview
+
+**Diagram**: `docs/diagrams/sequences/SD-007-pair-develop.puml` (added in Phase 3, Task 15)
+
+The `pair_develop` collaboration node of the collaborative workflow (`WORKFLOW_COLLABORATION=pair`). DEV drives and the Architect navigates: the Architect reviews DEV's plan before any code is written and then reviews the code. When DEV finds a use case ambiguous it sends a REQUEST to BA, which answers with an INFORM and updates the use case.
+
+### Participants
+
+- **WorkflowEngine**: runs every agent turn as its own workflow step (`ctx.executeNode` with a synthetic `agent_task` node such as `pair_develop:3:architect-reviewPlan`)
+- **AgentCollaborationStrategy**: the `agent_collaboration` node strategy; picks the pattern from `CollaborationRegistry`, merges the result into the run variables
+- **PairDevelopCollaboration**: the pattern (Strategy); reuses `ClarificationLoopCollaboration`
+- **AgentMessageBus** (Mediator): validates each message against the conversation, persists it as an `AgentMessage` with `messageType 'acl'` and streams it to the Meeting Room
+- **DEV, BA, ARCHITECT**: agents, using the task types `planImplementation`, `clarifyUseCase`, `reviewPlan` and `reviewCode`
+
+### Main Flow Description
+
+1. DEV `planImplementation` returns a plan and `QUESTION: UC-xxx: ...` lines
+2. For each question (at most 3): REQUEST DEV → BA, BA `clarifyUseCase`, INFORM BA → DEV (in reply to the REQUEST); DEV re-plans with the clarifications
+3. PROPOSE DEV → ARCHITECT; the Architect answers ACCEPT or REJECT (in reply to the PROPOSE). A REJECT carries feedback and DEV proposes a revised plan in reply to it, up to `maxRounds` (default 2)
+4. DEV `implement` with the plan, feedback and clarifications in its prompt; INFORM DEV → ARCHITECT lists the files
+5. The Architect `reviewCode`: ACCEPT, or REJECT and another implementation round
+6. The node returns DEV's output plus `implementationPlan`, `planAccepted`, `codeAccepted`, `navigatorReviews`; the next node is `review_chain` (QC → QA, Chain of Responsibility)
+
+### Design Patterns Highlighted
+
+- **Mediator**: agents never call each other; all messages go through `AgentMessageBus`
+- **Strategy + Registry**: collaboration patterns are interchangeable and looked up by name
+- **Chain of Responsibility**: `ReviewHandler` links in the review chain that follows
+- **Value Object**: `AclMessage` is immutable and validated on creation
+
+### Key Invariants
+
+- An ACCEPT or REJECT always answers an earlier message of the same conversation, sent to the replier
+- The navigator advises: after `maxRounds` DEV's last version goes on, and QC/QA decide
+
+---
+
 ## Summary Table: All Sequence Diagrams
 
 | ID | Title | Primary Actors | Key Patterns | Complexity | Purpose |
@@ -1054,6 +1093,7 @@ This is the most complex error-handling diagram, essential for enterprise-grade 
 | SD-004 | Task Delegation Chain | 8 Agents (CEO → BA → Architect → PM → DEV → QC → QA → Marketing) | Registry, Strategy, Template Method, Chain of Responsibility | Very High | OOAD workflow hand-offs |
 | SD-005 | Agent Learning Cycle | BaseAgent, MemoryService, VectorStore | Repository, Strategy, Observer, Lazy Loading | High | Semantic memory storage and retrieval |
 | SD-006 | Workflow Rollback | WorkflowEngine, CompensationService, Agents | Saga, Command, Memento, Chain of Responsibility | Very High | Distributed transaction rollback |
+| SD-007 | Pair Develop with Clarification | DEV, ARCHITECT, BA, AgentMessageBus | Mediator, Strategy, Registry, Value Object | High | Agent collaboration with FIPA-ACL messages |
 
 ### Coverage Analysis
 
@@ -1072,7 +1112,8 @@ This is the most complex error-handling diagram, essential for enterprise-grade 
 - Strategy Pattern: SD-001, SD-002, SD-004
 - Observer Pattern: SD-001, SD-002, SD-003, SD-005
 - Template Method: SD-001, SD-002
-- Chain of Responsibility: SD-004, SD-006
+- Chain of Responsibility: SD-004, SD-006, SD-007 (review chain)
+- Mediator: SD-007
 - Command Pattern: SD-003, SD-004, SD-006
 - Memento Pattern: SD-003, SD-006
 - Saga Pattern: SD-006

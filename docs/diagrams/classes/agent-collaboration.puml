@@ -1,0 +1,108 @@
+@startuml agent-collaboration
+!theme plain
+title Agent Collaboration (Phase 3, Task 15)
+
+package "domain/collaboration" {
+  enum Performative {
+    REQUEST
+    INFORM
+    PROPOSE
+    ACCEPT
+    REJECT
+  }
+  class AclMessage <<value-object>> {
+    id, performative, sender, receiver, content
+    projectId, conversationId, inReplyTo?, protocol?
+    + {static} create(props): AclMessage
+    + reply(performative, content)
+  }
+  class AclProtocol {
+    + {static} REPLIES: Map<Performative, Performative[]>
+    + {static} allowsReply(to, reply): boolean
+  }
+  AclMessage --> Performative
+  AclProtocol ..> Performative
+}
+
+package "modules/orchestrator" {
+  class AgentMessageBus <<Mediator>> {
+    + send(props): AclMessage
+    + on(role, listener): unsubscribe
+    + conversation(id): AclMessage[]
+    - checkReply(message, history)
+  }
+  class AgentMessageService {
+    + sendMessage(params)
+  }
+  class AgentOrchestratorService {
+    + invokeAgent(role, context)
+  }
+  AgentMessageBus ..> AclProtocol : validates replies
+  AgentMessageBus --> AgentMessageService : persists (messageType 'acl')\nand streams to Meeting Room
+  AgentOrchestratorService --> AgentMessageBus : INFORM task result
+}
+
+package "modules/workflow/collaboration" {
+  interface NodeExecutionStrategy
+  class AgentCollaborationStrategy <<Strategy>> {
+    type = 'agent_collaboration'
+    + execute(node, run, ctx)
+  }
+  interface CollaborationStrategy <<Strategy>> {
+    pattern
+    + run(ctx: CollaborationContext): CollaborationResult
+  }
+  interface CollaborationContext {
+    + turn(role, taskType, input): TurnOutput
+    + say(performative, sender, receiver, content, inReplyTo?)
+    + variables()
+  }
+  class CollaborationRegistry <<Registry>> {
+    + register(strategy)
+    + get(pattern)
+  }
+  class PairDevelopCollaboration {
+    pattern = 'pair_develop'
+  }
+  class ReviewChainCollaboration {
+    pattern = 'review_chain'
+  }
+  class ClarificationLoopCollaboration {
+    pattern = 'clarification_loop'
+    + ask(ctx, asker, questions)
+  }
+  class ReviewHandler <<Chain of Responsibility>> {
+    config: ReviewerConfig
+    + setNext(handler)
+    + handle(ctx, proposal, outcomes)
+  }
+
+  NodeExecutionStrategy <|.. AgentCollaborationStrategy
+  AgentCollaborationStrategy --> CollaborationRegistry
+  AgentCollaborationStrategy ..> CollaborationContext : creates
+  CollaborationRegistry o-- CollaborationStrategy
+  CollaborationStrategy <|.. PairDevelopCollaboration
+  CollaborationStrategy <|.. ReviewChainCollaboration
+  CollaborationStrategy <|.. ClarificationLoopCollaboration
+  PairDevelopCollaboration --> ClarificationLoopCollaboration
+  ReviewChainCollaboration --> ReviewHandler
+  ReviewHandler --> ReviewHandler : next
+}
+
+class WorkflowEngine {
+  + registerStrategy(strategy)
+  - executeNode(node, run)
+}
+AgentCollaborationStrategy --> WorkflowEngine : registers at init;\nturn = ctx.executeNode(synthetic agent_task)
+AgentCollaborationStrategy --> AgentMessageBus : say()
+
+note bottom of PairDevelopCollaboration
+  DEV planImplementation → (REQUEST BA ↔ INFORM) →
+  PROPOSE plan → Architect reviewPlan → ACCEPT / REJECT →
+  DEV implement → INFORM → Architect reviewCode → ACCEPT / REJECT
+end note
+note bottom of ReviewChainCollaboration
+  default reviewers: QC (advisory) → QA (decides)
+  more reviewers via node metadata
+end note
+@enduml

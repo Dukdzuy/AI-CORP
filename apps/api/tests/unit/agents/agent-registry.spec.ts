@@ -6,6 +6,7 @@ import { BaseAgent } from '../../../src/modules/agents/base.agent';
 import { RoleProfile } from '../../../src/modules/agents/profiles';
 import { AgentOrchestratorService } from '../../../src/modules/orchestrator/agent-orchestrator.service';
 import { AgentMessageService } from '../../../src/modules/orchestrator/agent-message.service';
+import { AgentMessageBus } from '../../../src/modules/orchestrator/agent-message.bus';
 import { AppWebSocketGateway } from '../../../src/modules/websocket/websocket.gateway';
 import { EventBus } from '../../../src/domain/events/EventBus';
 import { IAgent } from '../../../src/domain/agent/interfaces/IAgent.interface';
@@ -56,6 +57,7 @@ describe('Agent registry (AGENTS token)', () => {
         { provide: AppWebSocketGateway, useValue: ws },
         { provide: EventBus, useValue: eventBus },
         { provide: AgentMessageService, useValue: messages },
+        AgentMessageBus,
         ...classes,
         ...extraProviders,
         agentsProvider(classes),
@@ -93,7 +95,12 @@ describe('Agent registry (AGENTS token)', () => {
 
     expect(result.action).toEqual({ success: true, output: { action: 'probe', output: 'ok' } });
     expect(moduleRef.get(TestAction).act).toHaveBeenCalledWith(expect.objectContaining({ taskType: 'probe' }), expect.anything());
-    expect(messages.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ fromRole: 'TEST' }));
+    expect(messages.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+      fromRole: 'TEST',
+      messageType: 'acl',
+      message: 'Completed probe: ok',
+      metadata: expect.objectContaining({ performative: 'INFORM' }),
+    }));
   });
 
   it('refuses two agents for the same role', () => {

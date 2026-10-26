@@ -32,7 +32,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 | Phase 1 – Foundation & Documentation | Done | UML/use-case docs in `docs/`. Actor list updated: DevOps removed, QC added (see role review) |
 | Phase 2 – Domain Layer Refactoring | Done (fixed) | Repositories, entities, application services (PR #2), engine strategies (PR #4), agent typing (PR #5) |
 | Phase 2.5 – OOAD Project Automation | Done (fixed) | Templates + skeleton (PR #3). Quality gate, traceability and metrics were not wired end-to-end; fixed in this audit |
-| Phase 3 – Agent System Enhancement | **In progress** | Re-scoped below. Task 11 done (2026-10-26); Tasks 12–15 next |
+| Phase 3 – Agent System Enhancement | **In progress** | Re-scoped below. Tasks 11–15 done (2026-10-26); end-to-end run for the definition of done next |
 | Phases 4–7 | Not started | DevOps references removed |
 
 ### **Audit findings and fixes**
@@ -1173,7 +1173,7 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
 
 ---
 
-**Task 15: Agent Collaboration Patterns**
+**Task 15: Agent Collaboration Patterns** — ✅ Done (2026-10-26)
 - **Objective**: Model agent collaboration explicitly (Mediator + collaboration strategies) instead of only sequential hand-offs.
 - **Implementation**:
   1. `AgentMessageBus` (Mediator) with FIPA-ACL performatives (REQUEST, INFORM, PROPOSE, ACCEPT, REJECT) replacing ad-hoc `AgentMessage` text; messages persisted and streamed to the Meeting Room.
@@ -1186,6 +1186,14 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Each collaboration strategy with mocked agents (message order, final output)
   - Message bus delivers, persists and validates performatives
 - **Demo**: Meeting Room transcript of Architect ↔ DEV pairing, and a BA clarification answered mid-run.
+- **Result (2026-10-26)**:
+  1. `AclMessage` (value object, `domain/collaboration/`) carries a FIPA-ACL performative, sender, receiver, conversation id and `inReplyTo`; `AclProtocol` says which performative may answer which (a REQUEST is answered by INFORM or REJECT, a PROPOSE by ACCEPT or REJECT; ACCEPT and REJECT must answer something). `AgentMessageBus` (Mediator, `modules/orchestrator/`) is the only channel between agents: it checks every reply against the conversation (known message, sent to the replier, allowed performative), stores it as an `AgentMessage` with `messageType 'acl'` and the ACL fields in its metadata, and notifies `on(role)` listeners. Persistence and listener errors are logged, protocol errors throw. The orchestrator's ad-hoc `"Action taken: {json}"` text is now one INFORM line (`Completed implement: Wrote 3 file(s) ...`).
+  2. Fixed on the way: `AgentMessageService` emitted the raw Prisma row, while the Meeting Room reads `AgentMessageEvent` (`fromAgent`, `toAgent`, `timestamp`), so agent messages showed no sender. It now emits the event shape, plus the ACL fields; the Meeting Room shows a coloured performative tag and the pattern name.
+  3. New task types on existing roles (RoleProfile only, no new agent): DEV `planImplementation` (plan + `QUESTION: UC-xxx:` lines), Architect `reviewPlan` / `reviewCode` (`DECISION: ACCEPT|REJECT`, feedback), BA `clarifyUseCase` (answer, and an updated use case validated by `UseCaseItemSchema`, merged into `ooadMetadata` without touching the design and re-rendered to `use-cases.md`). DEV's implement prompt now includes the accepted plan, the Architect's feedback and BA's clarifications.
+  4. `agent_collaboration` node (`AgentCollaborationStrategy`, registers itself with the engine like `QualityGateStrategy`) runs a pattern from `CollaborationRegistry`. Each agent turn is a synthetic `agent_task` node run through `ctx.executeNode`, so it is a normal workflow step (logging, events, variables, Kanban moves for `implement` / `review` only). Patterns: `pair_develop` (SD-007), `review_chain` (`ReviewHandler` Chain of Responsibility; default QC advisory → QA deciding, more reviewers from node metadata; sets `qa_approved` and the edge), `clarification_loop` (DEV/QC → BA, at most 3 questions).
+  5. `PAIR_WORKFLOW_DEFINITION` (`pair-project-workflow`) replaces `develop → test → review → qa_condition` with `pair_develop → review_chain` (onFail back to `pair_develop`). `WORKFLOW_COLLABORATION=pair` makes it the workflow new projects start with; both definitions are registered.
+  - Docs: FR-AGENT-014, FR-WF-011 (matrix recount: 80 / 1 / 9 of 90), FR-AGENT-012 updated; class diagram `docs/diagrams/classes/agent-collaboration.puml`; sequence diagram SD-007 in `docs/diagrams/sequences/` and `docs/design/sequence-diagrams.md`.
+  - **Verification**: `nest build` 0 errors. Jest 28/28 suites, 450 passed (15 skipped). The new `collaboration.spec.ts` covers `AclMessage` validation and protocol, the bus (delivery, broadcast, persistence shape, reply validation, failure isolation), each pattern with scripted agents (exact message and turn order, revision rounds, `maxRounds`, extra reviewers, early stop), the node (synthetic steps, merged variables, edge, failures) and the workflow variant; `agent-strategies.spec.ts` covers the four new task types. Web `tsc` and vitest (22 tests) pass.
 
 ---
 

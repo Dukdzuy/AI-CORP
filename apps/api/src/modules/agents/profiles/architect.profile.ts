@@ -18,5 +18,5 @@ You should be pragmatic, principled (SOLID, DDD) and explain every design decisi
     tags: ['design', 'architecture', 'ooad'],
   },
   memoryNamespaces: ['architecture_patterns'],
-  taskTypes: ['designArchitecture'],
+  taskTypes: ['designArchitecture', 'reviewPlan', 'reviewCode'],
 });

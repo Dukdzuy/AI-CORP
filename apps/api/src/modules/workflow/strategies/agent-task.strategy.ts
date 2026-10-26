@@ -93,7 +93,7 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
       }
 
       // Wire agent actions to task updates (Task 32.2)
-      await this.updateTaskStatusForAgent(node.agentRole, run.projectId, result, ctx);
+      await this.updateTaskStatusForAgent(node.agentRole, node.taskType, run.projectId, result, ctx);
 
       // Emit action completion event (Req 9)
       this.websocketGateway.sendToProject(run.projectId, {
@@ -238,10 +238,11 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
    * - QA approved     → every review task moves to done
    * - QA rejected     → review tasks go back to in_progress (the workflow loops back to DEV)
    * Moves go through the Task entity so the Kanban transition rules apply.
+   * Other task types of these roles (DEV's plan in pair_develop) move nothing.
    */
-  private async updateTaskStatusForAgent(agentRole: string, projectId: string, result: any, ctx: NodeExecutionContext): Promise<void> {
+  private async updateTaskStatusForAgent(agentRole: string, taskType: string | undefined, projectId: string, result: any, ctx: NodeExecutionContext): Promise<void> {
     try {
-      if (agentRole === 'DEV') {
+      if (agentRole === 'DEV' && (!taskType || taskType === 'implement')) {
         const tasks = [
           ...(await this.taskRepository.findByStatus(projectId, 'in_progress')),
           ...(await this.taskRepository.findByStatus(projectId, 'todo')),
@@ -252,7 +253,7 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
         if (tasks.length === 0) {
           ctx.logger.log(`No open task found for project ${projectId}, skipping task status update`);
         }
-      } else if (agentRole === 'QA') {
+      } else if (agentRole === 'QA' && (!taskType || taskType === 'review')) {
         const payload = AgentTaskStrategy.unwrapActionOutput(result?.action);
         const approved = payload?.qa_approved !== false;
         const tasks = await this.taskRepository.findByStatus(projectId, 'review');

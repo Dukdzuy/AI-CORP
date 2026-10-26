@@ -1,0 +1,56 @@
+@startuml SD-007: Pair Develop with Clarification
+!theme plain
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+
+title SD-007: Pair Develop (agent_collaboration node, Task 15)
+
+participant "WorkflowEngine" as Engine #Orange
+participant "AgentCollaborationStrategy" as Node #LightYellow
+participant "PairDevelopCollaboration" as Pair #LightYellow
+participant "AgentMessageBus" as Bus #LightCyan
+participant "DEV" as DEV #Pink
+participant "BA" as BA #Pink
+participant "ARCHITECT" as ARCH #Pink
+
+Engine -> Node : execute(pair_develop node, run)
+Node -> Pair : run(ctx)
+
+== Plan and clarification ==
+Pair -> Engine : ctx.executeNode(DEV planImplementation)
+Engine -> DEV : execute
+DEV --> Pair : implementationPlan, questions ["UC-002: ..."]
+Pair -> Bus : REQUEST DEV → BA "UC-002: ..."
+Pair -> Engine : ctx.executeNode(BA clarifyUseCase)
+Engine -> BA : execute (updates UC-002, re-renders use-cases.md)
+BA --> Pair : clarification
+Pair -> Bus : INFORM BA → DEV (inReplyTo REQUEST)
+Pair -> Engine : ctx.executeNode(DEV planImplementation + clarifications)
+
+== Plan review (max N rounds) ==
+Pair -> Bus : PROPOSE DEV → ARCHITECT (plan)
+Pair -> Engine : ctx.executeNode(ARCHITECT reviewPlan)
+ARCH --> Pair : design_approved, designFeedback
+alt rejected
+  Pair -> Bus : REJECT ARCHITECT → DEV (feedback)
+  Pair -> Engine : ctx.executeNode(DEV planImplementation + feedback)
+  Pair -> Bus : PROPOSE DEV → ARCHITECT (revised plan, inReplyTo REJECT)
+else accepted
+  Pair -> Bus : ACCEPT ARCHITECT → DEV
+end
+
+== Implementation and code review ==
+Pair -> Engine : ctx.executeNode(DEV implement + plan + feedback)
+Pair -> Bus : INFORM DEV → ARCHITECT (files written)
+Pair -> Engine : ctx.executeNode(ARCHITECT reviewCode)
+Pair -> Bus : ACCEPT / REJECT ARCHITECT → DEV
+
+Pair --> Node : output (code, plan, planAccepted, codeAccepted)
+Node -> Node : merge output into run variables
+Node --> Engine : success, edgeCondition onSuccess
+note over Bus
+  every message: validated against the conversation,
+  stored as AgentMessage (messageType 'acl'),
+  streamed to the Meeting Room
+end note
+@enduml

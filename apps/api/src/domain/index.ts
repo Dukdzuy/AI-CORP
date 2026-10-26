@@ -20,6 +20,7 @@ export * from './agent/AgentEventEmitter';
 export * from './agent/interfaces';
 export * from './agent/AgentOutputs';
 export * from './agent/learning/ExecutionOutcome';
+export * from './collaboration/AclMessage';
 
 // Tool Domain
 export * from './tool/interfaces';

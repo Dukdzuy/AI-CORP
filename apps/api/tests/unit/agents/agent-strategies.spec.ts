@@ -19,6 +19,7 @@ import {
   MarketingThinkingStrategy, MarketingActionStrategy,
 } from '../../../src/modules/agents/strategies';
 import { AgentContext, AgentThought } from '../../../src/domain/common/types';
+import { ArchitectOutput, BaOutput, DevOutput } from '../../../src/domain/agent/AgentOutputs';
 import { architecture, domainModel, patterns, useCaseData } from './ooad-fixtures';
 import { createMockAgentContext } from '../../utils';
 
@@ -151,8 +152,8 @@ describe('Action strategies', () => {
       expect(h.prompts[0].user).toContain('PROJECT GOAL: Online shop');
       expect(h.prompts[0].user).toContain('past lesson');
       expect(result.output).toEqual(expect.objectContaining({ action: 'generateUseCases', actors: ['Customer', 'Store Admin'] }));
-      expect(result.output!.useCases).toHaveLength(5);
-      expect(result.output!.filesWritten).toEqual(expect.arrayContaining([`projects/${projectId}/docs/use-cases.md`, `projects/${projectId}/docs/use-case-diagram.puml`]));
+      expect((result.output as BaOutput).useCases).toHaveLength(5);
+      expect((result.output as BaOutput).filesWritten).toEqual(expect.arrayContaining([`projects/${projectId}/docs/use-cases.md`, `projects/${projectId}/docs/use-case-diagram.puml`]));
       expect(await workspace.exists(projectId, 'docs/use-cases.md')).toBe(true);
       expect(h.metadata().useCases).toHaveLength(5);
     });
@@ -185,8 +186,8 @@ describe('Action strategies', () => {
       expect(h.prompts[0].user).toContain('past lesson');
       expect(h.prompts[3].user).toContain('USE CASE: Place Order (UC-001)');
       expect(result.output!.action).toBe('designArchitecture');
-      expect(result.output!.domainModel.entities.map(e => e.name)).toEqual(['Order', 'Product', 'Payment']);
-      expect(result.output!.skeletonFiles.some(f => f.startsWith('src/domain/'))).toBe(true);
+      expect((result.output as ArchitectOutput).domainModel.entities.map(e => e.name)).toEqual(['Order', 'Product', 'Payment']);
+      expect((result.output as ArchitectOutput).skeletonFiles.some(f => f.startsWith('src/domain/'))).toBe(true);
       expect(await workspace.exists(projectId, 'docs/class-diagram.puml')).toBe(true);
       expect(h.metadata()).toEqual(expect.objectContaining({ useCases: expect.any(Array), patterns: expect.any(Array) }));
     });
@@ -241,7 +242,7 @@ describe('Action strategies', () => {
         action: 'implement',
         filesWritten: [`projects/${projectId}/src/application/services/OrderService.ts`],
       }));
-      expect(result.output!.code).toContain('export class OrderService');
+      expect((result.output as DevOutput).code).toContain('export class OrderService');
       expect(await workspace.readFile(projectId, 'src/application/services/OrderService.ts')).toContain('UC-001');
     });
   });
@@ -336,6 +337,103 @@ describe('Action strategies', () => {
         .act(ctx({ projectSummary: 'A shop for books' }), thought);
       expect(h.prompts[0].user).toContain('PROJECT: A shop for books');
       expect(result.output).toEqual({ action: 'draftAnnouncement', output: 'We are live!' });
+    });
+  });
+
+  describe('Collaboration task types (Task 15)', () => {
+    it('DEV plans before coding and turns ambiguous use cases into questions', async () => {
+      const h = harness(['1. UC-001 -> OrderService (application), Order (domain)\nQUESTION: UC-002: can a guest pay?\nQUESTION: none']);
+      h.setMetadata(design);
+      const strategy = new DevActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any, ooad, workspace);
+
+      const result = await strategy.act(ctx({ taskType: 'planImplementation', designFeedback: 'Put Order in the domain layer' }), thought);
+
+      expect(h.prompts[0].user).toContain('propose an implementation plan');
+      expect(h.prompts[0].user).toContain('ARCHITECT FEEDBACK');
+      expect(result.output).toEqual({
+        action: 'planImplementation',
+        output: '1. UC-001 -> OrderService (application), Order (domain)',
+        implementationPlan: '1. UC-001 -> OrderService (application), Order (domain)',
+        questions: ['UC-002: can a guest pay?'],
+      });
+      expect(await workspace.listFiles(projectId)).toEqual([]);
+    });
+
+    it('DEV implements with the accepted plan, feedback and BA clarifications in the prompt', async () => {
+      const h = harness(['<CODE filepath="src/a.ts">\n// UC-001\nexport const a = 1;\n</CODE>']);
+      h.setMetadata(design);
+      const strategy = new DevActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any, ooad, workspace);
+
+      await strategy.act(ctx({ implementationPlan: 'PLAN-X', designFeedback: 'FEEDBACK-Y', clarifications: ['UC-002: guests cannot pay'] }), thought);
+
+      expect(h.prompts[0].user).toContain('IMPLEMENTATION PLAN (accepted by the Architect):\nPLAN-X');
+      expect(h.prompts[0].user).toContain('FEEDBACK-Y');
+      expect(h.prompts[0].user).toContain('- UC-002: guests cannot pay');
+    });
+
+    it('Architect reviews a plan against the design and rejects with feedback', async () => {
+      const h = harness(['1. Payment is missing for UC-003\nDECISION: REJECT']);
+      h.setMetadata(design);
+      const strategy = new ArchitectActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, ooad, h.prisma as any);
+
+      const result = await strategy.act(ctx({ taskType: 'reviewPlan', implementationPlan: 'PLAN-X' }), thought);
+
+      expect(h.prompts[0].user).toContain("DEV'S IMPLEMENTATION PLAN:\nPLAN-X");
+      expect(h.prompts[0].user).toContain('Entities: Order, Product, Payment');
+      expect(result.output).toEqual({
+        action: 'reviewPlan',
+        output: '1. Payment is missing for UC-003',
+        design_approved: false,
+        designFeedback: '1. Payment is missing for UC-003',
+      });
+      expect(h.chat).toHaveBeenCalledTimes(1);
+    });
+
+    it('Architect accepts code and clears the feedback', async () => {
+      const h = harness(['Layers are respected.\nDECISION: ACCEPT']);
+      h.setMetadata(design);
+      const strategy = new ArchitectActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, ooad, h.prisma as any);
+
+      const result = await strategy.act(ctx({ taskType: 'reviewCode', code: 'export class Order {}' }), thought);
+
+      expect(h.prompts[0].user).toContain("DEV'S CODE:\nexport class Order {}");
+      expect(result.output).toEqual(expect.objectContaining({ action: 'reviewCode', design_approved: true, designFeedback: '' }));
+    });
+
+    it('BA answers a clarification, updates only that use case and keeps the design', async () => {
+      const uc2 = useCaseData.useCases[1];
+      const updatedUc = { ...uc2, exceptionFlows: [...uc2.exceptionFlows, 'Guest tries to pay: ask them to sign in'] };
+      const h = harness([JSON.stringify({ answer: 'Guests must sign in before paying.', useCase: updatedUc })]);
+      h.setMetadata(design);
+      const strategy = new BAActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, ooad, h.prisma as any);
+
+      const result = await strategy.act(ctx({ taskType: 'clarifyUseCase', clarificationQuestion: `${uc2.id}: can a guest pay?` }), thought);
+
+      expect(h.prompts[0].user).toContain(`"id": "${uc2.id}"`);
+      expect(result.output).toEqual({
+        action: 'clarifyUseCase',
+        output: 'Guests must sign in before paying.',
+        clarification: `${uc2.id}: Guests must sign in before paying.`,
+        updatedUseCaseId: uc2.id,
+      });
+      const saved = h.metadata();
+      expect(saved.domainModel).toEqual(domainModel);
+      expect(saved.patterns).toEqual(patterns);
+      expect(saved.useCases[1].exceptionFlows).toContain('Guest tries to pay: ask them to sign in');
+      expect(saved.useCases[0]).toEqual(useCaseData.useCases[0]);
+      expect(await workspace.readFile(projectId, 'docs/use-cases.md')).toContain('Guest tries to pay');
+    });
+
+    it('BA keeps the use case when the update is invalid', async () => {
+      const h = harness([JSON.stringify({ answer: 'Yes.', useCase: { name: 'x' } })]);
+      h.setMetadata(design);
+      const strategy = new BAActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, ooad, h.prisma as any);
+
+      const result = await strategy.act(ctx({ taskType: 'clarifyUseCase', clarificationQuestion: 'UC-001: anything?' }), thought);
+
+      expect(result.output).toEqual(expect.objectContaining({ clarification: 'UC-001: Yes.' }));
+      expect(result.output).not.toHaveProperty('updatedUseCaseId');
+      expect(h.prisma.project.update).not.toHaveBeenCalled();
     });
   });
 });

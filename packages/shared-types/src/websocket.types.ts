@@ -39,14 +39,25 @@ export interface AgentActionEvent {
   parameters: Record<string, unknown>;
 }
 
+export type AclPerformative = 'REQUEST' | 'INFORM' | 'PROPOSE' | 'ACCEPT' | 'REJECT';
+
 export interface AgentMessageEvent {
+  id?: string;
+  projectId?: string;
   agentId: string;
   agentRole: AgentRole;
   fromAgent: AgentRole;
   toAgent: AgentRole | 'all';
   message: string;
-  messageType: 'chat' | 'thinking' | 'action' | 'notification';
+  /** 'acl' = an agent-to-agent message through AgentMessageBus (Task 15) */
+  messageType: 'chat' | 'thinking' | 'action' | 'notification' | 'acl';
   timestamp: Date;
+  /** FIPA-ACL fields, present when messageType is 'acl' */
+  performative?: AclPerformative;
+  conversationId?: string;
+  inReplyTo?: string;
+  /** Collaboration pattern that produced the message, e.g. pair_develop */
+  protocol?: string;
 }
 
 export interface TaskUpdatedEvent {
