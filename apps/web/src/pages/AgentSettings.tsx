@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Select, Button, Typography, Space, Tag, message, Skeleton } from 'antd';
+import { Permission } from '@ai-corp/shared-types';
+import { usePermission } from '../lib/permissions';
 import { RobotOutlined, SaveOutlined, ReloadOutlined } from '@ant-design/icons';
 import { apiClient } from '../lib/api/client';
 
@@ -38,6 +40,7 @@ const PROVIDER_COLORS: Record<string, string> = {
 };
 
 export const AgentSettings: React.FC = () => {
+  const canConfigure = usePermission(Permission.AGENT_CONFIGURE);
   const [agents, setAgents] = useState<AgentModel[]>([]);
   const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
   const [pendingChanges, setPendingChanges] = useState<Record<string, string>>({});
@@ -133,6 +136,7 @@ export const AgentSettings: React.FC = () => {
           <Space>
             <Select
               style={{ width: 280 }}
+              disabled={!canConfigure}
               value={currentValue}
               onChange={(val) => handleModelChange(record.role, val)}
               placeholder="Select a model"

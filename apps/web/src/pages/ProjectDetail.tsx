@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ArtifactsTab } from '../components/artifacts/ArtifactsTab';
 import { useQualityEvents } from '../components/artifacts/useQualityEvents';
 import { WorkflowRunView } from '../components/workflow/WorkflowRunView';
+import { ReportsTab } from '../components/reports/ReportsTab';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -302,6 +303,11 @@ export const ProjectDetail: React.FC = () => {
       key: 'artifacts',
       label: 'Artifacts',
       children: <ArtifactsTab projectId={project.id} projectName={project.name} liveGates={liveGates} liveWarnings={liveWarnings} />,
+    },
+    {
+      key: 'reports',
+      label: 'Reports',
+      children: <ReportsTab projectId={project.id} />,
     },
     {
       key: 'kanban',

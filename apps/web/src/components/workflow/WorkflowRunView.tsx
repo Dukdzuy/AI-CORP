@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Breadcrumb, Button, Empty, List, Popconfirm, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
 import { ApartmentOutlined, CaretDownOutlined, CaretRightOutlined, HistoryOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { useResumeRun, useRollbackRun, useRunSnapshots, useWorkflowRun } from '../../lib/api/hooks/workflows';
+import { Permission } from '@ai-corp/shared-types';
+import { usePermission } from '../../lib/permissions';
 import { ganttLayout, overlappingKeys, pathTo, timelineRows, WorkflowRunTree } from './runTree';
 
 const { Text } = Typography;
@@ -91,10 +93,12 @@ const RunTimeline: React.FC<{ tree: WorkflowRunTree; onOpenRun: (runId: string) 
 
 /** Snapshots taken before each node, with rollback (Task 17) */
 const SnapshotPanel: React.FC<{ runId: string; projectId: string; status: string }> = ({ runId, projectId, status }) => {
+  // Phase 5: controlling a run needs workflow:control (and owning the project, checked by the API)
+  const canControl = usePermission(Permission.WORKFLOW_CONTROL);
   const { data: snapshots = [], isLoading } = useRunSnapshots(runId);
   const rollback = useRollbackRun();
   const resume = useResumeRun();
-  const canRollback = status === 'paused' || status === 'failed';
+  const canRollback = canControl && (status === 'paused' || status === 'failed');
 
   const doRollback = async (snapshotId: string) => {
     try {
@@ -123,7 +127,7 @@ const SnapshotPanel: React.FC<{ runId: string; projectId: string; status: string
             {canRollback ? 'roll back to the state before a node ran' : 'rollback is available when the run is paused or failed'}
           </Text>
         </Space>
-        {status === 'paused' && (
+        {canControl && status === 'paused' && (
           <Button size="small" icon={<PlayCircleOutlined />} loading={resume.isPending} onClick={doResume}>
             Resume
           </Button>

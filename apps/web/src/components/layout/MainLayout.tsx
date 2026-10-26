@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Menu, Badge, Typography, Space, Button, Avatar } from 'antd';
+import { Layout, Menu, Badge, Typography, Space, Button, Avatar, Tag } from 'antd';
 import {
   DashboardOutlined,
   TeamOutlined,
@@ -8,7 +8,12 @@ import {
   SettingOutlined,
   LogoutOutlined,
   RobotOutlined,
+  AuditOutlined,
+  KeyOutlined,
+  UsergroupAddOutlined,
 } from '@ant-design/icons';
+import { Permission } from '@ai-corp/shared-types';
+import { hasPermission, ROLE_LABELS } from '../../lib/permissions';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useWebsocketStore } from '../../stores/websocketStore';
 import { useAuthStore } from '../../stores/authStore';
@@ -28,7 +33,7 @@ export const MainLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { status } = useWebsocketStore();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
 
   const handleLogout = () => {
     logout();
@@ -43,7 +48,7 @@ export const MainLayout: React.FC = () => {
     ? '/admin'
     : location.pathname.startsWith('/agents')
     ? '/agents'
-    : '/';
+    : ['/users', '/audit', '/integrations'].find(p => location.pathname.startsWith(p)) ?? '/';
 
   const menuItems = [
     {
@@ -70,7 +75,26 @@ export const MainLayout: React.FC = () => {
       label: 'Agent Models',
       onClick: () => navigate('/agents'),
     },
-  ];
+    // Phase 5: shown only to roles that may use them
+    hasPermission(user, Permission.INTEGRATION_MANAGE) && {
+      key: '/integrations',
+      icon: <KeyOutlined />,
+      label: 'Integrations',
+      onClick: () => navigate('/integrations'),
+    },
+    hasPermission(user, Permission.USER_MANAGE) && {
+      key: '/users',
+      icon: <UsergroupAddOutlined />,
+      label: 'Users & Roles',
+      onClick: () => navigate('/users'),
+    },
+    hasPermission(user, Permission.AUDIT_VIEW) && {
+      key: '/audit',
+      icon: <AuditOutlined />,
+      label: 'Audit Log',
+      onClick: () => navigate('/audit'),
+    },
+  ].filter(Boolean) as Array<{ key: string; icon: React.ReactNode; label: string; onClick: () => void }>;
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -114,6 +138,12 @@ export const MainLayout: React.FC = () => {
 
           <ApprovalNotification />
 
+          {user && (
+            <Space size={6}>
+              <Text style={{ color: '#ccc', fontSize: 13 }}>{user.name}</Text>
+              <Tag color={ROLE_LABELS[user.role]?.color}>{ROLE_LABELS[user.role]?.label ?? user.role}</Tag>
+            </Space>
+          )}
           <Avatar
             icon={<UserOutlined />}
             style={{ background: '#1677ff', cursor: 'pointer' }}
