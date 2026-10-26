@@ -38,6 +38,22 @@ export class PrismaTaskRepository implements ITaskRepository {
     }
   }
 
+  async findAll(): Promise<TaskDTO[]> {
+    try {
+      const tasks = await this.prisma.task.findMany({
+        orderBy: { createdAt: 'desc' },
+      });
+      return tasks.map((t) => this.mapToDTO(t));
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('findAll', 'Task', error as Error);
+    }
+  }
+
   async findByProjectId(projectId: string): Promise<TaskDTO[]> {
     try {
       const tasks = await this.prisma.task.findMany({
@@ -76,6 +92,7 @@ export class PrismaTaskRepository implements ITaskRepository {
     try {
       const task = await this.prisma.task.create({
         data: {
+          id: data.id,
           projectId: data.projectId,
           milestoneId: data.milestoneId,
           title: data.title,

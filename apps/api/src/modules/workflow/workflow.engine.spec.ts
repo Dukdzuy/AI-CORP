@@ -3,6 +3,8 @@ import { WorkflowEngine } from './workflow.engine';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { AgentOrchestratorService } from '../orchestrator/agent-orchestrator.service';
+import { EventBus } from '../../domain/events/EventBus';
+import { MILESTONE_REPOSITORY, TASK_REPOSITORY } from '../../domain/repositories';
 import { WorkflowDefinition, WorkflowNode, WorkflowContext, AgentRole } from '@ai-corp/shared-types';
 
 // Mock BullMQ to prevent Redis connections during tests
@@ -106,6 +108,9 @@ describe('WorkflowEngine - Node Execution Logic', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: AppWebSocketGateway, useValue: mockWebSocketGateway },
         { provide: AgentOrchestratorService, useValue: mockOrchestrator },
+        { provide: EventBus, useValue: { publish: jest.fn().mockResolvedValue(undefined) } },
+        { provide: MILESTONE_REPOSITORY, useValue: { create: jest.fn() } },
+        { provide: TASK_REPOSITORY, useValue: { create: jest.fn() } },
       ],
     }).compile();
 

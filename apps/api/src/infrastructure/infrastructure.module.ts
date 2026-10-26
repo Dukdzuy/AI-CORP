@@ -8,6 +8,14 @@ import {
   PrismaWorkflowRepository,
   PrismaApprovalRepository,
 } from './persistence';
+import {
+  PROJECT_REPOSITORY,
+  TASK_REPOSITORY,
+  MILESTONE_REPOSITORY,
+  AGENT_REPOSITORY,
+  WORKFLOW_REPOSITORY,
+  APPROVAL_REPOSITORY,
+} from '../domain/repositories';
 
 /**
  * Infrastructure Module - Dependency Injection Container
@@ -15,13 +23,15 @@ import {
  * Follows Dependency Inversion Principle (SOLID)
  */
 
-// Injection tokens for repositories
-export const PROJECT_REPOSITORY = Symbol('IProjectRepository');
-export const TASK_REPOSITORY = Symbol('ITaskRepository');
-export const MILESTONE_REPOSITORY = Symbol('IMilestoneRepository');
-export const AGENT_REPOSITORY = Symbol('IAgentRepository');
-export const WORKFLOW_REPOSITORY = Symbol('IWorkflowRepository');
-export const APPROVAL_REPOSITORY = Symbol('IApprovalRepository');
+// Injection tokens are owned by the domain layer; re-exported here for existing imports
+export {
+  PROJECT_REPOSITORY,
+  TASK_REPOSITORY,
+  MILESTONE_REPOSITORY,
+  AGENT_REPOSITORY,
+  WORKFLOW_REPOSITORY,
+  APPROVAL_REPOSITORY,
+};
 
 @Module({
   imports: [PrismaModule],

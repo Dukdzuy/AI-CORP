@@ -10,4 +10,4 @@ export * from './IAgent.interface';
 export * from './IAgentObserver.interface';
 export * from './IThinkingStrategy.interface';
 export * from './IActionStrategy.interface';
-export * from './IAgentRepository.interface';
+// IAgentRepository lives in domain/repositories (single persistence contract for agents)

@@ -42,7 +42,7 @@ export class PrismaMilestoneRepository implements IMilestoneRepository {
     try {
       const milestones = await this.prisma.milestone.findMany({
         where: { projectId },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'asc' }, // plan order
       });
       return milestones.map((m) => this.mapToDTO(m));
     } catch (error) {
@@ -76,6 +76,7 @@ export class PrismaMilestoneRepository implements IMilestoneRepository {
     try {
       const milestone = await this.prisma.milestone.create({
         data: {
+          id: data.id,
           projectId: data.projectId,
           name: data.name,
           description: data.description,

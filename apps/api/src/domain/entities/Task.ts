@@ -235,6 +235,21 @@ export class Task {
     // DomainEvents.raise(new TaskStatusChangedEvent(this.id, oldStatus.toString(), this.status.toString()));
   }
 
+  /**
+   * Generic Kanban move (e.g. a board drag-and-drop to a target column).
+   * Delegates to the intention-revealing transition so every rule above still applies.
+   */
+  transitionTo(target: TaskStatus, reason: string = 'Changes requested'): void {
+    if (this.status.equals(target)) return;
+
+    if (target.equals(TaskStatus.IN_PROGRESS)) {
+      return this.status.requiresReview() ? this.reject(reason) : this.startProgress();
+    }
+    if (target.equals(TaskStatus.REVIEW)) return this.submitForReview();
+    if (target.equals(TaskStatus.TODO)) return this.moveBackToBacklog();
+    return this.status.requiresReview() ? this.approve() : this.complete();
+  }
+
   // Business logic - cost tracking
   accrueCost(cost: Money): void {
     if (cost.lessThan(Money.zero())) {

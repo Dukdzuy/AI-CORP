@@ -49,13 +49,13 @@ Requirements are organized into 7 subsystems:
 
 | Req ID | Requirement Name | Description | Use Case IDs | Design Artifacts | Implementation Files | Test IDs | Status |
 |--------|------------------|-------------|--------------|------------------|---------------------|----------|--------|
-| FR-PROJ-001 | Create Project | Board Member shall create projects with name, description, goal, budget | UC-002 | Class: ProjectsService (create method) | apps/api/src/modules/projects/projects.service.ts | TEST-PROJ-001, TEST-PROJ-002 | Implemented |
+| FR-PROJ-001 | Create Project | Board Member shall create projects with name, description, goal, budget | UC-002 | Class: ProjectApplicationService (createProject) → Project.create | apps/api/src/modules/projects/project-application.service.ts, apps/api/src/domain/entities/Project.ts | TEST-PROJ-001, TEST-PROJ-002 | Implemented |
 | FR-PROJ-002 | Project Validation | System shall validate project name (3-200 chars), description (<2000 chars), budget (≥0) | UC-002 | DTO: CreateProjectDto with class-validator decorators | apps/api/src/modules/projects/dto/create-project.dto.ts | TEST-PROJ-003 | Implemented |
 | FR-PROJ-003 | Project Uniqueness | System shall enforce unique project names per user | UC-002 | Database unique constraint on (createdById, name) | apps/api/prisma/schema.prisma | TEST-PROJ-004 | Planned |
 | FR-PROJ-004 | Milestone Management | CEO Agent shall create 2-4 high-level milestones per project | UC-016 | Class: CeoAgent (act method) | apps/api/src/modules/agents/ceo.agent.ts | TEST-AGENT-CEO-001 | Implemented |
 | FR-PROJ-005 | Task Breakdown | PM Agent shall break milestones into 5-20 granular tasks | UC-011 | Class: PmAgent (act method) | apps/api/src/modules/agents/pm.agent.ts | TEST-AGENT-PM-001 | Implemented |
-| FR-PROJ-006 | Kanban Status Management | System shall enforce Kanban transitions: todo→in_progress→review→done | UC-020 | Class: TasksService (updateStatus method) | apps/api/src/modules/projects/tasks.service.ts | TEST-PROJ-005, TEST-PROJ-006 | Implemented |
-| FR-PROJ-007 | Budget Tracking | System shall track project.costAccrued and prevent exceeding budget | UC-002, UC-008, UC-011 | Class: ProjectsService (accrueCost method) | apps/api/src/modules/projects/projects.service.ts | TEST-PROJ-007 | Implemented |
+| FR-PROJ-006 | Kanban Status Management | System shall enforce Kanban transitions: todo→in_progress→review→done | UC-020 | Class: TaskApplicationService (updateTask) → Task.transitionTo / TaskStatus | apps/api/src/modules/projects/task-application.service.ts, apps/api/src/domain/entities/Task.ts | TEST-PROJ-005, TEST-PROJ-006 | Implemented |
+| FR-PROJ-007 | Budget Tracking | System shall track project.costAccrued and prevent exceeding budget | UC-002, UC-008, UC-011 | Class: ProjectApplicationService (accrueCost) → Project.accrueCost | apps/api/src/modules/projects/project-application.service.ts, apps/api/src/domain/entities/Project.ts | TEST-PROJ-007 | Implemented |
 
 ### 3.3 Agent Framework Subsystem
 
@@ -159,7 +159,7 @@ Requirements are organized into 7 subsystems:
 
 | Req ID | Requirement Name | Description | Use Case IDs | Design Decisions | Implementation | Test IDs | Status |
 |--------|------------------|-------------|--------------|------------------|----------------|----------|--------|
-| NFR-MAINT-001 | Single Responsibility Principle | Each class shall have one reason to change | All | Separate services: AuthService, ProjectsService, WorkflowEngine, MemoryService | All service classes | CODE-REVIEW-001 | Implemented |
+| NFR-MAINT-001 | Single Responsibility Principle | Each class shall have one reason to change | All | Separate services: AuthService, ProjectApplicationService, WorkflowEngine, MemoryService | All service classes | CODE-REVIEW-001 | Implemented |
 | NFR-MAINT-002 | Open/Closed Principle | Classes shall be open for extension, closed for modification | UC-009-016 | BaseAgent abstract class, agents extend without modifying base | BaseAgent + CeoAgent, PmAgent, etc. | CODE-REVIEW-002 | Implemented |
 | NFR-MAINT-003 | Liskov Substitution Principle | Derived classes must be substitutable for base class | UC-004 | All agents implement IAgent interface, WorkflowEngine uses IAgent | IAgent interface, BaseAgent implements | CODE-REVIEW-003 | Implemented |
 | NFR-MAINT-004 | Interface Segregation Principle | Clients shall not depend on interfaces they don't use | All | Separate interfaces: IAgent, IThinkingStrategy, IActionStrategy, IAgentObserver | domain/ interfaces | CODE-REVIEW-004 | Implemented |
@@ -218,7 +218,7 @@ Requirements are organized into 7 subsystems:
 | Requirement Subsystem | Architectural Layer | Modules | Design Rationale |
 |-----------------------|---------------------|---------|------------------|
 | Authentication & Authorization | Infrastructure Layer | AuthModule, JwtStrategy | Separates security concerns from business logic |
-| Project Management | Application Layer | ProjectsModule, TasksService, MilestonesService | Orchestrates project CRUD and business rules |
+| Project Management | Application Layer | ProjectsModule, ProjectApplicationService, TaskApplicationService, MilestoneApplicationService | Orchestrates project CRUD and business rules |
 | Agent Framework | Domain Layer + Application Layer | AgentsModule, BaseAgent, domain/agent-state-machine.ts | Core business logic in domain, orchestration in application |
 | Workflow Orchestration | Application Layer + Infrastructure Layer | WorkflowModule, BullMQ integration | Workflow engine coordinates agents, BullMQ handles async execution |
 | Approval System | Application Layer | ApprovalsModule, ApprovalService | Human-in-the-loop coordination |

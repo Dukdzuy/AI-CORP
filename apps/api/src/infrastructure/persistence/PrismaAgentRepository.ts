@@ -140,6 +140,20 @@ export class PrismaAgentRepository implements IAgentRepository {
     }
   }
 
+  async exists(id: string): Promise<boolean> {
+    try {
+      const count = await this.prisma.agent.count({ where: { id } });
+      return count > 0;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2021' || error.code === 'P2024') {
+          throw new DatabaseConnectionException(error);
+        }
+      }
+      throw new RepositoryException('exists', 'Agent', error as Error);
+    }
+  }
+
   private mapToDTO(agent: any): AgentDTO {
     return {
       id: agent.id,
