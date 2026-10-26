@@ -1,0 +1,12 @@
+import { {{className}} } from '../entities/{{className}}';
+
+/**
+ * Repository port for the {{className}} aggregate (domain layer).
+ * Implemented in src/infrastructure/persistence; the application layer depends only on this interface.
+ */
+export interface {{repositoryInterface}} {
+  findById(id: {{idTsType}}): Promise<{{className}} | null>;
+  findAll(): Promise<{{className}}[]>;
+  save(entity: {{className}}): Promise<void>;
+  delete(id: {{idTsType}}): Promise<void>;
+}

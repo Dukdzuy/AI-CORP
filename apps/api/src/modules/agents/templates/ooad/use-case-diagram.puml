@@ -1,0 +1,20 @@
+@startuml
+title Use Case Diagram: {{projectName}}
+left to right direction
+skinparam packageStyle rectangle
+
+{{#each actors}}
+actor "{{name}}" as {{id}}
+{{/each}}
+
+rectangle "{{projectName}}" {
+{{#each useCases}}
+  usecase "{{id}}: {{name}}" as {{alias}}
+{{/each}}
+}
+
+{{#each useCases}}
+{{actorId}} --> {{alias}}
+{{/each}}
+
+@enduml

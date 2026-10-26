@@ -5,17 +5,20 @@ import { MemoryService } from '../../memory/memory.service';
 import { LLMProviderFactory } from '../../llm/llm-provider.factory';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
-import { TemplateService } from '../services/template.service';
+import { OOADArtifactService } from '../services/ooad-artifact.service';
+import { defaultSequenceDiagram } from '../services/ooad-view-model';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { SandboxExecutor } from '../../tools/sandbox.executor';
 import {
   DomainModelSchema,
   PatternsSchema,
   ArchitectureSchema,
+  SequenceDiagramSchema,
   DomainModel,
   Patterns,
   Architecture,
-  UseCaseData
+  SequenceDiagram,
+  UseCaseData,
+  UseCaseItem
 } from '../schemas/ooad.schema';
 import { OOADSchemaValidationError } from '../errors/OOADSchemaValidationError';
 
@@ -27,9 +30,8 @@ export class ArchitectActionStrategy implements IActionStrategy {
     private readonly memoryService: MemoryService,
     private readonly llmFactory: LLMProviderFactory,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly templateService: TemplateService,
-    private readonly prisma: PrismaService,
-    private readonly sandboxExecutor: SandboxExecutor
+    private readonly ooadArtifacts: OOADArtifactService,
+    private readonly prisma: PrismaService
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -76,48 +78,24 @@ export class ArchitectActionStrategy implements IActionStrategy {
 
     // Call 4-6: Sequence Diagrams for top 3 high-priority use cases
     const highPriorityUCs = useCases.filter(uc => uc.priority === 'High').slice(0, 3);
-    const sequenceDiagrams: { ucId: string; diagram: string }[] = [];
+    const sequences: { useCase: UseCaseItem; diagram: SequenceDiagram }[] = [];
 
     for (const uc of highPriorityUCs) {
       const diagram = await this.generateSequenceDiagram(provider, actualModelConfig.model, uc, domainModel);
-      sequenceDiagrams.push({ ucId: uc.id, diagram });
+      sequences.push({ useCase: uc, diagram });
     }
 
-    // Generate artifacts
-    const domainModelPuml = this.generateDomainModelPuml(domainModel);
-    const architectureMd = await this.templateService.render('architecture-patterns-template.md', {
-      architecture,
-      patterns: patterns.patterns
-    });
+    // Render design docs and the layered code skeleton from the OOAD templates
+    const projectName = context.projectContext?.name;
+    const designInput = { projectName, useCases, domainModel, architecture, patterns: patterns.patterns };
+    const designFiles = await this.ooadArtifacts.renderDesignArtifacts({ ...designInput, sequences });
+    const skeletonFiles = await this.ooadArtifacts.renderSkeleton(designInput);
+    const architectureMd = designFiles.find(f => f.path === 'docs/architecture-patterns.md')?.content || '';
 
-    // Write files to sandbox
-    const docsPath = `projects/${projectId}/docs`;
-    const filesWritten: string[] = [];
-
+    let filesWritten: string[];
     try {
-      await this.sandboxExecutor.executeInSandbox('custom_command', `mkdir -p ${docsPath}`, {
-        maxMemoryMB: 64,
-        maxCPUPercent: 10,
-        maxDiskMB: 10,
-        timeout: 5000
-      });
-
-      // Write domain-model.puml
-      await this.writeFile(`${docsPath}/domain-model.puml`, domainModelPuml);
-      filesWritten.push(`${docsPath}/domain-model.puml`);
-
-      // Write architecture-patterns.md
-      await this.writeFile(`${docsPath}/architecture-patterns.md`, architectureMd);
-      filesWritten.push(`${docsPath}/architecture-patterns.md`);
-
-      // Write sequence diagrams
-      for (const seq of sequenceDiagrams) {
-        const filename = `${docsPath}/sequence-${seq.ucId}.puml`;
-        await this.writeFile(filename, seq.diagram);
-        filesWritten.push(filename);
-      }
-
-      this.logger.log(`Architect wrote OOAD artifacts to ${docsPath}`);
+      filesWritten = await this.ooadArtifacts.writeFiles(projectId, [...designFiles, ...skeletonFiles]);
+      this.logger.log(`Architect wrote OOAD artifacts and code skeleton for project ${projectId}`);
     } catch (err: any) {
       this.logger.error(`Failed to write OOAD artifacts: ${err.message}`);
       throw new Error(`Architect failed to write artifacts: ${err.message}`);
@@ -128,7 +106,9 @@ export class ArchitectActionStrategy implements IActionStrategy {
       ...ooadMetadata,
       domainModel,
       patterns: patterns.patterns,
-      architecture
+      architecture,
+      sequenceDiagrams: sequences.map(seq => ({ ucId: seq.useCase.id, ...seq.diagram })),
+      skeletonFiles: skeletonFiles.map(f => f.path)
     }));
     
     await this.prisma.project.update({
@@ -172,6 +152,7 @@ export class ArchitectActionStrategy implements IActionStrategy {
         domainModel,
         patterns: patterns.patterns,
         architecture,
+        skeletonFiles: skeletonFiles.map(f => f.path),
         filesWritten
       },
       errors: []
@@ -340,101 +321,56 @@ Output ONLY valid JSON.`;
     }
   }
 
-  private async generateSequenceDiagram(provider: any, model: string, useCase: any, domainModel: DomainModel): Promise<string> {
+  /**
+   * Ask the LLM for a structured sequence diagram (validated by SequenceDiagramSchema and
+   * rendered through sequence-diagram.puml). Falls back to the layered default
+   * Actor → Controller → Service → Repository so one weak answer can't fail the design.
+   */
+  private async generateSequenceDiagram(provider: any, model: string, useCase: UseCaseItem, domainModel: DomainModel): Promise<SequenceDiagram> {
     const entities = domainModel.entities.map(e => e.name).join(', ');
-    const prompt = `Generate a PlantUML sequence diagram for this use case.
+    const prompt = `Design the sequence of interactions for this use case in a layered architecture.
 
 USE CASE: ${useCase.name} (${useCase.id})
+ACTOR: ${useCase.actor}
 MAIN FLOW:
 ${useCase.mainFlow.map((step: string, idx: number) => `${idx + 1}. ${step}`).join('\n')}
 
-ENTITIES: ${entities}
+DOMAIN ENTITIES: ${entities}
 
-Generate a PlantUML sequence diagram showing interactions between:
-- Actor (${useCase.actor})
-- System components
-- Domain entities (${entities})
+Use participants from these layers, in this order:
+- the actor (kind "actor")
+- a controller, e.g. "OrderController" (kind "boundary")
+- an application service, e.g. "OrderService" (kind "control")
+- domain entities from the list above (kind "entity")
+- repository interfaces, e.g. "IOrderRepository" (kind "database")
 
-Output valid PlantUML syntax starting with @startuml and ending with @enduml.
-Include participant declarations and message arrows.`;
+Generate a JSON object:
+{
+  "participants": [{"name": "Customer", "kind": "actor"}, {"name": "OrderController", "kind": "boundary"}],
+  "messages": [
+    {"from": "Customer", "to": "OrderController", "label": "placeOrder(items)", "kind": "sync"},
+    {"from": "OrderController", "to": "Customer", "label": "orderId", "kind": "reply"}
+  ]
+}
 
-    const result = await provider.chat({
-      messages: [
-        { role: 'system', content: 'You are a UML expert. Generate PlantUML sequence diagrams.' },
-        { role: 'user', content: prompt }
-      ],
-      model,
-      maxTokens: 1500
-    });
+Requirements: at least 2 participants and 3 messages; kind of a message is "sync", "async" or "reply".
+Output ONLY valid JSON.`;
 
-    let content = result.content || '';
-    
-    // Extract PlantUML if in code block
-    const pumlMatch = content.match(/```(?:plantuml)?\s*([\s\S]*?)\s*```/);
-    if (pumlMatch) {
-      content = pumlMatch[1];
-    }
-
-    // Ensure it starts and ends properly
-    if (!content.includes('@startuml')) {
-      content = '@startuml\n' + content;
-    }
-    if (!content.includes('@enduml')) {
-      content = content + '\n@enduml';
-    }
-
-    return content;
-  }
-
-  private generateDomainModelPuml(model: DomainModel): string {
-    let puml = '@startuml\ntitle Domain Model\n\n';
-
-    // Entities
-    model.entities.forEach(entity => {
-      puml += `class ${entity.name} <<Entity>> {\n`;
-      puml += `  - id: ${entity.idType}\n`;
-      entity.attributes.forEach(attr => {
-        puml += `  - ${attr.name}: ${attr.type}\n`;
+    try {
+      const result = await provider.chat({
+        messages: [
+          { role: 'system', content: 'You are a UML expert. Generate sequence diagrams as JSON.' },
+          { role: 'user', content: prompt }
+        ],
+        model,
+        maxTokens: 1500,
+        response_format: { type: 'json_object' } as any
       });
-      if (entity.methods.length > 0) {
-        puml += '  --\n';
-        entity.methods.forEach(method => {
-          puml += `  + ${method.name}(${method.params}): ${method.returnType}\n`;
-        });
-      }
-      puml += '}\n\n';
-    });
-
-    // Value Objects
-    model.valueObjects.forEach(vo => {
-      puml += `class ${vo.name} <<Value Object>> {\n`;
-      vo.attributes.forEach(attr => {
-        puml += `  - ${attr.name}: ${attr.type}\n`;
-      });
-      puml += '}\n\n';
-    });
-
-    // Relationships
-    model.relationships.forEach(rel => {
-      puml += `${rel.from} ${rel.type} ${rel.to}`;
-      if (rel.label) {
-        puml += ` : ${rel.label}`;
-      }
-      puml += '\n';
-    });
-
-    puml += '@enduml';
-    return puml;
-  }
-
-  private async writeFile(filepath: string, content: string): Promise<void> {
-    const writeCmd = `cat > "${filepath}" << 'HEREDOC_EOF'\n${content}\nHEREDOC_EOF`;
-    await this.sandboxExecutor.executeInSandbox('custom_command', writeCmd, {
-      maxMemoryMB: 128,
-      maxCPUPercent: 20,
-      maxDiskMB: 50,
-      timeout: 10000
-    });
+      return SequenceDiagramSchema.parse(this.extractJSON(result.content || ''));
+    } catch (error: any) {
+      this.logger.warn(`Sequence diagram for ${useCase.id} invalid, using layered default: ${error.message}`);
+      return defaultSequenceDiagram(useCase, domainModel);
+    }
   }
 
   private extractJSON(content: string): any {

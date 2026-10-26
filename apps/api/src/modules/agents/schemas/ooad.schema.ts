@@ -92,6 +92,24 @@ export const ArchitectureSchema = z.object({
   layers: z.array(ArchitectureLayerSchema).min(3),
 });
 
+// Sequence Diagram Schema (one per high-priority use case)
+export const SequenceParticipantSchema = z.object({
+  name: z.string().min(1),
+  kind: z.enum(['actor', 'boundary', 'control', 'entity', 'database', 'participant']).default('participant'),
+});
+
+export const SequenceMessageSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+  label: z.string().min(1),
+  kind: z.enum(['sync', 'async', 'reply']).default('sync'),
+});
+
+export const SequenceDiagramSchema = z.object({
+  participants: z.array(SequenceParticipantSchema).min(2, 'At least 2 participants required'),
+  messages: z.array(SequenceMessageSchema).min(3, 'At least 3 messages required'),
+});
+
 // TypeScript types
 export type UseCaseItem = z.infer<typeof UseCaseItemSchema>;
 export type UseCaseData = z.infer<typeof UseCaseDataSchema>;
@@ -104,3 +122,6 @@ export type PatternItem = z.infer<typeof PatternItemSchema>;
 export type Patterns = z.infer<typeof PatternsSchema>;
 export type ArchitectureLayer = z.infer<typeof ArchitectureLayerSchema>;
 export type Architecture = z.infer<typeof ArchitectureSchema>;
+export type SequenceParticipant = z.infer<typeof SequenceParticipantSchema>;
+export type SequenceMessage = z.infer<typeof SequenceMessageSchema>;
+export type SequenceDiagram = z.infer<typeof SequenceDiagramSchema>;

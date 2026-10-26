@@ -137,31 +137,44 @@ VERDICT: FAIL`;
     const projectPath = `projects/${projectId}`;
     const docsPath = `${projectPath}/docs`;
 
-    // Read use cases from use-cases.md
     const readFileCommand = (filename: string) => `cat ${docsPath}/${filename} 2>/dev/null || echo "FILE_NOT_FOUND"`;
-    const useCasesResult = await this.sandboxExecutor.executeInSandbox(
-      'custom_command',
-      readFileCommand('use-cases.md'),
-      { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
-    );
 
-    if (useCasesResult.output.includes('FILE_NOT_FOUND')) {
-      throw new Error('use-cases.md not found - cannot generate traceability matrix');
+    // Prefer the persisted OOAD metadata (written by BA/Architect); fall back to the docs files
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ooadMetadata: true }
+    });
+    const ooadMetadata = (project?.ooadMetadata as any) || {};
+
+    let useCases: Array<{ id: string; name: string; priority?: string }>;
+    if (ooadMetadata.useCases?.length) {
+      useCases = ooadMetadata.useCases.map((uc: any) => ({ id: uc.id, name: uc.name, priority: uc.priority }));
+    } else {
+      const useCasesResult = await this.sandboxExecutor.executeInSandbox(
+        'custom_command',
+        readFileCommand('use-cases.md'),
+        { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
+      );
+
+      if (useCasesResult.output.includes('FILE_NOT_FOUND')) {
+        throw new Error('use-cases.md not found - cannot generate traceability matrix');
+      }
+      useCases = this.parseUseCases(useCasesResult.output);
     }
 
-    // Parse use cases
-    const useCases = this.parseUseCases(useCasesResult.output);
-
-    // Read domain model
-    const domainModelResult = await this.sandboxExecutor.executeInSandbox(
-      'custom_command',
-      readFileCommand('domain-model.puml'),
-      { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
-    );
-
-    const entities = domainModelResult.output.includes('FILE_NOT_FOUND')
-      ? []
-      : this.parseEntitiesFromPuml(domainModelResult.output);
+    let entities: string[];
+    if (ooadMetadata.domainModel?.entities?.length) {
+      entities = ooadMetadata.domainModel.entities.map((e: any) => e.name);
+    } else {
+      const domainModelResult = await this.sandboxExecutor.executeInSandbox(
+        'custom_command',
+        readFileCommand('domain-model.puml'),
+        { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
+      );
+      entities = domainModelResult.output.includes('FILE_NOT_FOUND')
+        ? []
+        : this.parseEntitiesFromPuml(domainModelResult.output);
+    }
 
     // Find test files
     const findTestsCommand = `find ${projectPath}/src -name '*.test.ts' -o -name '*.spec.ts' 2>/dev/null || echo ""`;

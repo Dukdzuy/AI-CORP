@@ -32,6 +32,30 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
       },
     },
     {
+      id: 'analyze',
+      type: 'agent_task',
+      agentRole: 'BA' as AgentRole,
+      taskType: 'generateUseCases',
+      maxRetries: 3,
+      timeout: 180000,
+      metadata: {
+        promptTemplate: 'Analyze the requirements and produce structured use cases with a use case diagram.',
+        description: 'BA writes use cases (OOAD analysis)',
+      },
+    },
+    {
+      id: 'design',
+      type: 'agent_task',
+      agentRole: 'ARCHITECT' as AgentRole,
+      taskType: 'designArchitecture',
+      maxRetries: 3,
+      timeout: 300000,
+      metadata: {
+        promptTemplate: 'Design the domain model, class and sequence diagrams, choose design patterns and generate the layered code skeleton.',
+        description: 'Architect designs the system and generates the code skeleton (OOAD design)',
+      },
+    },
+    {
       id: 'develop',
       type: 'agent_task',
       agentRole: 'DEV' as AgentRole,
@@ -101,7 +125,9 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
   ],
   edges: [
     { from: 'start', to: 'breakdown' },
-    { from: 'breakdown', to: 'develop' },
+    { from: 'breakdown', to: 'analyze' },
+    { from: 'analyze', to: 'design' },
+    { from: 'design', to: 'develop' },
     { from: 'develop', to: 'review' },
     { from: 'review', to: 'qa_condition' },
     { from: 'qa_condition', to: 'develop', condition: 'onFail' },

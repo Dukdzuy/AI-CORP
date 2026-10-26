@@ -1,0 +1,27 @@
+import { {{className}} } from '../../domain/entities/{{className}}';
+import { {{repositoryInterface}} } from '../../domain/repositories/{{repositoryInterface}}';
+
+/**
+ * {{serviceName}}: application service (application layer).
+ * One method per use case; orchestrates domain objects through the repository port.
+ */
+export class {{serviceName}} {
+  constructor(private readonly repository: {{repositoryInterface}}) {}
+
+  async getById(id: {{idTsType}}): Promise<{{className}}> {
+    const {{varName}} = await this.repository.findById(id);
+    if (!{{varName}}) {
+      throw new Error(`{{className}} ${id} not found`);
+    }
+    return {{varName}};
+  }
+
+{{#each useCases}}
+  // {{id}}: {{name}}
+  async {{methodName}}(input: unknown): Promise<unknown> {
+    // TODO(Dev): implement the main flow of {{id}} (see docs/use-cases.md and docs/sequence-{{id}}.puml)
+    throw new Error('Not implemented: {{id}} {{name}}');
+  }
+
+{{/each}}
+}

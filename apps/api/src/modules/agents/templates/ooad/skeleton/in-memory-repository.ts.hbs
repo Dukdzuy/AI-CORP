@@ -1,0 +1,26 @@
+import { {{className}} } from '../../domain/entities/{{className}}';
+import { {{repositoryInterface}} } from '../../domain/repositories/{{repositoryInterface}}';
+
+/**
+ * In-memory adapter for {{repositoryInterface}} (infrastructure layer).
+ * Swap for a database-backed implementation without touching domain or application code.
+ */
+export class {{repositoryImpl}} implements {{repositoryInterface}} {
+  private readonly items = new Map<{{idTsType}}, {{className}}>();
+
+  async findById(id: {{idTsType}}): Promise<{{className}} | null> {
+    return this.items.get(id) ?? null;
+  }
+
+  async findAll(): Promise<{{className}}[]> {
+    return [...this.items.values()];
+  }
+
+  async save(entity: {{className}}): Promise<void> {
+    this.items.set(entity.id, entity);
+  }
+
+  async delete(id: {{idTsType}}): Promise<void> {
+    this.items.delete(id);
+  }
+}

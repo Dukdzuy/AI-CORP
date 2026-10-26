@@ -1,0 +1,21 @@
+{{#each imports}}
+import { {{name}} } from '{{from}}';
+{{/each}}
+
+/**
+ * {{className}}: value object (domain layer).
+ * Immutable and compared by value; it has no identity of its own.
+ */
+export class {{className}} {
+  constructor(
+{{#each attributes}}
+    public readonly {{name}}: {{tsType}},
+{{/each}}
+  ) {
+    Object.freeze(this);
+  }
+
+  equals(other: {{className}}): boolean {
+    return JSON.stringify(this) === JSON.stringify(other);
+  }
+}
