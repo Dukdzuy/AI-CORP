@@ -24,6 +24,9 @@ export interface AgentContext {
   
   /** Task description */
   task: string;
+
+  /** Workflow node task type (e.g. planMilestones, complete_project) */
+  taskType?: string;
   
   /** Project-level context data */
   projectContext: {
@@ -52,6 +55,8 @@ export interface AgentContext {
   milestone?: string;
   code?: string;
   architecture?: string;
+  /** Traceability report written by QC, read by QA */
+  qcReport?: string;
 }
 
 /**

@@ -244,7 +244,9 @@ describe('WorkflowEngine - Node Execution Logic', () => {
       updatedAt: new Date(),
     };
 
-    const runAgent = async (agentRole: AgentRole) => {
+    const reviewTask = { ...inProgressTask, id: 'task-2', status: 'review' };
+
+    const runAgent = async (agentRole: AgentRole, tasksByStatus: Record<string, any[]>, agentResult: any = { success: true }) => {
       const agentNode: WorkflowNode = { id: 'agent-node-1', type: 'agent_task', agentRole };
       engine.createWorkflow({
         id: 'def-789',
@@ -255,27 +257,48 @@ describe('WorkflowEngine - Node Execution Logic', () => {
         startNode: 'agent-node-1',
         endNode: 'agent-node-1',
       });
-      orchestrator.invokeAgent.mockResolvedValue({ success: true });
-      taskRepository.findByStatus.mockResolvedValue([inProgressTask]);
+      orchestrator.invokeAgent.mockResolvedValue(agentResult);
+      taskRepository.findByStatus.mockImplementation(async (_projectId: string, status: string) => tasksByStatus[status] || []);
       return (engine as any).executeNode(agentNode, mockWorkflowRun);
     };
 
-    it('moves the latest in_progress task to review when the DEV agent finishes', async () => {
-      await runAgent(AgentRole.DEV);
+    it('moves open tasks to review when the DEV agent finishes', async () => {
+      const todoTask = { ...inProgressTask, id: 'task-3', status: 'todo' };
+      await runAgent(AgentRole.DEV, { in_progress: [inProgressTask], todo: [todoTask] });
 
       expect(taskRepository.findByStatus).toHaveBeenCalledWith('project-456', 'in_progress');
       expect(taskRepository.update).toHaveBeenCalledWith('task-1', { status: 'review' });
+      expect(taskRepository.update).toHaveBeenCalledWith('task-3', { status: 'review' });
       expect(websocketGateway.sendToProject).toHaveBeenCalledWith(
         'project-456',
         expect.objectContaining({ type: 'task:updated', data: expect.objectContaining({ status: 'review' }) })
       );
     });
 
+    it('moves review tasks to done when QA approves', async () => {
+      await runAgent(AgentRole.QA, { review: [reviewTask] }, {
+        action: { success: true, output: { action: 'review', qa_approved: true } },
+      });
+      expect(taskRepository.update).toHaveBeenCalledWith('task-2', { status: 'done' });
+    });
+
+    it('sends review tasks back to in_progress when QA rejects', async () => {
+      await runAgent(AgentRole.QA, { review: [reviewTask] }, {
+        action: { success: true, output: { action: 'review', qa_approved: false } },
+      });
+      expect(taskRepository.update).toHaveBeenCalledWith('task-2', { status: 'in_progress' });
+    });
+
     it('does not let QA skip review: an in_progress task is left unchanged', async () => {
-      const result = await runAgent(AgentRole.QA);
+      const result = await runAgent(AgentRole.QA, { in_progress: [inProgressTask] });
 
       expect(result.status).toBe('success');
       expect(taskRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('fails the node when the agent strategy reports failure', async () => {
+      await expect(runAgent(AgentRole.QC, {}, { action: { success: false, output: null, error: 'QC needs a project' } }))
+        .rejects.toThrow('QC needs a project');
     });
   });
 

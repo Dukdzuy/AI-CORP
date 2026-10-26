@@ -2,20 +2,20 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IActionStrategy } from '../../../domain/agent/interfaces/IActionStrategy.interface';
 import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { LLMProviderFactory } from '../../llm/llm-provider.factory';
+import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
 
 @Injectable()
 export class MarketingActionStrategy implements IActionStrategy {
   private readonly logger = new Logger(MarketingActionStrategy.name);
+  private readonly systemPrompt = 'You are the Marketing Manager. Your objective is to draft announcements, blog posts, and prepare launch materials.';
+  private readonly modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/owl-alpha', fallbackProvider: 'opencode' };
 
   constructor(
     private readonly memoryService: MemoryService,
-    private readonly llmFactory: LLMProviderFactory,
-    private readonly websocketGateway: AppWebSocketGateway,
-    private readonly systemPrompt: string,
-    private readonly modelConfig: ModelRouteConfig
+    private readonly agentLLM: AgentLLMService,
+    private readonly websocketGateway: AppWebSocketGateway
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -42,15 +42,14 @@ Write a professional release announcement that:
 Target audience: Internal stakeholders and potential users.`;
 
     // Fetch latest model config
-    const modelConfig = await this.memoryService.getModelConfigForAgent(AgentRole.MARKETING, this.modelConfig);
-    const provider = this.llmFactory.getProvider(modelConfig);
+    const { provider, model } = await this.agentLLM.providerFor(AgentRole.MARKETING, this.modelConfig, context.projectId);
 
     const result = await provider.chat({
       messages: [
         { role: 'system', content: this.systemPrompt },
         { role: 'user', content: prompt }
       ],
-      model: modelConfig.model,
+      model,
       maxTokens: 800
     });
 

@@ -2,8 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IActionStrategy } from '../../../domain/agent/interfaces/IActionStrategy.interface';
 import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { LLMProviderFactory } from '../../llm/llm-provider.factory';
-import { SandboxExecutor } from '../../tools/sandbox.executor';
+import { AgentLLMService } from '../services/agent-llm.service';
+import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
 import { PrismaService } from '../../../prisma/prisma.service';
@@ -21,11 +21,11 @@ export class DevActionStrategy implements IActionStrategy {
 
   constructor(
     private readonly memoryService: MemoryService,
-    private readonly llmFactory: LLMProviderFactory,
-    private readonly sandboxExecutor: SandboxExecutor,
+    private readonly agentLLM: AgentLLMService,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly prisma: PrismaService,
-    private readonly ooadArtifacts: OOADArtifactService
+    private readonly ooadArtifacts: OOADArtifactService,
+    private readonly workspace: ProjectWorkspace
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -90,15 +90,14 @@ ${ooadContext ? '6. File paths are relative to the project root; reuse the skele
 Write ALL files needed for the project to work. Make it production-quality.`;
 
     // Fetch latest model config
-    const modelConfig = await this.memoryService.getModelConfigForAgent(AgentRole.DEV, this.modelConfig);
-    const provider = this.llmFactory.getProvider(modelConfig);
+    const { provider, model } = await this.agentLLM.providerFor(AgentRole.DEV, this.modelConfig, context.projectId);
 
     const result = await provider.chat({
       messages: [
         { role: 'system', content: this.systemPrompt },
         { role: 'user', content: prompt }
       ],
-      model: modelConfig.model,
+      model,
       maxTokens: 3000
     });
 
@@ -110,25 +109,18 @@ Write ALL files needed for the project to work. Make it production-quality.`;
     let writtenFiles: string[] = [];
     let codeContent = '';
 
-    if (codeBlocks.length > 0) {
+    if (codeBlocks.length > 0 && projectId) {
       for (const block of codeBlocks) {
-        const filepath = this.resolveProjectPath(projectId, block.filepath);
-        if (!filepath) {
+        const relativePath = this.workspace.normalize(projectId, block.filepath);
+        if (!relativePath) {
           this.logger.warn(`Skipping unsafe file path from LLM: ${block.filepath}`);
           continue;
         }
-        block.filepath = filepath;
         try {
-          const command = `mkdir -p $(dirname "${block.filepath}") && cat > "${block.filepath}" << 'HEREDOC_EOF'\n${block.content}\nHEREDOC_EOF`;
-          await this.sandboxExecutor.executeInSandbox('custom_command', command, {
-            maxMemoryMB: 256,
-            maxCPUPercent: 30,
-            maxDiskMB: 100,
-            timeout: 10000
-          });
-          writtenFiles.push(block.filepath);
-          codeContent += `// File: ${block.filepath}\n${block.content}\n\n`;
-          this.logger.log(`DEV wrote file: ${block.filepath}`);
+          const written = await this.workspace.writeFile(projectId, relativePath, block.content);
+          writtenFiles.push(written);
+          codeContent += `// File: ${written}\n${block.content}\n\n`;
+          this.logger.log(`DEV wrote file: ${written}`);
         } catch (err: any) {
           this.logger.warn(`Failed to write file ${block.filepath}: ${err.message}`);
         }
@@ -191,20 +183,6 @@ Write ALL files needed for the project to work. Make it production-quality.`;
         code: codeContent
       },
     };
-  }
-
-  /**
-   * Place generated files inside the project's folder (next to the skeleton and docs),
-   * rejecting absolute paths and parent-directory traversal.
-   */
-  private resolveProjectPath(projectId: string | undefined, filepath: string): string | null {
-    const clean = filepath.trim().replace(/^\.\//, '');
-    if (!clean || clean.startsWith('/') || clean.split('/').includes('..') || /["$`\\]/.test(clean)) {
-      return null;
-    }
-    if (!projectId) return clean;
-    const root = OOADArtifactService.projectRoot(projectId);
-    return clean.startsWith(`${root}/`) ? clean : `${root}/${clean}`;
   }
 
   private parseCodeBlocks(output: string): Array<{ filepath: string; content: string }> {

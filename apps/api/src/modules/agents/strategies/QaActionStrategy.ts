@@ -2,110 +2,95 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IActionStrategy } from '../../../domain/agent/interfaces/IActionStrategy.interface';
 import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { LLMProviderFactory } from '../../llm/llm-provider.factory';
+import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
-import { SandboxExecutor } from '../../tools/sandbox.executor';
 import { PrismaService } from '../../../prisma/prisma.service';
 
+/**
+ * QA (Quality Assurance) action: process-side review.
+ *
+ * Checks that the implementation follows the approved OOAD design (layers, domain model,
+ * patterns, use case references) and takes the QC verification report into account.
+ * Its verdict (qa_approved) drives the workflow's QA condition node.
+ * Product-side testing and the traceability matrix belong to QC (QcActionStrategy).
+ */
 @Injectable()
 export class QaActionStrategy implements IActionStrategy {
   private readonly logger = new Logger(QaActionStrategy.name);
-  private readonly systemPrompt: string = 'You are a QA engineer reviewing code from an AI developer. Be thorough but fair.';
-  private readonly modelConfig: ModelRouteConfig = { 
-    provider: 'opencode', 
-    model: 'openrouter/openrouter/free', 
-    fallbackProvider: 'opencode' 
+  private readonly systemPrompt: string =
+    'You are a QA (Quality Assurance) engineer. You check that code produced by an AI developer follows the approved OOAD design and the team process. Be thorough but fair.';
+  private readonly modelConfig: ModelRouteConfig = {
+    provider: 'opencode',
+    model: 'openrouter/openrouter/free',
+    fallbackProvider: 'opencode'
   };
 
   constructor(
     private readonly memoryService: MemoryService,
-    private readonly llmFactory: LLMProviderFactory,
+    private readonly agentLLM: AgentLLMService,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly sandboxExecutor: SandboxExecutor,
     private readonly prisma: PrismaService
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
     const memories = thought.memories || [];
     const memoryContext = memories.length > 0
-      ? `\n\nRelevant testing patterns:\n${memories.join('\n')}`
+      ? `\n\nRelevant review checklist items:\n${memories.join('\n')}`
       : '';
 
     const code = context.code || '';
     const hasCode = code.length > 10 && !code.includes('No code provided');
     const projectId = context.projectId;
+    const designSummary = await this.loadDesignSummary(projectId);
+    const qcReport = typeof context.qcReport === 'string' ? context.qcReport : '';
 
-    const prompt = `You are a QA engineer reviewing code from an AI developer.
+    const prompt = `You are reviewing code from an AI developer against the approved design.
 ${memoryContext}
+${designSummary ? `APPROVED DESIGN:\n${designSummary}\n` : ''}
+${qcReport ? `QC VERIFICATION REPORT:\n${qcReport}\n` : ''}
 Code to review:
 ${hasCode ? code : 'No code was provided by the developer.'}
 
+Review checklist:
+1. Layered structure respected (domain / application / infrastructure / presentation); domain imports nothing from outer layers
+2. Entities and value objects match the domain model
+3. Application service methods carry their use case comment (// UC-xxx)
+4. Listed design patterns are applied where the design says
+5. QC report: use cases without tests
+
+List findings for each checklist item, then give your verdict.
 Rules for your verdict:
-- If real implementation code exists (even if imperfect), reply: VERDICT: PASS
-- Only reply VERDICT: FAIL if there is absolutely NO code or the code is a pure placeholder (like "echo hello" or just comments)
-- Remember: imperfect code is still code. Only reject empty/placeholder responses.
+- If real implementation code exists and broadly follows the design (even if imperfect), reply: VERDICT: PASS
+- Reply VERDICT: FAIL only if there is NO real code, the code is a placeholder, or it ignores the design entirely
 
 Reply with EXACTLY one of these on the last line:
 VERDICT: PASS
 VERDICT: FAIL`;
 
-    // Fetch latest model config
-    const modelConfig = await this.memoryService.getModelConfigForAgent(AgentRole.QA, this.modelConfig);
-    const provider = this.llmFactory.getProvider(modelConfig);
+    const { provider, model } = await this.agentLLM.providerFor(AgentRole.QA, this.modelConfig, context.projectId);
 
     const result = await provider.chat({
       messages: [
         { role: 'system', content: this.systemPrompt },
         { role: 'user', content: prompt }
       ],
-      model: modelConfig.model,
-      maxTokens: 800
+      model,
+      maxTokens: 1200
     });
 
     // Save memory
     await this.memoryService.saveMemory(
       await this.memoryService.getAgentIdByRole(AgentRole.QA) || 'qa',
       AgentRole.QA,
-      'testing_patterns',
-      `Reviewed code for task: ${context.taskId || 'unknown'}`,
+      'review_checklist',
+      `Reviewed design conformance for task: ${context.taskId || 'unknown'}`,
       { importance: 5, projectId }
     );
 
     const output = result.content || '';
-    const outputUpper = output.toUpperCase();
-
-    // Check for explicit failure
-    const explicitlyFailed = outputUpper.includes('VERDICT: FAIL')
-      || outputUpper.includes('VERDICT:FAIL')
-      || outputUpper.includes('VERDICT:\\s*FAIL');
-
-    // Check for explicit pass
-    const explicitlyPassed = outputUpper.includes('VERDICT: PASS')
-      || outputUpper.includes('VERDICT:PASS');
-
-    // Determine approval
-    let approved: boolean;
-    if (explicitlyFailed) {
-      approved = false;
-    } else if (explicitlyPassed) {
-      approved = true;
-    } else {
-      approved = hasCode;
-    }
-
+    const approved = QaActionStrategy.verdict(output, hasCode);
     this.logger.log(`QA review result: ${approved ? 'APPROVED' : 'REJECTED'}`);
-
-    // Generate traceability matrix if projectId is available
-    let traceabilityMatrix = '';
-    if (projectId && projectId !== 'unknown') {
-      try {
-        traceabilityMatrix = await this.generateTraceabilityMatrix(projectId);
-        this.logger.log(`Generated traceability matrix for project ${projectId}`);
-      } catch (err: any) {
-        this.logger.warn(`Failed to generate traceability matrix: ${err.message}`);
-      }
-    }
 
     // Emit action event
     this.websocketGateway.sendToProject(projectId || 'unknown', {
@@ -127,243 +112,41 @@ VERDICT: FAIL`;
         output,
         qa_approved: approved,
         edgeCondition: approved ? 'onSuccess' : 'onFail',
-        traceabilityMatrix: traceabilityMatrix || undefined
       },
     };
   }
 
-  private async generateTraceabilityMatrix(projectId: string): Promise<string> {
-    const projectPath = `projects/${projectId}`;
-    const docsPath = `${projectPath}/docs`;
+  /** Explicit FAIL wins, then explicit PASS; without a verdict, approve only if code exists */
+  static verdict(output: string, hasCode: boolean): boolean {
+    const upper = output.toUpperCase();
+    if (/VERDICT:\s*FAIL/.test(upper)) return false;
+    if (/VERDICT:\s*PASS/.test(upper)) return true;
+    return hasCode;
+  }
 
-    const readFileCommand = (filename: string) => `cat ${docsPath}/${filename} 2>/dev/null || echo "FILE_NOT_FOUND"`;
-
-    // Prefer the persisted OOAD metadata (written by BA/Architect); fall back to the docs files
+  private async loadDesignSummary(projectId?: string): Promise<string> {
+    if (!projectId || projectId === 'unknown') return '';
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       select: { ooadMetadata: true }
     });
-    const ooadMetadata = (project?.ooadMetadata as any) || {};
-
-    let useCases: Array<{ id: string; name: string; priority?: string }>;
-    if (ooadMetadata.useCases?.length) {
-      useCases = ooadMetadata.useCases.map((uc: any) => ({ id: uc.id, name: uc.name, priority: uc.priority }));
-    } else {
-      const useCasesResult = await this.sandboxExecutor.executeInSandbox(
-        'custom_command',
-        readFileCommand('use-cases.md'),
-        { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
-      );
-
-      if (useCasesResult.output.includes('FILE_NOT_FOUND')) {
-        throw new Error('use-cases.md not found - cannot generate traceability matrix');
-      }
-      useCases = this.parseUseCases(useCasesResult.output);
+    const m = (project?.ooadMetadata as any) || {};
+    const lines: string[] = [];
+    if (m.useCases?.length) {
+      lines.push(`Use cases: ${m.useCases.map((uc: any) => `${uc.id} ${uc.name}`).join('; ')}`);
     }
-
-    let entities: string[];
-    if (ooadMetadata.domainModel?.entities?.length) {
-      entities = ooadMetadata.domainModel.entities.map((e: any) => e.name);
-    } else {
-      const domainModelResult = await this.sandboxExecutor.executeInSandbox(
-        'custom_command',
-        readFileCommand('domain-model.puml'),
-        { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
-      );
-      entities = domainModelResult.output.includes('FILE_NOT_FOUND')
-        ? []
-        : this.parseEntitiesFromPuml(domainModelResult.output);
+    if (m.domainModel?.entities?.length) {
+      lines.push(`Entities: ${m.domainModel.entities.map((e: any) => e.name).join(', ')}`);
     }
-
-    // Find test files
-    const findTestsCommand = `find ${projectPath}/src -name '*.test.ts' -o -name '*.spec.ts' 2>/dev/null || echo ""`;
-    const testFilesResult = await this.sandboxExecutor.executeInSandbox(
-      'custom_command',
-      findTestsCommand,
-      { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 10000 }
-    );
-
-    const testFiles = testFilesResult.output.split('\n').filter(f => f.trim() && !f.includes('FILE_NOT_FOUND'));
-
-    // Read test file contents
-    const tests: { ucId: string; testFile: string; testName: string }[] = [];
-    for (const testFile of testFiles) {
-      try {
-        const testContentResult = await this.sandboxExecutor.executeInSandbox(
-          'custom_command',
-          `cat "${testFile}" 2>/dev/null || echo ""`,
-          { maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000 }
-        );
-        
-        if (testContentResult.output) {
-          const parsedTests = this.parseTestFile(testContentResult.output, testFile);
-          tests.push(...parsedTests);
-        }
-      } catch (err: any) {
-        this.logger.warn(`Failed to read test file ${testFile}: ${err.message}`);
-      }
+    if (m.domainModel?.valueObjects?.length) {
+      lines.push(`Value objects: ${m.domainModel.valueObjects.map((v: any) => v.name).join(', ')}`);
     }
-
-    // Build traceability matrix
-    let traceabilityMd = '# Traceability Matrix\n\n';
-    traceabilityMd += '| Use Case ID | Use Case Name | Priority | Domain Classes | Test Cases | Coverage |\n';
-    traceabilityMd += '|-------------|---------------|----------|----------------|------------|-----------|\n';
-
-    const matrixRows: any[] = [];
-
-    useCases.forEach(uc => {
-      const relatedEntities = entities.filter(e =>
-        uc.name.toLowerCase().includes(e.toLowerCase())
-      );
-
-      const relatedTests = tests.filter(t => 
-        t.ucId === uc.id || 
-        t.testName.toLowerCase().includes(uc.name.toLowerCase()) ||
-        t.testName.includes(uc.id)
-      );
-
-      const coverage = relatedTests.length > 0 ? 'Covered' : 'Missing';
-
-      matrixRows.push({
-        ucId: uc.id,
-        ucName: uc.name,
-        priority: uc.priority || 'Unknown',
-        entities: relatedEntities,
-        tests: relatedTests,
-        coverage
-      });
-
-      traceabilityMd += `| ${uc.id} | ${uc.name} | ${uc.priority || 'N/A'} | ${relatedEntities.join(', ') || 'N/A'} | ${relatedTests.map(t => t.testName).join(', ') || 'None'} | ${coverage} |\n`;
-    });
-
-    const coveredCount = matrixRows.filter(r => r.coverage === 'Covered').length;
-    const totalCount = matrixRows.length;
-    const coveragePercent = totalCount > 0 ? ((coveredCount / totalCount) * 100).toFixed(1) : '0';
-
-    traceabilityMd += `\n**Summary:**\n`;
-    traceabilityMd += `- Total Use Cases: ${totalCount}\n`;
-    traceabilityMd += `- Covered: ${coveredCount}\n`;
-    traceabilityMd += `- Missing: ${totalCount - coveredCount}\n`;
-    traceabilityMd += `- Coverage: ${coveragePercent}%\n`;
-
-    if (parseFloat(coveragePercent) < 80) {
-      const missingUCs = matrixRows.filter(r => r.coverage === 'Missing').map(r => r.ucId);
-      traceabilityMd += `\n**⚠️ WARNING: Test coverage below 80%**\n`;
-      traceabilityMd += `Missing tests for: ${missingUCs.join(', ')}\n`;
-
-      // Emit warning via WebSocket
-      this.websocketGateway.sendToProject(projectId, {
-        type: 'quality_warning',
-        payload: {
-          message: `Test coverage is ${coveragePercent}% (below 80% threshold)`,
-          missingUseCases: missingUCs,
-          severity: 'warning'
-        }
-      });
+    if (m.patterns?.length) {
+      lines.push(`Patterns: ${m.patterns.map((p: any) => `${p.name} (${p.location})`).join('; ')}`);
     }
-
-    // Write traceability matrix to file
-    const writeMatrixCmd = `cat > ${docsPath}/traceability-matrix.md << 'HEREDOC_EOF'\n${traceabilityMd}\nHEREDOC_EOF`;
-    await this.sandboxExecutor.executeInSandbox('custom_command', writeMatrixCmd, {
-      maxMemoryMB: 128,
-      maxCPUPercent: 20,
-      maxDiskMB: 50,
-      timeout: 10000
-    });
-
-    // Persist test coverage to ooadMetadata for metrics dashboard
-    try {
-      const project = await this.prisma.project.findUnique({
-        where: { id: projectId },
-        select: { ooadMetadata: true }
-      });
-      
-      const existingMetadata = (project?.ooadMetadata as any) || {};
-      const updatedMetadata = JSON.parse(JSON.stringify({
-        ...existingMetadata,
-        testCoverage: parseFloat(coveragePercent)
-      }));
-      
-      await this.prisma.project.update({
-        where: { id: projectId },
-        data: { ooadMetadata: updatedMetadata }
-      });
-      
-      this.logger.log(`Persisted test coverage ${coveragePercent}% to project ${projectId}`);
-    } catch (err: any) {
-      this.logger.warn(`Failed to persist test coverage: ${err.message}`);
+    if (m.architecture?.style) {
+      lines.push(`Architecture style: ${m.architecture.style}`);
     }
-
-    return traceabilityMd;
-  }
-
-  private parseUseCases(content: string): Array<{ id: string; name: string; priority?: string }> {
-    const useCases: Array<{ id: string; name: string; priority?: string }> = [];
-    
-    // Match markdown headers with use case pattern
-    const ucPattern = /##\s+Use Case:\s+(.+?)\n[\s\S]*?\|\s*\*\*ID\*\*\s*\|\s*(.+?)\s*\|[\s\S]*?(?:\|\s*\*\*Priority\*\*\s*\|\s*(.+?)\s*\|)?/gi;
-    let match;
-    
-    while ((match = ucPattern.exec(content)) !== null) {
-      useCases.push({
-        name: match[1].trim(),
-        id: match[2].trim(),
-        priority: match[3]?.trim()
-      });
-    }
-
-    return useCases;
-  }
-
-  private parseEntitiesFromPuml(content: string): string[] {
-    const entities: string[] = [];
-    const entityPattern = /class\s+(\w+)\s+<<Entity>>/g;
-    let match;
-
-    while ((match = entityPattern.exec(content)) !== null) {
-      entities.push(match[1]);
-    }
-
-    return entities;
-  }
-
-  private parseTestFile(content: string, filePath: string): Array<{ ucId: string; testFile: string; testName: string }> {
-    const tests: Array<{ ucId: string; testFile: string; testName: string }> = [];
-
-    // Match describe blocks
-    const describePattern = /describe\s*\(\s*['"`](.+?)['"`]/g;
-    let match;
-
-    while ((match = describePattern.exec(content)) !== null) {
-      const testName = match[1];
-      
-      // Try to extract UC-XXX from test name or content
-      const ucMatch = testName.match(/UC-\d{3}/);
-      const ucId = ucMatch ? ucMatch[0] : '';
-
-      tests.push({
-        ucId,
-        testFile: filePath,
-        testName
-      });
-    }
-
-    // Also match it() blocks
-    const itPattern = /it\s*\(\s*['"`](.+?)['"`]/g;
-    while ((match = itPattern.exec(content)) !== null) {
-      const testName = match[1];
-      const ucMatch = testName.match(/UC-\d{3}/);
-      const ucId = ucMatch ? ucMatch[0] : '';
-
-      if (ucId) {
-        tests.push({
-          ucId,
-          testFile: filePath,
-          testName
-        });
-      }
-    }
-
-    return tests;
+    return lines.join('\n');
   }
 }

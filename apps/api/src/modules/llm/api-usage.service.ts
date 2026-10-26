@@ -2,6 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { WebSocketEventType } from '@ai-corp/shared-types';
+import { EventBus } from '../../domain/events/EventBus';
+import { BudgetExceededEvent } from '../../domain/events/BudgetExceededEvent';
 
 export interface LogUsageParams {
   projectId?: string;
@@ -36,6 +38,7 @@ export class ApiUsageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly websocketGateway: AppWebSocketGateway,
+    private readonly eventBus: EventBus,
   ) {}
 
   async logUsage(params: LogUsageParams): Promise<void> {
@@ -80,6 +83,13 @@ export class ApiUsageService {
           if (project.budget) {
             const budget = Number(project.budget);
             if (newCost >= budget) {
+              // Raise the domain event once, when the budget is first crossed;
+              // BudgetExceededHandler pauses the project's running workflow
+              if (Number(project.costAccrued) < budget) {
+                await this.eventBus
+                  .publish(new BudgetExceededEvent(params.projectId, newCost, budget))
+                  .catch(err => this.logger.error(`Failed to publish BudgetExceededEvent: ${err.message}`));
+              }
               await this.prisma.project.update({
                 where: { id: params.projectId },
                 data: { status: 'paused' },

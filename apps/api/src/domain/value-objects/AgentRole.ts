@@ -2,7 +2,7 @@
  * AgentRole Value Object
  * 
  * Enum-like value object representing agent roles in the system.
- * Based on actual schema: CEO, PM, DEV, QA, MARKETING, BA, ARCHITECT, DEVOPS
+ * Based on actual schema: CEO, PM, DEV, QA, QC, MARKETING, BA, ARCHITECT
  * 
  * @pattern Value Object
  * @principle Type Safety, Domain Vocabulary
@@ -14,10 +14,10 @@ export class AgentRole {
     'PM',
     'DEV',
     'QA',
+    'QC',
     'MARKETING',
     'BA',
-    'ARCHITECT',
-    'DEVOPS'
+    'ARCHITECT'
   ] as const;
 
   private constructor(private readonly value: string) {
@@ -35,10 +35,10 @@ export class AgentRole {
   static PM = new AgentRole('PM');
   static DEV = new AgentRole('DEV');
   static QA = new AgentRole('QA');
+  static QC = new AgentRole('QC');
   static MARKETING = new AgentRole('MARKETING');
   static BA = new AgentRole('BA');
   static ARCHITECT = new AgentRole('ARCHITECT');
-  static DEVOPS = new AgentRole('DEVOPS');
 
   toString(): string {
     return this.value;
@@ -49,7 +49,7 @@ export class AgentRole {
   }
 
   isTechnical(): boolean {
-    return ['DEV', 'QA', 'ARCHITECT', 'DEVOPS'].includes(this.value);
+    return ['DEV', 'QA', 'QC', 'ARCHITECT'].includes(this.value);
   }
 
   isManagement(): boolean {

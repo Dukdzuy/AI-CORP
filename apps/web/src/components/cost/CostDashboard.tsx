@@ -30,6 +30,9 @@ const AGENT_COLORS: Record<string, string> = {
   PM: '#1677ff',
   DEV: '#52c41a',
   QA: '#fa8c16',
+  QC: '#13c2c2',
+  BA: '#2f54eb',
+  ARCHITECT: '#a0d911',
   MARKETING: '#eb2f96',
 };
 

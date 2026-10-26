@@ -49,3 +49,7 @@ coverage/
 # OOAD templates the agents render into generated projects
 !apps/api/src/modules/agents/templates/**/*.md
 *.tsbuildinfo
+
+# Files of the projects the agents generate (ProjectWorkspace)
+/workspace/
+apps/api/workspace/

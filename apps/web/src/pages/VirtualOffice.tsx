@@ -3,7 +3,7 @@ import { Typography, Space, Card, Badge, Row, Col, Tag, Flex } from 'antd';
 import { RobotOutlined, TeamOutlined, MessageOutlined, ClearOutlined } from '@ant-design/icons';
 import { WebSocketEventType, AgentThinkingEvent, AgentActionEvent, AgentMessageEvent, ApprovalRequiredEvent, AgentRole } from '@ai-corp/shared-types';
 import { useWebsocketStore } from '../stores/websocketStore';
-import { useMeetingStore } from '../stores/meetingStore';
+import { useMeetingStore, MeetingMessage } from '../stores/meetingStore';
 import { usePendingApprovals } from '../lib/api/hooks/approvals';
 import socketClient from '../lib/websocket/socket-client';
 import { AgentStatusCard, AgentStatus } from '../components/virtual-office/AgentStatusCard';
@@ -11,7 +11,16 @@ import { MeetingRoom } from '../components/virtual-office/MeetingRoom';
 
 const { Title, Text } = Typography;
 
-const AGENT_ROLES = [AgentRole.CEO, AgentRole.PM, AgentRole.DEV, AgentRole.QA, AgentRole.MARKETING];
+const AGENT_ROLES = [
+  AgentRole.CEO,
+  AgentRole.BA,
+  AgentRole.ARCHITECT,
+  AgentRole.PM,
+  AgentRole.DEV,
+  AgentRole.QC,
+  AgentRole.QA,
+  AgentRole.MARKETING,
+];
 
 export const VirtualOffice: React.FC = () => {
   const { status } = useWebsocketStore();

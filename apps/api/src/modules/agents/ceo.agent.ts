@@ -8,6 +8,7 @@ import { SandboxExecutor } from '../tools/sandbox.executor';
 import { ApiUsageService } from '../llm/api-usage.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { EventBus } from '../../domain/events/EventBus';
+import { CeoThinkingStrategy, CeoActionStrategy } from './strategies';
 
 @Injectable()
 export class CeoAgent extends BaseAgent {
@@ -18,49 +19,40 @@ export class CeoAgent extends BaseAgent {
     sandboxExecutor: SandboxExecutor,
     apiUsageService: ApiUsageService,
     websocketGateway: AppWebSocketGateway,
-    eventBus: EventBus
+    eventBus: EventBus,
+    thinkingStrategy: CeoThinkingStrategy,
+    actionStrategy: CeoActionStrategy
   ) {
     const systemPrompt = `You are the CEO. Your objective is to define the strategic vision, plan high-level milestones, and ensure the product aligns with market needs.`;
-    const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
-    // Don't pass strategies - keep existing behavior
-    super(AgentRole.CEO, systemPrompt, modelConfig, memoryService, llmFactory, toolRegistry, sandboxExecutor, apiUsageService, websocketGateway, eventBus);
+
+    const modelConfig: ModelRouteConfig = {
+      provider: 'opencode',
+      model: 'openrouter/openrouter/free',
+      fallbackProvider: 'opencode'
+    };
+
+    super(
+      AgentRole.CEO,
+      systemPrompt,
+      modelConfig,
+      memoryService,
+      llmFactory,
+      toolRegistry,
+      sandboxExecutor,
+      apiUsageService,
+      websocketGateway,
+      eventBus,
+      thinkingStrategy,
+      actionStrategy
+    );
   }
 
+  // Abstract methods for backward compatibility (not used when strategies are injected)
   async think(context: any): Promise<any> {
-    this.logger.debug('CEO thinking...');
-    const goal = context.projectContext?.goal || context.goal || '';
-    this.emitThinking(context.projectId, 'Analyzing project goals to formulate milestones.');
-    const memories = await this.loadMemory('strategy', goal, 3);
-    return { thought: "Analyzing project goals to formulate milestones.", memories };
+    return { thought: 'Strategy pattern handles thinking' };
   }
 
   async act(context: any): Promise<any> {
-    this.logger.debug('CEO acting...');
-    const goal = context.projectContext?.goal || context.goal || '';
-    const description = context.projectContext?.description || '';
-    const prompt = `You are the CEO planning a project.
-
-PROJECT GOAL: ${goal}
-PROJECT DESCRIPTION: ${description}
-
-Create 2-4 high-level milestones for this project. Each milestone should be a clear, deliverable objective.
-
-Format your response as a numbered list:
-1. Milestone name - Brief description of what will be delivered
-2. Milestone name - Brief description of what will be delivered
-3. Milestone name - Brief description of what will be delivered
-
-Be specific and actionable. Each milestone should be completable in a reasonable timeframe.`;
-    
-    const result = await this.callLLM({
-      messages: [{ role: 'user', content: prompt }],
-      maxTokens: 1000
-    }, context.projectId);
-
-    await this.saveMemory('strategy', `Created milestones for goal: ${goal}`, 8, context.projectId);
-
-    this.emitAction(context.projectId, context.taskId || 'none', 'planMilestones', 'llm', { goal });
-
-    return { action: 'planMilestones', output: result.content };
+    return { action: 'Strategy pattern handles actions' };
   }
 }

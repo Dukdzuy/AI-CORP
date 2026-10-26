@@ -1,9 +1,15 @@
 import { WorkflowDefinition, AgentRole } from '@ai-corp/shared-types';
 
+/**
+ * Default OOAD-driven project workflow:
+ * CEO (milestones) → BA (use cases) → Architect (design + skeleton) → OOAD quality gate
+ * → PM (one task per use case) → DEV (implementation) → QC (acceptance tests + traceability)
+ * → QA (design conformance verdict) → Marketing → human approval → CEO (close-out)
+ */
 export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
   id: 'default-project-workflow',
   name: 'Default Project Workflow',
-  version: '1.0.0',
+  version: '2.0.0',
   startNode: 'start',
   endNode: 'end',
   nodes: [
@@ -17,18 +23,6 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
       metadata: {
         promptTemplate: 'Analyze the project goal and create a high-level milestone plan. Define 2-4 major milestones with clear deliverables.',
         description: 'CEO plans project milestones',
-      },
-    },
-    {
-      id: 'breakdown',
-      type: 'agent_task',
-      agentRole: 'PM' as AgentRole,
-      taskType: 'breakdownTasks',
-      maxRetries: 3,
-      timeout: 180000,
-      metadata: {
-        promptTemplate: 'Break down the milestones into actionable tasks. Estimate effort for each task and assign to appropriate team members.',
-        description: 'PM breaks down milestones into tasks',
       },
     },
     {
@@ -56,6 +50,31 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
       },
     },
     {
+      id: 'ooad_gate',
+      type: 'quality_gate',
+      metadata: {
+        description: 'OOAD quality gate (QA): use cases, domain model, patterns and diagrams must be complete before implementation',
+        criteria: {
+          minUseCases: 5,
+          minEntities: 3,
+          minPatterns: 3,
+          requiredArtifacts: ['use-cases.md', 'use-case-diagram.puml', 'domain-model.puml', 'class-diagram.puml', 'architecture-patterns.md'],
+        },
+      },
+    },
+    {
+      id: 'breakdown',
+      type: 'agent_task',
+      agentRole: 'PM' as AgentRole,
+      taskType: 'breakdownTasks',
+      maxRetries: 3,
+      timeout: 180000,
+      metadata: {
+        promptTemplate: 'Turn the approved use cases into one developer task per use case, ordered by priority.',
+        description: 'PM plans one task per approved use case',
+      },
+    },
+    {
       id: 'develop',
       type: 'agent_task',
       agentRole: 'DEV' as AgentRole,
@@ -68,6 +87,18 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
       },
     },
     {
+      id: 'test',
+      type: 'agent_task',
+      agentRole: 'QC' as AgentRole,
+      taskType: 'verify',
+      maxRetries: 3,
+      timeout: 300000,
+      metadata: {
+        promptTemplate: 'Write acceptance tests for every use case and build the traceability matrix (use case -> classes -> code -> tests).',
+        description: 'QC verifies the implementation against the use cases',
+      },
+    },
+    {
       id: 'review',
       type: 'agent_task',
       agentRole: 'QA' as AgentRole,
@@ -75,8 +106,8 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
       maxRetries: 3,
       timeout: 180000,
       metadata: {
-        promptTemplate: 'Review the implementation. Run tests, check for bugs, verify requirements are met. Provide detailed feedback.',
-        description: 'QA reviews the implementation',
+        promptTemplate: 'Review the implementation against the approved OOAD design and the QC report. Approve or send it back with findings.',
+        description: 'QA reviews design conformance and approves',
       },
     },
     {
@@ -124,11 +155,14 @@ export const DEFAULT_WORKFLOW_DEFINITION: WorkflowDefinition = {
     },
   ],
   edges: [
-    { from: 'start', to: 'breakdown' },
-    { from: 'breakdown', to: 'analyze' },
+    { from: 'start', to: 'analyze' },
     { from: 'analyze', to: 'design' },
-    { from: 'design', to: 'develop' },
-    { from: 'develop', to: 'review' },
+    { from: 'design', to: 'ooad_gate' },
+    { from: 'ooad_gate', to: 'breakdown', condition: 'onSuccess' },
+    { from: 'ooad_gate', to: 'design', condition: 'onFail' },
+    { from: 'breakdown', to: 'develop' },
+    { from: 'develop', to: 'test' },
+    { from: 'test', to: 'review' },
     { from: 'review', to: 'qa_condition' },
     { from: 'qa_condition', to: 'develop', condition: 'onFail' },
     { from: 'qa_condition', to: 'market', condition: 'onSuccess' },

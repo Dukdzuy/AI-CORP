@@ -6,7 +6,7 @@ import { QaAgent } from '../agents/qa.agent';
 import { MarketingAgent } from '../agents/marketing.agent';
 import { BaAgent } from '../agents/ba.agent';
 import { ArchitectAgent } from '../agents/architect.agent';
-import { DevOpsAgent } from '../agents/devops.agent';
+import { QcAgent } from '../agents/qc.agent';
 import { BaseAgent } from '../agents/base.agent';
 import { AgentRole, AgentContext } from '@ai-corp/shared-types';
 import { AgentMessageService } from './agent-message.service';
@@ -37,7 +37,7 @@ export class AgentOrchestratorService {
     private readonly marketingAgent: MarketingAgent,
     private readonly baAgent: BaAgent,
     private readonly architectAgent: ArchitectAgent,
-    private readonly devOpsAgent: DevOpsAgent,
+    private readonly qcAgent: QcAgent,
     private readonly messageService: AgentMessageService,
   ) {
     // Initialize agent registry - Map-based lookup instead of switch statement
@@ -49,7 +49,7 @@ export class AgentOrchestratorService {
       [AgentRole.MARKETING, this.marketingAgent],
       [AgentRole.BA, this.baAgent],
       [AgentRole.ARCHITECT, this.architectAgent],
-      [AgentRole.DEVOPS, this.devOpsAgent],
+      [AgentRole.QC, this.qcAgent],
     ]);
   }
 

@@ -5,31 +5,33 @@ import { MemoryService } from '../../memory/memory.service';
 import { AgentRole } from '@ai-corp/shared-types';
 
 @Injectable()
-export class DevOpsThinkingStrategy implements IThinkingStrategy {
+export class QcThinkingStrategy implements IThinkingStrategy {
   constructor(private readonly memoryService: MemoryService) {}
 
   async think(context: AgentContext): Promise<AgentThought> {
-    // Load DevOps patterns memories
     const memories = await this.memoryService.searchMemories(
-      AgentRole.DEVOPS,
-      'devops_patterns',
-      JSON.stringify(context),
+      AgentRole.QC,
+      'test_design',
+      context.goal || context.task || '',
       5
     );
 
-    const reasoning = 'Analyzing system to design CI/CD pipeline, infrastructure, and deployment strategy.';
-
     return {
-      reasoning,
+      reasoning: 'Deriving acceptance tests from the use cases and checking which use cases the implementation covers.',
       plannedActions: [
         {
           toolName: 'llm',
           parameters: {},
-          rationale: 'Generate deployment configs, Dockerfiles, CI/CD pipeline definitions'
-        }
+          rationale: 'Write one acceptance test suite per use case (main, alternative and exception flows)',
+        },
+        {
+          toolName: 'traceability',
+          parameters: {},
+          rationale: 'Map use cases to domain classes, implementation files and tests; compute coverage',
+        },
       ],
-      confidence: 0.87,
-      memories: memories.map(m => m.content)
+      confidence: 0.85,
+      memories: memories.map(m => m.content),
     };
   }
 }

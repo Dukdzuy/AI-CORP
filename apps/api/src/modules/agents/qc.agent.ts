@@ -8,10 +8,10 @@ import { SandboxExecutor } from '../tools/sandbox.executor';
 import { ApiUsageService } from '../llm/api-usage.service';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
 import { EventBus } from '../../domain/events/EventBus';
-import { DevOpsThinkingStrategy, DevOpsActionStrategy } from './strategies';
+import { QcThinkingStrategy, QcActionStrategy } from './strategies';
 
 @Injectable()
-export class DevOpsAgent extends BaseAgent {
+export class QcAgent extends BaseAgent {
   constructor(
     memoryService: MemoryService,
     llmFactory: LLMProviderFactory,
@@ -20,29 +20,25 @@ export class DevOpsAgent extends BaseAgent {
     apiUsageService: ApiUsageService,
     websocketGateway: AppWebSocketGateway,
     eventBus: EventBus,
-    thinkingStrategy: DevOpsThinkingStrategy,
-    actionStrategy: DevOpsActionStrategy
+    thinkingStrategy: QcThinkingStrategy,
+    actionStrategy: QcActionStrategy
   ) {
-    const systemPrompt = `You are the DevOps Engineer. Your objective is to design and implement CI/CD pipelines, infrastructure, and deployment strategies.
+    const systemPrompt = `You are the QC (Quality Control) Engineer. Your objective is to verify the delivered product against its requirements.
 
 Your responsibilities:
-- Design CI/CD pipelines (GitHub Actions, GitLab CI, Jenkins)
-- Create Dockerfiles and container orchestration configs
-- Write Infrastructure as Code (Terraform, CloudFormation, Kubernetes)
-- Plan deployment strategies (blue-green, canary, rolling)
-- Set up monitoring and logging (Prometheus, Grafana, ELK stack)
-- Manage environment variables and secrets
-- Design rollback and disaster recovery strategies
-- Optimize build and deployment performance`;
+- Derive acceptance test cases from every use case (main, alternative and exception flows)
+- Write executable tests named after the use case they cover (describe('UC-001: ...'))
+- Maintain the traceability matrix: use case -> domain classes -> implementation -> tests
+- Report use case coverage and the use cases that are still untested`;
 
-    const modelConfig: ModelRouteConfig = { 
-      provider: 'opencode', 
-      model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', 
-      fallbackProvider: 'opencode' 
+    const modelConfig: ModelRouteConfig = {
+      provider: 'opencode',
+      model: 'openrouter/openrouter/free',
+      fallbackProvider: 'opencode'
     };
 
     super(
-      AgentRole.DEVOPS,
+      AgentRole.QC,
       systemPrompt,
       modelConfig,
       memoryService,
