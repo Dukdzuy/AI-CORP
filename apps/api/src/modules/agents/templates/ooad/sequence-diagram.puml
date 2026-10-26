@@ -1,0 +1,35 @@
+@startuml
+title {{ucId}}: {{ucName}}
+autonumber
+
+{{#each participants}}
+{{kind}} "{{name}}" as {{id}}
+{{/each}}
+
+note over {{firstParticipant}}, {{lastParticipant}}
+Main flow:
+{{#each mainFlow}}
+{{inc @index}}. {{this}}
+{{/each}}
+end note
+
+{{#each messages}}
+{{from}} {{arrow}} {{to}} : {{label}}
+{{/each}}
+
+{{#if alternativeFlows.length}}
+note right of {{lastParticipant}}
+Alternative flows:
+{{#each alternativeFlows}}
+- {{this}}
+{{/each}}
+{{#if exceptionFlows.length}}
+Exceptions:
+{{#each exceptionFlows}}
+- {{this}}
+{{/each}}
+{{/if}}
+end note
+{{/if}}
+
+@enduml

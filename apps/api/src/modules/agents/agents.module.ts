@@ -12,6 +12,7 @@ import { LLMModule } from '../llm/llm.module';
 import { ToolsModule } from '../tools/tools.module';
 import { WebSocketModule } from '../websocket/websocket.module';
 import { TemplateService } from './services/template.service';
+import { OOADArtifactService } from './services/ooad-artifact.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 
 // Import all strategy classes
@@ -39,6 +40,7 @@ import {
   providers: [
     // Services
     TemplateService,
+    OOADArtifactService,
     
     // Strategy Pattern implementations
     CeoThinkingStrategy,
@@ -70,6 +72,7 @@ import {
   ],
   exports: [
     TemplateService,
+    OOADArtifactService,
     CeoAgent,
     PmAgent,
     DevAgent,

@@ -1,0 +1,33 @@
+{{#each imports}}
+import { {{name}} } from '{{from}}';
+{{/each}}
+
+/**
+ * {{className}}: entity (domain layer).
+ * Holds business state and rules only: no framework, HTTP or persistence code here.
+ */
+{{#each useCases}}
+// {{id}}: {{name}}
+{{/each}}
+export class {{className}} {
+  constructor(
+    public readonly id: {{idTsType}},
+{{#each attributes}}
+    private _{{name}}: {{tsType}},
+{{/each}}
+  ) {}
+
+{{#each attributes}}
+  get {{name}}(): {{tsType}} {
+    return this._{{name}};
+  }
+
+{{/each}}
+{{#each methods}}
+  {{name}}({{params}}): {{returnType}} {
+    // TODO(Dev): implement the business rule for {{../className}}.{{name}}
+    throw new Error('Not implemented: {{../className}}.{{name}}');
+  }
+
+{{/each}}
+}

@@ -1,0 +1,22 @@
+{{#each entities}}
+import { {{repositoryImpl}} } from './infrastructure/persistence/{{repositoryImpl}}';
+import { {{serviceName}} } from './application/services/{{serviceName}}';
+import { {{controllerName}} } from './presentation/controllers/{{controllerName}}';
+{{/each}}
+
+/**
+ * Composition root: the only place that knows concrete classes.
+ * Wires infrastructure adapters into application services (dependency injection by hand).
+ */
+export function createApp() {
+{{#each entities}}
+  const {{varName}}Repository = new {{repositoryImpl}}();
+  const {{varName}}Service = new {{serviceName}}({{varName}}Repository);
+{{/each}}
+
+  return {
+{{#each entities}}
+    {{varName}}Controller: new {{controllerName}}({{varName}}Service),
+{{/each}}
+  };
+}

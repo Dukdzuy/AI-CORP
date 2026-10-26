@@ -1,0 +1,54 @@
+# {{projectName}}: Architecture
+
+Style: **{{architecture.style}}**
+
+## Layers
+
+```
+src/
+  presentation/controllers/     request handling, no business logic
+  application/services/         one method per use case
+  domain/entities/              business state and rules
+  domain/value-objects/         immutable values
+  domain/repositories/          repository interfaces (ports)
+  infrastructure/persistence/   repository implementations (adapters)
+  composition-root.ts           wires concrete classes together
+```
+
+Dependencies point inwards only: presentation → application → domain ← infrastructure.
+The domain layer must not import from any other layer.
+
+{{#each architecture.layers}}
+### {{name}}
+
+- **Responsibilities:** {{responsibilities}}
+- **Components:** {{join components ", "}}
+- **Dependencies:** {{dependencies}}
+
+{{/each}}
+## Design Patterns
+
+| Pattern | Type | Where |
+|---------|------|-------|
+| Repository | Enterprise | `src/domain/repositories`, `src/infrastructure/persistence` |
+| Dependency Injection | Structural | `src/composition-root.ts` |
+{{#each patterns}}
+| {{name}} | {{type}} | `{{location}}` |
+{{/each}}
+
+## Traceability
+
+| Use Case | Entity | Service method | Controller handler |
+|----------|--------|----------------|--------------------|
+{{#each entities}}
+{{#each useCases}}
+| {{id}}: {{name}} | {{../className}} | `{{../serviceName}}.{{methodName}}` | `{{../controllerName}}.{{handlerName}}` |
+{{/each}}
+{{/each}}
+
+## Implementation rules
+
+1. Keep every file in the layer it was generated in; add new files to the matching folder.
+2. Implement each `TODO(Dev)` and keep the `// UC-XXX` comments for traceability.
+3. Name tests after the use case they cover, e.g. `describe('UC-001: ...')`.
+4. Design docs live in `docs/` (use cases, domain model, class and sequence diagrams).

@@ -1,0 +1,18 @@
+import { {{serviceName}} } from '../../application/services/{{serviceName}}';
+
+/**
+ * {{controllerName}}: presentation layer.
+ * Translates requests into application-service calls; holds no business logic.
+ */
+export class {{controllerName}} {
+  constructor(private readonly service: {{serviceName}}) {}
+
+{{#each useCases}}
+  // {{id}}: {{name}}
+  async {{handlerName}}(request: unknown): Promise<unknown> {
+    // TODO(Dev): validate the request, then delegate
+    return this.service.{{methodName}}(request);
+  }
+
+{{/each}}
+}

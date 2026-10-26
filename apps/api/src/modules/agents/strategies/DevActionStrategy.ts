@@ -6,7 +6,8 @@ import { LLMProviderFactory } from '../../llm/llm-provider.factory';
 import { SandboxExecutor } from '../../tools/sandbox.executor';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
-import { OOADGateNotPassedError } from '../errors/OOADGateNotPassedError';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { OOADArtifactService } from '../services/ooad-artifact.service';
 
 @Injectable()
 export class DevActionStrategy implements IActionStrategy {
@@ -22,7 +23,9 @@ export class DevActionStrategy implements IActionStrategy {
     private readonly memoryService: MemoryService,
     private readonly llmFactory: LLMProviderFactory,
     private readonly sandboxExecutor: SandboxExecutor,
-    private readonly websocketGateway: AppWebSocketGateway
+    private readonly websocketGateway: AppWebSocketGateway,
+    private readonly prisma: PrismaService,
+    private readonly ooadArtifacts: OOADArtifactService
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -37,36 +40,22 @@ export class DevActionStrategy implements IActionStrategy {
     const existingCode = context.code || '';
     const projectId = context.projectId;
 
-    // Load OOAD artifacts
+    // Load the OOAD design (use cases, domain model, class diagram, skeleton) written by BA/Architect
     let ooadContext = '';
     if (projectId) {
       try {
-        const projectPath = `projects/${projectId}/docs`;
-        const readFileCommand = (filename: string) => `cat ${projectPath}/${filename} 2>/dev/null || echo "FILE_NOT_FOUND"`;
-
-        const [useCasesResult, domainModelResult, architectureResult] = await Promise.all([
-          this.sandboxExecutor.executeInSandbox('custom_command', readFileCommand('use-cases.md'), {
-            maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000
-          }),
-          this.sandboxExecutor.executeInSandbox('custom_command', readFileCommand('domain-model.puml'), {
-            maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000
-          }),
-          this.sandboxExecutor.executeInSandbox('custom_command', readFileCommand('architecture-patterns.md'), {
-            maxMemoryMB: 64, maxCPUPercent: 10, maxDiskMB: 10, timeout: 5000
-          })
-        ]);
-
-        const useCases = useCasesResult.output.includes('FILE_NOT_FOUND') ? null : useCasesResult.output;
-        const domainModel = domainModelResult.output.includes('FILE_NOT_FOUND') ? null : domainModelResult.output;
-        const architecture = architectureResult.output.includes('FILE_NOT_FOUND') ? null : architectureResult.output;
-
-        if (useCases && domainModel && architecture) {
-          ooadContext = `\n\n==== OOAD DESIGN (MUST FOLLOW) ====\n\n=== USE CASES ===\n${useCases}\n\n=== DOMAIN MODEL ===\n${domainModel}\n\n=== ARCHITECTURE & PATTERNS ===\n${architecture}\n\n==== IMPLEMENTATION RULES ====\n1. Follow the layered architecture (domain/application/infrastructure)\n2. Implement entities EXACTLY as specified in the domain model\n3. Apply the design patterns listed above\n4. Each class must reference its corresponding use case ID in a comment (e.g., // UC-001: Create Order)\n5. Follow SOLID principles\n6. No deviations from the design without explicit reason\n\n`;
+        const project = await this.prisma.project.findUnique({
+          where: { id: projectId },
+          select: { ooadMetadata: true }
+        });
+        const designContext = await this.ooadArtifacts.buildImplementationContext(project?.ooadMetadata, projectName);
+        if (designContext) {
+          ooadContext = `\n\n${designContext}\n\n`;
         } else {
-          this.logger.warn('Some OOAD artifacts missing - proceeding without full design context');
+          this.logger.warn('OOAD design missing - proceeding without design context');
         }
       } catch (err: any) {
-        this.logger.warn(`Failed to load OOAD artifacts: ${err.message}`);
+        this.logger.warn(`Failed to load OOAD design: ${err.message}`);
       }
     }
 
@@ -96,6 +85,7 @@ INSTRUCTIONS:
 <CODE filepath="src/index.js">
 // your complete working code here
 </CODE>
+${ooadContext ? '6. File paths are relative to the project root; reuse the skeleton paths listed in the design (e.g. src/application/services/...)\n' : ''}
 
 Write ALL files needed for the project to work. Make it production-quality.`;
 
@@ -122,6 +112,12 @@ Write ALL files needed for the project to work. Make it production-quality.`;
 
     if (codeBlocks.length > 0) {
       for (const block of codeBlocks) {
+        const filepath = this.resolveProjectPath(projectId, block.filepath);
+        if (!filepath) {
+          this.logger.warn(`Skipping unsafe file path from LLM: ${block.filepath}`);
+          continue;
+        }
+        block.filepath = filepath;
         try {
           const command = `mkdir -p $(dirname "${block.filepath}") && cat > "${block.filepath}" << 'HEREDOC_EOF'\n${block.content}\nHEREDOC_EOF`;
           await this.sandboxExecutor.executeInSandbox('custom_command', command, {
@@ -196,6 +192,20 @@ Write ALL files needed for the project to work. Make it production-quality.`;
       },
       errors: []
     };
+  }
+
+  /**
+   * Place generated files inside the project's folder (next to the skeleton and docs),
+   * rejecting absolute paths and parent-directory traversal.
+   */
+  private resolveProjectPath(projectId: string | undefined, filepath: string): string | null {
+    const clean = filepath.trim().replace(/^\.\//, '');
+    if (!clean || clean.startsWith('/') || clean.split('/').includes('..') || /["$`\\]/.test(clean)) {
+      return null;
+    }
+    if (!projectId) return clean;
+    const root = OOADArtifactService.projectRoot(projectId);
+    return clean.startsWith(`${root}/`) ? clean : `${root}/${clean}`;
   }
 
   private parseCodeBlocks(output: string): Array<{ filepath: string; content: string }> {

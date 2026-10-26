@@ -3,6 +3,12 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": ["**/*.json"]
+    "assets": [
+      "**/*.json",
+      {
+        "include": "modules/agents/templates/**/*",
+        "watchAssets": true
+      }
+    ]
   }
 }

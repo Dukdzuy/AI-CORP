@@ -5,9 +5,8 @@ import { MemoryService } from '../../memory/memory.service';
 import { LLMProviderFactory } from '../../llm/llm-provider.factory';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
-import { TemplateService } from '../services/template.service';
+import { OOADArtifactService } from '../services/ooad-artifact.service';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { SandboxExecutor } from '../../tools/sandbox.executor';
 import { UseCaseDataSchema, UseCaseData } from '../schemas/ooad.schema';
 import { OOADSchemaValidationError } from '../errors/OOADSchemaValidationError';
 
@@ -19,9 +18,8 @@ export class BAActionStrategy implements IActionStrategy {
     private readonly memoryService: MemoryService,
     private readonly llmFactory: LLMProviderFactory,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly templateService: TemplateService,
-    private readonly prisma: PrismaService,
-    private readonly sandboxExecutor: SandboxExecutor
+    private readonly ooadArtifacts: OOADArtifactService,
+    private readonly prisma: PrismaService
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -92,44 +90,15 @@ Output ONLY valid JSON, no additional text.`;
       throw new OOADSchemaValidationError('UseCaseData', error.errors || [error.message]);
     }
 
-    // Generate PlantUML use case diagram
-    const useCaseDiagram = this.generateUseCaseDiagram(useCaseData);
-
-    // Render use cases markdown
-    const useCasesMd = await this.templateService.render('use-case-template.md', useCaseData);
-
-    // Write files to sandbox
+    // Render use-cases.md and use-case-diagram.puml from the OOAD templates
     const projectId = context.projectId || 'unknown';
-    const docsPath = `projects/${projectId}/docs`;
+    const artifacts = await this.ooadArtifacts.renderUseCaseArtifacts(useCaseData, context.projectContext?.name);
+    const useCasesMd = artifacts[0].content;
 
+    let filesWritten: string[];
     try {
-      // Create docs directory
-      await this.sandboxExecutor.executeInSandbox('custom_command', `mkdir -p ${docsPath}`, {
-        maxMemoryMB: 64,
-        maxCPUPercent: 10,
-        maxDiskMB: 10,
-        timeout: 5000
-      });
-
-      // Write use-cases.md
-      const writeMdCmd = `cat > ${docsPath}/use-cases.md << 'HEREDOC_EOF'\n${useCasesMd}\nHEREDOC_EOF`;
-      await this.sandboxExecutor.executeInSandbox('custom_command', writeMdCmd, {
-        maxMemoryMB: 128,
-        maxCPUPercent: 20,
-        maxDiskMB: 50,
-        timeout: 10000
-      });
-
-      // Write use-case-diagram.puml
-      const writePumlCmd = `cat > ${docsPath}/use-case-diagram.puml << 'HEREDOC_EOF'\n${useCaseDiagram}\nHEREDOC_EOF`;
-      await this.sandboxExecutor.executeInSandbox('custom_command', writePumlCmd, {
-        maxMemoryMB: 128,
-        maxCPUPercent: 20,
-        maxDiskMB: 50,
-        timeout: 10000
-      });
-
-      this.logger.log(`BA wrote OOAD artifacts to ${docsPath}`);
+      filesWritten = await this.ooadArtifacts.writeFiles(projectId, artifacts);
+      this.logger.log(`BA wrote OOAD artifacts for project ${projectId}`);
     } catch (err: any) {
       this.logger.error(`Failed to write OOAD artifacts: ${err.message}`);
       throw new Error(`BA Agent failed to write artifacts: ${err.message}`);
@@ -183,7 +152,7 @@ Output ONLY valid JSON, no additional text.`;
         output: useCasesMd,
         useCases: useCaseData.useCases,
         actors: useCaseData.actors,
-        filesWritten: [`${docsPath}/use-cases.md`, `${docsPath}/use-case-diagram.puml`]
+        filesWritten
       },
       errors: []
     };
@@ -206,35 +175,5 @@ Output ONLY valid JSON, no additional text.`;
       }
       throw new Error('No valid JSON found in LLM response');
     }
-  }
-
-  private generateUseCaseDiagram(data: UseCaseData): string {
-    let puml = '@startuml\ntitle Use Case Diagram\nleft to right direction\n\n';
-
-    // Add actors
-    data.actors.forEach(actor => {
-      const actorId = actor.replace(/\s/g, '').replace(/[^a-zA-Z0-9]/g, '');
-      puml += `actor "${actor}" as ${actorId}\n`;
-    });
-
-    puml += '\nrectangle System {\n';
-
-    // Add use cases
-    data.useCases.forEach(uc => {
-      const ucId = uc.id.replace(/-/g, '');
-      puml += `  usecase "${uc.name}" as ${ucId}\n`;
-    });
-
-    puml += '}\n\n';
-
-    // Add relationships
-    data.useCases.forEach(uc => {
-      const ucId = uc.id.replace(/-/g, '');
-      const actorId = uc.actor.replace(/\s/g, '').replace(/[^a-zA-Z0-9]/g, '');
-      puml += `${actorId} --> ${ucId}\n`;
-    });
-
-    puml += '@enduml';
-    return puml;
   }
 }

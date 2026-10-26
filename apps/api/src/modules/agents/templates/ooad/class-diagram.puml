@@ -1,0 +1,74 @@
+@startuml
+title Class Diagram: {{projectName}}
+skinparam packageStyle rectangle
+hide empty members
+
+package "Presentation" {
+{{#each entities}}
+  class {{controllerName}} {
+    - service: {{serviceName}}
+{{#each useCases}}
+    + {{handlerName}}(request): Promise<unknown>
+{{/each}}
+  }
+{{/each}}
+}
+
+package "Application" {
+{{#each entities}}
+  class {{serviceName}} {
+    - repository: {{repositoryInterface}}
+    + getById(id: {{idTsType}}): Promise<{{className}}>
+{{#each useCases}}
+    + {{methodName}}(input): Promise<unknown>
+{{/each}}
+  }
+{{/each}}
+}
+
+package "Domain" {
+{{#each entities}}
+  class {{className}} <<Entity>> {
+    + id: {{idTsType}}
+{{#each attributes}}
+    - {{name}}: {{tsType}}
+{{/each}}
+{{#each methods}}
+    + {{name}}({{params}}): {{returnType}}
+{{/each}}
+  }
+  interface {{repositoryInterface}} <<Repository>> {
+    + findById(id: {{idTsType}}): Promise<{{className}} | null>
+    + findAll(): Promise<{{className}}[]>
+    + save(entity: {{className}}): Promise<void>
+    + delete(id: {{idTsType}}): Promise<void>
+  }
+{{/each}}
+{{#each valueObjects}}
+  class {{className}} <<Value Object>> {
+{{#each attributes}}
+    + {{name}}: {{tsType}}
+{{/each}}
+  }
+{{/each}}
+}
+
+package "Infrastructure" {
+{{#each entities}}
+  class {{repositoryImpl}}
+{{/each}}
+}
+
+' Dependency rule: outer layers depend on inner layers, never the reverse
+{{#each entities}}
+{{controllerName}} --> {{serviceName}}
+{{serviceName}} --> {{repositoryInterface}}
+{{serviceName}} ..> {{className}}
+{{repositoryInterface}} <|.. {{repositoryImpl}}
+{{/each}}
+
+{{#each relationships}}
+{{from}} {{type}} {{to}}{{#if label}} : {{label}}{{/if}}
+{{/each}}
+
+@enduml
