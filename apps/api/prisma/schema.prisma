@@ -169,21 +169,59 @@ model AgentMessage {
 // ============================================================================
 
 model WorkflowRun {
-  id            String    @id @default(uuid())
-  projectId     String
-  workflowDefId String
-  status        String    @default("running") // running, paused, completed, failed, cancelled
-  currentNodeId String?
-  context       Json      // Workflow execution context
-  startedAt     DateTime  @default(now())
-  completedAt   DateTime?
+  id                 String    @id @default(uuid())
+  projectId          String
+  workflowDefId      String
+  workflowDefVersion String?   // Version the run is pinned to (Task 17); null = latest registered
+  status             String    @default("running") // running, paused, completed, failed, cancelled
+  currentNodeId      String?
+  context            Json      // Workflow execution context
+  parentRunId        String?   // Sub-workflow runs (Task 16): the run that started this one
+  parentNodeId       String?   // ...and its sub_workflow node
+  startedAt          DateTime  @default(now())
+  completedAt        DateTime?
 
   project       Project   @relation(fields: [projectId], references: [id])
+  parentRun     WorkflowRun?  @relation("SubWorkflowRuns", fields: [parentRunId], references: [id], onDelete: Cascade)
+  childRuns     WorkflowRun[] @relation("SubWorkflowRuns")
   steps         WorkflowStep[]
   approvals     Approval[]
+  snapshots     WorkflowSnapshot[]
 
   @@index([projectId])
   @@index([status])
+  @@index([parentRunId])
+}
+
+// Memento of a run taken before each node executes; rollback restores one (Task 17)
+model WorkflowSnapshot {
+  id            String    @id @default(uuid())
+  workflowRunId String
+  sequence      Int       // 1, 2, 3 ... per run
+  nodeId        String
+  status        String
+  context       Json
+  createdAt     DateTime  @default(now())
+
+  workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowRunId, sequence])
+  @@index([workflowRunId, createdAt])
+}
+
+// Immutable workflow definitions, one row per id + version (Task 17); templates write here (Task 19)
+model WorkflowDefinitionVersion {
+  id           String   @id @default(uuid())
+  definitionId String
+  version      String
+  name         String
+  definition   Json
+  templateId   String?
+  parameters   Json?
+  createdAt    DateTime @default(now())
+
+  @@unique([definitionId, version])
+  @@index([templateId])
 }
 
 model WorkflowStep {
@@ -219,7 +257,7 @@ model Approval {
   workflowRunId String
   userId        String
   approvalType  String
-  status        String    @default("pending") // pending, approved, rejected - transitions validated in app layer
+  status        String    @default("pending") // pending, approved, rejected, cancelled (rollback) - transitions validated in app layer
   requestData   Json
   comment       String?   @db.Text
   requestedAt   DateTime  @default(now())

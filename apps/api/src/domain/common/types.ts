@@ -58,7 +58,10 @@ export interface AgentContext {
    */
   goal?: string;
   projectName?: string;
+  projectDescription?: string;
   projectSummary?: string;
+  /** Node-level constraints from the workflow definition, e.g. a template's database choice (Task 19) */
+  constraints?: string;
   milestone?: string;
   code?: string;
   architecture?: string;

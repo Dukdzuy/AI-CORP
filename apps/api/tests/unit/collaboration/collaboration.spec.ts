@@ -438,9 +438,10 @@ describe('Collaborative workflow variant', () => {
   });
 
   it('is chosen for new projects with WORKFLOW_COLLABORATION=pair', () => {
-    const engine = { createWorkflow: jest.fn() };
+    const builtIns = [DEFAULT_WORKFLOW_DEFINITION, PAIR_WORKFLOW_DEFINITION];
+    const engine = { createWorkflow: jest.fn(), getDefinition: jest.fn((id: string) => builtIns.find(d => d.id === id)) };
     jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
-    const service = new WorkflowDefinitionService(engine as any);
+    const service = new WorkflowDefinitionService(engine as any, { saveIfAbsent: jest.fn(), findAll: jest.fn() }, {} as any);
 
     expect(engine.createWorkflow).toHaveBeenCalledTimes(2);
     delete process.env.WORKFLOW_COLLABORATION;

@@ -7,6 +7,7 @@ import {
   CreateStepInput,
   UpdateStepInput,
   CreateApprovalInput,
+  CreateSnapshotInput,
 } from './workflow-engine.repository';
 
 /**
@@ -29,8 +30,16 @@ export class PrismaWorkflowEngineRepository implements IWorkflowEngineRepository
   findRunsByStatus(status: string) {
     return this.prisma.workflowRun.findMany({
       where: {
-        status
+        status,
+        parentRunId: null
       }
+    });
+  }
+
+  findChildRuns(parentRunId: string) {
+    return this.prisma.workflowRun.findMany({
+      where: { parentRunId },
+      orderBy: { startedAt: 'asc' }
     });
   }
 
@@ -52,6 +61,30 @@ export class PrismaWorkflowEngineRepository implements IWorkflowEngineRepository
     });
   }
 
+  findStepsByRun(runId: string) {
+    return this.prisma.workflowStep.findMany({
+      where: { workflowRunId: runId },
+      orderBy: { startedAt: 'asc' }
+    });
+  }
+
+  createSnapshot(data: CreateSnapshotInput) {
+    return this.prisma.workflowSnapshot.create({ data });
+  }
+
+  findSnapshots(runId: string) {
+    return this.prisma.workflowSnapshot.findMany({
+      where: { workflowRunId: runId },
+      orderBy: { sequence: 'asc' }
+    });
+  }
+
+  deleteSnapshotsAfter(runId: string, sequence: number) {
+    return this.prisma.workflowSnapshot.deleteMany({
+      where: { workflowRunId: runId, sequence: { gt: sequence } }
+    });
+  }
+
   findProjectWithOwner(projectId: string) {
     return this.prisma.project.findUnique({
       where: { id: projectId },
@@ -68,5 +101,13 @@ export class PrismaWorkflowEngineRepository implements IWorkflowEngineRepository
 
   createApproval(data: CreateApprovalInput) {
     return this.prisma.approval.create({ data });
+  }
+
+  async cancelPendingApprovals(runId: string) {
+    const result = await this.prisma.approval.updateMany({
+      where: { workflowRunId: runId, status: 'pending' },
+      data: { status: 'cancelled', respondedAt: new Date(), comment: 'Cancelled by workflow rollback' }
+    });
+    return result.count;
   }
 }

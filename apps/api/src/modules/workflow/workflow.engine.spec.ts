@@ -957,6 +957,7 @@ describe('WorkflowEngine - Node Execution Logic', () => {
         expect(prismaService.workflowRun.findMany).toHaveBeenCalledWith({
           where: {
             status: 'running',
+            parentRunId: null,
           },
         });
 

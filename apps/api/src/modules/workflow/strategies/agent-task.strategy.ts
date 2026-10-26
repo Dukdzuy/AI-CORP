@@ -61,6 +61,8 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
         ...vars,
         // Set for turns of an agent_collaboration node: the pattern sends its own ACL messages
         collaboration: metadata.collaboration,
+        // Node-level constraints, e.g. from template parameters (Task 19)
+        ...(metadata.constraints ? { constraints: metadata.constraints } : {}),
       };
       const result = await this.orchestrator.invokeAgent(node.agentRole, agentInput);
 

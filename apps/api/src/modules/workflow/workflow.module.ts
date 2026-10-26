@@ -12,9 +12,16 @@ import { QualityGateStrategy } from './strategies/quality-gate.strategy';
 import { AgentCollaborationStrategy } from './collaboration/agent-collaboration.strategy';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { SubWorkflowStrategy } from './strategies/sub-workflow.strategy';
+import { WORKFLOW_DEFINITION_REPOSITORY } from './persistence/workflow-definition.repository';
+import { PrismaWorkflowDefinitionRepository } from './persistence/prisma-workflow-definition.repository';
+import { BUILT_IN_TEMPLATES, WORKFLOW_TEMPLATES, WorkflowTemplateCatalog } from './templates/workflow-template.catalog';
+import { WorkflowRunQueryService } from './workflow-run-query.service';
+import { WorkflowsController } from './workflows.controller';
 
 @Module({
   imports: [WebSocketModule, OrchestratorModule, InfrastructureModule, WorkspaceModule, PrismaModule],
+  controllers: [WorkflowsController],
   providers: [
     WorkflowValidator,
     WorkflowEngine,
@@ -22,7 +29,12 @@ import { PrismaModule } from '../../prisma/prisma.module';
     QualityGateHandler,
     QualityGateStrategy,
     AgentCollaborationStrategy,
+    SubWorkflowStrategy,
+    WorkflowTemplateCatalog,
+    WorkflowRunQueryService,
+    { provide: WORKFLOW_TEMPLATES, useFactory: BUILT_IN_TEMPLATES },
     { provide: WORKFLOW_ENGINE_REPOSITORY, useClass: PrismaWorkflowEngineRepository },
+    { provide: WORKFLOW_DEFINITION_REPOSITORY, useClass: PrismaWorkflowDefinitionRepository },
   ],
   exports: [WorkflowValidator, WorkflowEngine, WorkflowDefinitionService],
 })

@@ -7,6 +7,7 @@ export interface WorkflowRunDTO {
   id: string;
   projectId: string;
   workflowDefId: string;
+  workflowDefVersion?: string | null;
   status: string;
   currentNodeId: string | null;
   context: any;

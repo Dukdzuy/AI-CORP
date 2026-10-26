@@ -265,6 +265,8 @@ export class PrismaProjectRepository implements IProjectRepository {
       where: { id },
       include: {
         workflowRuns: {
+          // Sub-workflow runs belong to their parent run's tree, not to the project's run list
+          where: { parentRunId: null },
           orderBy: { startedAt: 'desc' },
           take: limit || 10,
         },
@@ -278,6 +280,7 @@ export class PrismaProjectRepository implements IProjectRepository {
         id: w.id,
         projectId: w.projectId,
         workflowDefId: w.workflowDefId,
+        workflowDefVersion: w.workflowDefVersion,
         status: w.status,
         currentNodeId: w.currentNodeId,
         context: w.context,

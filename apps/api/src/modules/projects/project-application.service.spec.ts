@@ -65,8 +65,47 @@ describe('ProjectApplicationService', () => {
       expect(workflowEngine.startWorkflow).toHaveBeenCalledWith(
         persisted.id,
         'default',
-        expect.objectContaining({ projectId: persisted.id, goal: GOAL })
+        expect.objectContaining({ projectId: persisted.id, goal: GOAL }),
+        undefined
       );
+    });
+
+    it('starts the instantiated template, pinned to its version, when a template is chosen (Task 19)', async () => {
+      workflowDefinitionService.previewTemplate = jest.fn();
+      workflowDefinitionService.instantiateTemplate = jest.fn().mockResolvedValue({
+        definition: { id: 'ooad-software-project', version: '1.0.0+abc' },
+        instance: { parameters: { minUseCases: 3 } },
+      });
+
+      await service.createProject({
+        name: 'Todo App',
+        description: 'A simple todo app',
+        goal: GOAL,
+        createdById: 'user-1',
+        templateId: 'ooad-software-project',
+        templateParams: { minUseCases: 3 },
+      });
+
+      expect(workflowDefinitionService.previewTemplate).toHaveBeenCalledWith('ooad-software-project', { minUseCases: 3 });
+      expect(workflowEngine.startWorkflow).toHaveBeenCalledWith(
+        expect.any(String),
+        'ooad-software-project',
+        expect.objectContaining({
+          variables: expect.objectContaining({ workflowTemplate: { id: 'ooad-software-project', parameters: { minUseCases: 3 } } }),
+        }),
+        '1.0.0+abc'
+      );
+    });
+
+    it('rejects an invalid template choice before creating the project', async () => {
+      workflowDefinitionService.previewTemplate = jest.fn(() => {
+        throw new BadRequestException('Invalid template parameters');
+      });
+
+      await expect(
+        service.createProject({ name: 'Todo App', description: 'x', goal: GOAL, createdById: 'user-1', templateId: 'ooad-software-project' })
+      ).rejects.toThrow(BadRequestException);
+      expect(repository.create).not.toHaveBeenCalled();
     });
 
     it('rejects a project that breaks an entity rule without persisting it', async () => {
