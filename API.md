@@ -264,7 +264,10 @@ Connect to `http://localhost:3000` with Socket.IO. Authenticate via JWT token.
 | `CEO` | Strategic planning, milestone creation | create_milestone |
 | `PM` | Task breakdown, prioritization | create_task |
 | `DEV` | Code implementation, testing | write_file, read_file, run_tests |
-| `QA` | Code review, bug detection | read_file, run_tests |
+| `BA` | Use cases, use case diagram | - |
+| `ARCHITECT` | Domain model, diagrams, patterns, code skeleton | - |
+| `QC` | Acceptance tests per use case, traceability matrix | - |
+| `QA` | OOAD quality gate, design-conformance review | read_file, run_tests |
 | `MARKETING` | Announcement drafting | - |
 
 ## Error Responses

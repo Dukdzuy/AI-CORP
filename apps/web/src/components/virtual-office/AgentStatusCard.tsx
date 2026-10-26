@@ -10,6 +10,9 @@ const ROLE_COLORS: Record<string, string> = {
   PM: '#1677ff',
   DEV: '#52c41a',
   QA: '#fa8c16',
+  QC: '#13c2c2',
+  BA: '#2f54eb',
+  ARCHITECT: '#a0d911',
   MARKETING: '#eb2f96',
 };
 
@@ -18,6 +21,9 @@ const ROLE_LABELS: Record<string, string> = {
   PM: 'Product Manager',
   DEV: 'Developer',
   QA: 'Quality Assurance',
+  QC: 'Quality Control',
+  BA: 'Business Analyst',
+  ARCHITECT: 'Software Architect',
   MARKETING: 'Marketing Lead',
 };
 

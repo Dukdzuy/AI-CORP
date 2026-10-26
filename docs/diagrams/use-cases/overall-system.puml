@@ -14,7 +14,7 @@ actor "QA Agent" as QA #lightgreen
 actor "Marketing Agent" as Marketing #lightgreen
 actor "BA Agent" as BA #orange
 actor "Architect Agent" as Architect #orange
-actor "DevOps Agent" as DevOps #orange
+actor "QC Agent" as QC #orange
 
 ' Actor - System/External
 actor "System\n(Internal)" as System #lightgray
@@ -53,7 +53,7 @@ rectangle "AI-CORP Platform" {
     usecase "UC-012\nExecute Development\nTask (DEV)" as UC012
     usecase "UC-013\nExecute Code Review\n(QA)" as UC013
     usecase "UC-014\nCreate Marketing\nStrategy" as UC014
-    usecase "UC-016\nDeploy Application\n(DevOps)" as UC016
+    usecase "UC-016\nVerify Implementation\nagainst Use Cases (QC)" as UC016
     usecase "UC-023\nPerform Code Quality\nAnalysis (QA)" as UC023
     usecase "UC-024\nEstimate Task\nComplexity (BA/PM)" as UC024
   }
@@ -109,8 +109,8 @@ QA --> UC023
 ' ====== ASSOCIATIONS - Marketing Agent ======
 Marketing --> UC014
 
-' ====== ASSOCIATIONS - DevOps Agent ======
-DevOps --> UC016
+' ====== ASSOCIATIONS - QC Agent ======
+QC --> UC016
 
 ' ====== ASSOCIATIONS - System ======
 System --> UC004
@@ -179,7 +179,7 @@ legend right
   |= Symbol |= Meaning |
   | #lightblue | Human User |
   | #lightgreen | Existing AI Agent |
-  | #orange | New AI Agent (BA, Architect, DevOps) |
+  | #orange | New AI Agent (BA, Architect, QC) |
   | #lightgray | Internal System Process |
   | #lightyellow | External System |
   

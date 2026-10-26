@@ -44,10 +44,12 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
     try {
       const workflowCtx = run.context as Record<string, unknown> || {};
       const vars = (workflowCtx.variables as Record<string, unknown>) || {};
+      const metadata = (node.metadata || {}) as Record<string, unknown>;
       const agentInput: any = {
         projectId: run.projectId,
         taskId: node.id,
-        task: (node as any).promptTemplate || node.taskType || 'Please proceed with the assigned task.',
+        task: (metadata.promptTemplate as string) || node.taskType || 'Please proceed with the assigned task.',
+        taskType: node.taskType,
         workflowRunId: run.id,
         projectContext: workflowCtx,
         relevantMemories: [],
@@ -60,29 +62,29 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
       };
       const result = await this.orchestrator.invokeAgent(node.agentRole, agentInput);
 
+      // Strategies return AgentActionResult { success, output: { action, output, ...fields } }
+      const actionResult = result?.action;
+      if (actionResult?.success === false) {
+        throw new Error(actionResult.error || `Agent ${node.agentRole} reported failure`);
+      }
+      const payload = AgentTaskStrategy.unwrapActionOutput(actionResult);
+
       // Merge agent output back into workflow context variables
-      // This allows condition nodes to check agent results (e.g., qa_approved)
-      if (result?.action) {
-        const action = result.action;
-        // Merge all output fields into variables
-        if (action.output && typeof action.output === 'object') {
-          Object.assign(vars, action.output);
-        } else if (typeof action.output === 'string' && action.output) {
-          // String output: store as 'output' key and also parse structured data
-          vars.output = action.output;
-          // Auto-create milestones from CEO agent output
-          if (action.action === 'planMilestones') {
-            await this.createMilestonesFromOutput(run.projectId, action.output, ctx);
-          }
-          // Auto-create tasks from PM agent output
-          if (action.action === 'breakdownTasks') {
-            await this.createTasksFromOutput(run.projectId, action.output, ctx);
+      // This allows condition nodes to check agent results (e.g., qa_approved) and later agents to read earlier output (e.g., code, qcReport)
+      if (payload) {
+        for (const [key, value] of Object.entries(payload)) {
+          if (key !== 'action') {
+            vars[key] = value;
           }
         }
-        // Merge top-level action fields (like qa_approved, edgeCondition)
-        for (const [key, value] of Object.entries(action)) {
-          if (key !== 'output' && key !== 'action') {
-            vars[key] = value;
+        if (typeof payload.output === 'string' && payload.output) {
+          // Auto-create milestones from CEO agent output
+          if (payload.action === 'planMilestones') {
+            await this.createMilestonesFromOutput(run.projectId, payload.output, ctx);
+          }
+          // Auto-create tasks from PM agent output
+          if (payload.action === 'breakdownTasks') {
+            await this.createTasksFromOutput(run.projectId, payload.output, ctx);
           }
         }
         workflowCtx.variables = vars;
@@ -118,6 +120,17 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
         error: (error as Error).message
       };
     }
+  }
+
+  /**
+   * The fields an agent produced: the strategy's output object, or a legacy { action, output } result
+   */
+  static unwrapActionOutput(action: any): Record<string, any> | null {
+    if (!action || typeof action !== 'object') return null;
+    if (typeof action.success === 'boolean') {
+      return action.output && typeof action.output === 'object' ? action.output : { output: action.output };
+    }
+    return action;
   }
 
   /**
@@ -219,48 +232,58 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
   /**
    * Update task status based on agent role after successful execution
    * Implements Task 32.2: Wire agent actions to task updates
+   *
+   * The DEV agent implements the whole approved design in one run, so:
+   * - DEV done        → every todo / in_progress task moves to review
+   * - QA approved     → every review task moves to done
+   * - QA rejected     → review tasks go back to in_progress (the workflow loops back to DEV)
+   * Moves go through the Task entity so the Kanban transition rules apply.
    */
   private async updateTaskStatusForAgent(agentRole: string, projectId: string, result: any, ctx: NodeExecutionContext): Promise<void> {
     try {
-      // Find the most recent task for this project that is in_progress (newest first)
-      const [task] = await this.taskRepository.findByStatus(projectId, 'in_progress');
-
-      if (!task) {
-        ctx.logger.log(`No in_progress task found for project ${projectId}, skipping task status update`);
-        return;
-      }
-
-      let newStatus: string | null = null;
-
-      // When Dev agent completes → task goes to review
       if (agentRole === 'DEV') {
-        newStatus = 'review';
-      }
-      // When QA agent approves → task goes to done
-      else if (agentRole === 'QA') {
-        // Check if QA result indicates approval
-        const isApproved = result?.output?.approved !== false && result?.status !== 'failure';
-        if (isApproved) {
-          newStatus = 'done';
+        const tasks = [
+          ...(await this.taskRepository.findByStatus(projectId, 'in_progress')),
+          ...(await this.taskRepository.findByStatus(projectId, 'todo')),
+        ];
+        for (const task of tasks) {
+          await this.moveTask(task, ['in_progress', 'review'], agentRole, projectId, ctx);
         }
-      }
-
-      if (newStatus) {
-        // Move the task through the Task entity so Kanban transition rules apply
-        const entity = Task.fromPrimitives(task);
-        entity.transitionTo(TaskStatus.fromString(newStatus));
-        await this.taskRepository.update(task.id, { status: entity.toPrimitives().status });
-        ctx.logger.log(`Updated task ${task.id} status to ${newStatus} after ${agentRole} agent completion`);
-
-        // Emit WebSocket event for task status change
-        this.websocketGateway.sendToProject(projectId, {
-          type: 'task:updated',
-          data: { taskId: task.id, status: newStatus, agentRole },
-          timestamp: new Date(),
-        });
+        if (tasks.length === 0) {
+          ctx.logger.log(`No open task found for project ${projectId}, skipping task status update`);
+        }
+      } else if (agentRole === 'QA') {
+        const payload = AgentTaskStrategy.unwrapActionOutput(result?.action);
+        const approved = payload?.qa_approved !== false;
+        const tasks = await this.taskRepository.findByStatus(projectId, 'review');
+        for (const task of tasks) {
+          await this.moveTask(task, [approved ? 'done' : 'in_progress'], agentRole, projectId, ctx);
+        }
       }
     } catch (error) {
       ctx.logger.error(`Failed to update task status for agent ${agentRole}: ${(error as Error).message}`);
     }
+  }
+
+  /** Walk a task through the given statuses (skipping the ones it is already in) and persist the result */
+  private async moveTask(task: any, path: string[], agentRole: string, projectId: string, ctx: NodeExecutionContext): Promise<void> {
+    const entity = Task.fromPrimitives(task);
+    for (const status of path) {
+      if (entity.toPrimitives().status !== status) {
+        entity.transitionTo(TaskStatus.fromString(status));
+      }
+    }
+    const newStatus = entity.toPrimitives().status;
+    if (newStatus === task.status) return;
+
+    await this.taskRepository.update(task.id, { status: newStatus });
+    ctx.logger.log(`Updated task ${task.id} status to ${newStatus} after ${agentRole} agent completion`);
+
+    // Emit WebSocket event for task status change
+    this.websocketGateway.sendToProject(projectId, {
+      type: 'task:updated',
+      data: { taskId: task.id, status: newStatus, agentRole },
+      timestamp: new Date(),
+    });
   }
 }

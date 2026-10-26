@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { SandboxExecutor } from '../../tools/sandbox.executor';
+import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 
 export interface ChecklistItem {
@@ -10,6 +10,21 @@ export interface ChecklistItem {
   expected: any;
   passed: boolean;
 }
+
+export interface QualityGateCriteria {
+  minUseCases: number;
+  minEntities: number;
+  minPatterns: number;
+  /** Files that must exist under the project's docs/ folder */
+  requiredArtifacts: string[];
+}
+
+export const DEFAULT_OOAD_GATE_CRITERIA: QualityGateCriteria = {
+  minUseCases: 5,
+  minEntities: 3,
+  minPatterns: 3,
+  requiredArtifacts: ['use-cases.md', 'use-case-diagram.puml', 'domain-model.puml', 'class-diagram.puml', 'architecture-patterns.md'],
+};
 
 export interface QualityGateResult {
   passed: boolean;
@@ -23,23 +38,16 @@ export class QualityGateHandler {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sandboxExecutor: SandboxExecutor,
+    private readonly workspace: ProjectWorkspace,
     private readonly websocketGateway: AppWebSocketGateway
   ) {}
 
   async executeGate(
     projectId: string,
     gateId: string,
-    criteria: {
-      minUseCases: number;
-      minEntities: number;
-      minPatterns: number;
-      requiredArtifacts: string[];
-    }
+    criteria: QualityGateCriteria = DEFAULT_OOAD_GATE_CRITERIA
   ): Promise<QualityGateResult> {
     this.logger.log(`Executing quality gate ${gateId} for project ${projectId}`);
-
-    const docsPath = `projects/${projectId}/docs`;
 
     // Load OOAD metadata from DB
     const project = await this.prisma.project.findUnique({
@@ -74,35 +82,18 @@ export class QualityGateHandler {
     // Note: Pattern justification length is already validated by PatternsSchema at creation time
     // No need to re-check here unless metadata was manually edited
 
-    // Check required artifact files exist
+    // Check required artifact files exist in the project workspace
     for (const artifact of criteria.requiredArtifacts) {
-      const checkFileCommand = `test -f ${docsPath}/${artifact} && echo "exists" || echo "missing"`;
+      let actual: string;
+      let passed = false;
       try {
-        const result = await this.sandboxExecutor.executeInSandbox('custom_command', checkFileCommand, {
-          maxMemoryMB: 64,
-          maxCPUPercent: 10,
-          maxDiskMB: 10,
-          timeout: 5000
-        });
-        const output = result.output.trim();
-        const exists = output === 'exists';
-        const checkFailed = output !== 'exists' && output !== 'missing';
-        
-        checklist.push({
-          name: `Artifact: ${artifact}`,
-          actual: checkFailed ? 'check failed (sandbox error)' : (exists ? 'exists' : 'missing'),
-          expected: 'exists',
-          passed: exists
-        });
+        passed = await this.workspace.exists(projectId, `docs/${artifact}`);
+        actual = passed ? 'exists' : 'missing';
       } catch (err: any) {
-        this.logger.warn(`Sandbox command failed for artifact ${artifact}: ${err.message}`);
-        checklist.push({
-          name: `Artifact: ${artifact}`,
-          actual: `check failed (${err.message})`,
-          expected: 'exists',
-          passed: false
-        });
+        this.logger.warn(`Artifact check failed for ${artifact}: ${err.message}`);
+        actual = `check failed (${err.message})`;
       }
+      checklist.push({ name: `Artifact: ${artifact}`, actual, expected: 'exists', passed });
     }
 
     // Calculate results

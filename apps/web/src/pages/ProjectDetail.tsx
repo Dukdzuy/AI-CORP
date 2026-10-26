@@ -38,7 +38,7 @@ export const ProjectDetail: React.FC = () => {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const { data: apiApprovals = [] } = usePendingApprovals(id ?? undefined);
-  const [wsApprovals, setWsApprovals] = useState<ApprovalRequiredEvent['data'][]>([]);
+  const [wsApprovals, setWsApprovals] = useState<ApprovalRequiredEvent[]>([]);
   const queryClient = useQueryClient();
 
   // Merge REST API approvals + WebSocket approvals, dedupe by approvalId

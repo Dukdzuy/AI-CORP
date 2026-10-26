@@ -107,7 +107,7 @@ Mở trình duyệt tại: **http://localhost:5173**
 Sau khi tạo dự án, workflow tự động chạy:
 
 ```
-CEO (Lên kế hoạch) → PM (Phân công) → Dev (Làm việc) → QA (Kiểm tra) → Marketing (Quảng cáo) → Duyệt
+CEO (Lên kế hoạch) → BA (Use case) → Architect (Thiết kế OOAD) → Quality gate → PM (Phân công theo use case) → Dev (Code) → QC (Test theo use case) → QA (Duyệt theo thiết kế) → Marketing (Quảng cáo) → Duyệt
 ```
 
 Theo dõi tiến độ tại **Virtual Office**.
@@ -162,8 +162,11 @@ Truy cập **Virtual Office** để xem agents đang hoạt động:
 |-------|--------|-----------|
 | **CEO** | Phòng Họp | Lên kế hoạch, quản lý dự án |
 | **PM** | Bàn Làm Việc | Phân công công việc |
-| **DEV** | Bàn Code | Viết code, test |
-| **QA** | Bàn Kiểm Tra | Kiểm tra code |
+| **BA** | Bàn Phân Tích | Viết use case, sơ đồ use case |
+| **ARCHITECT** | Bàn Thiết Kế | Domain model, sơ đồ lớp/tuần tự, design pattern, code skeleton |
+| **DEV** | Bàn Code | Viết code theo thiết kế |
+| **QC** | Bàn Kiểm Thử | Viết test theo use case, ma trận truy vết |
+| **QA** | Bàn Kiểm Tra | Quality gate OOAD, duyệt code theo thiết kế |
 | **MARKETING** | Phòng Marketing | Viết quảng cáo |
 
 ### Trạng Thái Agent
@@ -274,6 +277,7 @@ Truy cập **Dashboard** → Xem tổng quan:
 | `PORT` | Port backend | `3000` |
 | `REDIS_HOST` | Redis host | `localhost` |
 | `REDIS_PORT` | Redis port | `6379` |
+| `PROJECTS_WORKSPACE_DIR` | Thư mục lưu file các dự án do agent tạo ra | `apps/api/workspace` |
 
 ### Reset Database
 

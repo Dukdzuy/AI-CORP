@@ -2,7 +2,7 @@ import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { OoadMetricsService } from './ooad-metrics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
-@Controller('api/ooad-metrics')
+@Controller('ooad-metrics')
 @UseGuards(JwtAuthGuard)
 export class OoadMetricsController {
   constructor(private readonly ooadMetricsService: OoadMetricsService) {}

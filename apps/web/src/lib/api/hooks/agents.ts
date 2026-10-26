@@ -12,7 +12,10 @@ export interface AgentInfo {
 const DEFAULT_AGENTS: AgentInfo[] = [
   { id: 'ceo', role: AgentRole.CEO, name: 'CEO Agent', isActive: true },
   { id: 'pm', role: AgentRole.PM, name: 'PM Agent', isActive: true },
+  { id: 'ba', role: AgentRole.BA, name: 'Business Analyst Agent', isActive: true },
+  { id: 'architect', role: AgentRole.ARCHITECT, name: 'Software Architect Agent', isActive: true },
   { id: 'dev', role: AgentRole.DEV, name: 'Dev Agent', isActive: true },
+  { id: 'qc', role: AgentRole.QC, name: 'QC Agent', isActive: true },
   { id: 'qa', role: AgentRole.QA, name: 'QA Agent', isActive: true },
   { id: 'marketing', role: AgentRole.MARKETING, name: 'Marketing Agent', isActive: true },
 ];

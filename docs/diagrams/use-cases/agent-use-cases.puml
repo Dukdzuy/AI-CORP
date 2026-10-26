@@ -10,7 +10,7 @@ actor "PM Agent" as PM #90EE90
 actor "DEV Agent" as DEV #90EE90
 actor "QA Agent" as QA #90EE90
 actor "Marketing Agent" as Marketing #90EE90
-actor "DevOps Agent" as DevOps #FFA500
+actor "QC Agent" as QC #FFA500
 
 ' ====== EXTERNAL ACTORS ======
 actor "LLM Gateway" as LLM #FFD700
@@ -43,8 +43,8 @@ rectangle "Multi-Agent Collaboration Platform" {
     usecase "UC-023\nPerform Code Quality\nAnalysis" as UC023
   }
   
-  package "Deployment Phase" #FFF9C4 {
-    usecase "UC-016\nDeploy Application" as UC016
+  package "Verification Phase" #FFF9C4 {
+    usecase "UC-016\nVerify Implementation\nagainst Use Cases" as UC016
   }
   
   package "Marketing Phase" #E1F5FE {
@@ -75,7 +75,7 @@ DEV --> UC012
 QA --> UC013
 QA --> UC023
 
-DevOps --> UC016
+QC --> UC016
 
 Marketing --> UC014
 
@@ -117,9 +117,9 @@ UC016CEO ..> UC009 : <<delegates>>\n1. CEO → BA
 UC009 ..> UC010 : <<delegates>>\n2. BA → Architect
 UC010 ..> UC011 : <<delegates>>\n3. Architect → PM
 UC011 ..> UC012 : <<delegates>>\n4. PM → DEV
-UC012 ..> UC013 : <<delegates>>\n5. DEV → QA
-UC013 ..> UC016 : <<delegates>>\n6. QA → DevOps
-UC016 ..> UC014 : <<delegates>>\n7. DevOps → Marketing
+UC012 ..> UC016 : <<delegates>>\n5. DEV → QC
+UC016 ..> UC013 : <<delegates>>\n6. QC → QA
+UC013 ..> UC014 : <<delegates>>\n7. QA → Marketing
 
 ' ====== NOTES ======
 note right of UC015
@@ -131,7 +131,7 @@ note right of UC015
   - Provides strategic oversight
   
   **Coordination Pattern:**
-  CEO → BA → Architect → PM → DEV → QA → DevOps → Marketing
+  CEO → BA → Architect → OOAD gate → PM → DEV → QC → QA → Marketing
 end note
 
 note right of UC009
@@ -212,19 +212,15 @@ note top of UC013
 end note
 
 note right of UC016
-  **DevOps Agent Process:**
-  1. Receive approved code from QA
-  2. Generate deployment artifacts:
-     - Dockerfile
-     - docker-compose.yml
-     - CI/CD pipeline config
-  3. Execute deployment in sandbox (Docker-in-Docker)
-  4. Perform health checks (HTTP /health endpoint)
-  5. If success: Report deployment URL
-  6. If failure: Rollback and notify
-  
-  **Zero-Downtime:**
-  Supports blue-green or rolling updates
+  **QC Agent Process:**
+  1. Receive implementation from DEV
+  2. Load use cases + domain model (ooadMetadata)
+  3. Write one acceptance test per untested use case
+     (tests/UC-xxx.spec.ts, describe('UC-xxx: ...'))
+  4. Build traceability matrix:
+     use case → classes → code → tests
+  5. Persist coverage; warn if < 80%
+  6. Hand the report to QA
 end note
 
 note left of UC014
@@ -298,7 +294,7 @@ end note
 legend bottom
   |= Color |= Agent Type |
   | #90EE90 (Green) | Existing Agent (CEO, PM, DEV, QA, Marketing) |
-  | #FFA500 (Orange) | New Agent (BA, Architect, DevOps) |
+  | #FFA500 (Orange) | New Agent (BA, Architect, QC) |
   | #FFD700 (Gold) | External LLM Service |
   | #D3D3D3 (Gray) | External Docker Sandbox |
   
@@ -309,7 +305,7 @@ legend bottom
   | <<delegates>> | Agent-to-agent task handoff |
   
   **Workflow Sequence:**
-  CEO → BA → Architect → PM → DEV → QA → DevOps → Marketing
+  CEO → BA → Architect → OOAD gate → PM → DEV → QC → QA → Marketing
 endlegend
 
 @enduml

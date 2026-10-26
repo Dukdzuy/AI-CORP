@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IActionStrategy } from '../../../domain/agent/interfaces/IActionStrategy.interface';
 import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { LLMProviderFactory } from '../../llm/llm-provider.factory';
+import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
 import { OOADArtifactService } from '../services/ooad-artifact.service';
@@ -28,7 +28,7 @@ export class ArchitectActionStrategy implements IActionStrategy {
 
   constructor(
     private readonly memoryService: MemoryService,
-    private readonly llmFactory: LLMProviderFactory,
+    private readonly agentLLM: AgentLLMService,
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly ooadArtifacts: OOADArtifactService,
     private readonly prisma: PrismaService
@@ -64,24 +64,23 @@ export class ArchitectActionStrategy implements IActionStrategy {
 
     // Fetch model config once
     const modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free', fallbackProvider: 'opencode' };
-    const actualModelConfig = await this.memoryService.getModelConfigForAgent(AgentRole.ARCHITECT, modelConfig);
-    const provider = this.llmFactory.getProvider(actualModelConfig);
+    const { provider, model } = await this.agentLLM.providerFor(AgentRole.ARCHITECT, modelConfig, context.projectId);
 
     // Call 1: Domain Model
-    const domainModel = await this.generateDomainModel(provider, actualModelConfig.model, goal, description, useCases, memoryContext);
+    const domainModel = await this.generateDomainModel(provider, model, goal, description, useCases, memoryContext);
 
     // Call 2: Design Patterns
-    const patterns = await this.generatePatterns(provider, actualModelConfig.model, goal, description, useCases, domainModel, memoryContext);
+    const patterns = await this.generatePatterns(provider, model, goal, description, useCases, domainModel, memoryContext);
 
     // Call 3: Architecture Layers
-    const architecture = await this.generateArchitecture(provider, actualModelConfig.model, goal, description, useCases, domainModel, patterns, memoryContext);
+    const architecture = await this.generateArchitecture(provider, model, goal, description, useCases, domainModel, patterns, memoryContext);
 
     // Call 4-6: Sequence Diagrams for top 3 high-priority use cases
     const highPriorityUCs = useCases.filter(uc => uc.priority === 'High').slice(0, 3);
     const sequences: { useCase: UseCaseItem; diagram: SequenceDiagram }[] = [];
 
     for (const uc of highPriorityUCs) {
-      const diagram = await this.generateSequenceDiagram(provider, actualModelConfig.model, uc, domainModel);
+      const diagram = await this.generateSequenceDiagram(provider, model, uc, domainModel);
       sequences.push({ useCase: uc, diagram });
     }
 

@@ -2,7 +2,7 @@
 
 import { AgentRole } from './agent.types';
 
-export type NodeType = 'agent_task' | 'human_approval' | 'condition' | 'parallel';
+export type NodeType = 'agent_task' | 'human_approval' | 'condition' | 'parallel' | 'quality_gate';
 
 export interface WorkflowNode {
   id: string;

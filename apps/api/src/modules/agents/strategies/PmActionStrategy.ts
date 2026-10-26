@@ -2,20 +2,22 @@ import { Injectable, Logger } from '@nestjs/common';
 import { IActionStrategy } from '../../../domain/agent/interfaces/IActionStrategy.interface';
 import { AgentContext, AgentThought, AgentActionResult } from '../../../domain/common/types';
 import { MemoryService } from '../../memory/memory.service';
-import { LLMProviderFactory } from '../../llm/llm-provider.factory';
+import { AgentLLMService } from '../services/agent-llm.service';
 import { AppWebSocketGateway } from '../../websocket/websocket.gateway';
 import { AgentRole, ModelRouteConfig } from '@ai-corp/shared-types';
+import { PrismaService } from '../../../prisma/prisma.service';
 
 @Injectable()
 export class PmActionStrategy implements IActionStrategy {
   private readonly logger = new Logger(PmActionStrategy.name);
+  private readonly systemPrompt = 'You are the Project Manager. Your objective is to break down milestones into actionable technical tasks for the development team.';
+  private readonly modelConfig: ModelRouteConfig = { provider: 'opencode', model: 'openrouter/openrouter/free', fallbackProvider: 'opencode' };
 
   constructor(
     private readonly memoryService: MemoryService,
-    private readonly llmFactory: LLMProviderFactory,
+    private readonly agentLLM: AgentLLMService,
     private readonly websocketGateway: AppWebSocketGateway,
-    private readonly systemPrompt: string,
-    private readonly modelConfig: ModelRouteConfig
+    private readonly prisma: PrismaService
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult> {
@@ -26,8 +28,25 @@ export class PmActionStrategy implements IActionStrategy {
 
     const goal = context.goal || context.projectContext?.goal || '';
     const milestone = context.milestone || '';
+    const useCases = await this.loadUseCases(context.projectId);
 
-    const prompt = `You are the Project Manager breaking down milestones into developer tasks.
+    // PM runs after BA/Architect: tasks are derived from the approved use cases (one task per use case)
+    const prompt = useCases.length > 0
+      ? `You are the Project Manager planning the implementation of an approved design.
+
+PROJECT GOAL: ${goal}
+${milestone ? `MILESTONE: ${milestone}\n` : ''}USE CASES (approved by the OOAD quality gate):
+${useCases.map(uc => `- ${uc.id}: ${uc.name} (priority ${uc.priority})`).join('\n')}
+${memoryContext}
+
+Create one developer task per use case, ordered by priority. Keep the use case id at the start of each title.
+
+Format your response as a numbered list:
+1. UC-001 Task title - Brief description of what needs to be done
+2. UC-002 Task title - Brief description of what needs to be done
+
+Each task should be specific, measurable, and achievable.`
+      : `You are the Project Manager breaking down milestones into developer tasks.
 
 PROJECT GOAL: ${goal}
 MILESTONE: ${milestone}
@@ -43,16 +62,15 @@ Format your response as a numbered list:
 Each task should be specific, measurable, and achievable.`;
 
     // Fetch latest model config
-    const modelConfig = await this.memoryService.getModelConfigForAgent(AgentRole.PM, this.modelConfig);
-    const provider = this.llmFactory.getProvider(modelConfig);
+    const { provider, model } = await this.agentLLM.providerFor(AgentRole.PM, this.modelConfig, context.projectId);
 
     const result = await provider.chat({
       messages: [
         { role: 'system', content: this.systemPrompt },
         { role: 'user', content: prompt }
       ],
-      model: modelConfig.model,
-      maxTokens: 800
+      model,
+      maxTokens: 1200
     });
 
     // Save memory
@@ -60,7 +78,7 @@ Each task should be specific, measurable, and achievable.`;
       await this.memoryService.getAgentIdByRole(AgentRole.PM) || 'pm',
       AgentRole.PM,
       'task_breakdown',
-      `Broke down milestone: ${milestone}`,
+      useCases.length > 0 ? `Planned ${useCases.length} use case tasks for: ${goal}` : `Broke down milestone: ${milestone}`,
       { importance: 6, projectId: context.projectId }
     );
 
@@ -81,5 +99,16 @@ Each task should be specific, measurable, and achievable.`;
       success: true,
       output: { action: 'breakdownTasks', output: result.content },
     };
+  }
+
+  private async loadUseCases(projectId?: string): Promise<Array<{ id: string; name: string; priority: string }>> {
+    if (!projectId || projectId === 'unknown') return [];
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { ooadMetadata: true }
+    });
+    const useCases = ((project?.ooadMetadata as any)?.useCases || []) as Array<{ id: string; name: string; priority: string }>;
+    const rank: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+    return [...useCases].sort((a, b) => (rank[a.priority] ?? 3) - (rank[b.priority] ?? 3));
   }
 }

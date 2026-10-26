@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TemplateService } from './template.service';
-import { SandboxExecutor } from '../../tools/sandbox.executor';
+import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import {
   Architecture,
   DomainModel,
@@ -33,8 +33,8 @@ export interface DesignInput {
 
 /**
  * Facade over the OOAD templates: renders every design artifact and the layered code
- * skeleton for a generated project, and writes them to the sandbox. BA, Architect and
- * Dev strategies go through this service so the artifacts always share one format.
+ * skeleton for a generated project, and writes them to the project workspace. BA, Architect
+ * and Dev strategies go through this service so the artifacts always share one format.
  */
 @Injectable()
 export class OOADArtifactService {
@@ -42,7 +42,7 @@ export class OOADArtifactService {
 
   constructor(
     private readonly templateService: TemplateService,
-    private readonly sandboxExecutor: SandboxExecutor
+    private readonly workspace: ProjectWorkspace
   ) {}
 
   static projectRoot(projectId: string): string {
@@ -107,28 +107,19 @@ export class OOADArtifactService {
     return files;
   }
 
-  /** Write files under projects/<projectId>/ in the sandbox; returns the full paths written */
+  /** Write files under projects/<projectId>/ in the project workspace; returns the paths written */
   async writeFiles(projectId: string, files: GeneratedFile[]): Promise<string[]> {
-    const root = OOADArtifactService.projectRoot(projectId);
     const written: string[] = [];
     for (const file of files) {
-      const fullPath = `${root}/${file.path}`;
-      const command = `mkdir -p "$(dirname "${fullPath}")" && cat > "${fullPath}" << 'HEREDOC_EOF'\n${file.content}\nHEREDOC_EOF`;
-      await this.sandboxExecutor.executeInSandbox('custom_command', command, {
-        maxMemoryMB: 128,
-        maxCPUPercent: 20,
-        maxDiskMB: 50,
-        timeout: 10000,
-      });
-      written.push(fullPath);
+      written.push(await this.workspace.writeFile(projectId, file.path, file.content));
     }
-    this.logger.log(`Wrote ${written.length} OOAD file(s) under ${root}`);
+    this.logger.log(`Wrote ${written.length} OOAD file(s) under ${OOADArtifactService.projectRoot(projectId)}`);
     return written;
   }
 
   /**
    * Rebuild the design context for the Dev agent from the persisted ooadMetadata
-   * (the database is the source of truth; sandbox files don't outlive their container).
+   * (the database is the source of truth for the design; the workspace holds the rendered files).
    * Returns null when BA/Architect haven't produced a design yet.
    */
   async buildImplementationContext(metadata: any, projectName?: string): Promise<string | null> {

@@ -1,6 +1,9 @@
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { TemplateService } from '../../../src/modules/agents/services/template.service';
 import { OOADArtifactService } from '../../../src/modules/agents/services/ooad-artifact.service';
+import { ProjectWorkspace } from '../../../src/modules/workspace/project-workspace.service';
 import {
   defaultSequenceDiagram,
   toCamelCase,
@@ -31,8 +34,10 @@ describe('OOAD view model helpers', () => {
 describe('OOADArtifactService', () => {
   process.env.OOAD_TEMPLATES_PATH = path.join(__dirname, '../../../src/modules/agents/templates/ooad');
   const templates = new TemplateService();
-  const executeInSandbox = jest.fn().mockResolvedValue({ output: '', exitCode: 0 });
-  const service = new OOADArtifactService(templates, { executeInSandbox } as any);
+  const workspaceDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ooad-ws-'));
+  const workspace = new ProjectWorkspace(workspaceDir);
+  const service = new OOADArtifactService(templates, workspace);
+  afterAll(() => fs.rmSync(workspaceDir, { recursive: true, force: true }));
   const designInput = { projectName: 'Shop', useCases: useCaseData.useCases, domainModel, architecture, patterns };
 
   it('renders use case docs in the format the QA traceability parser reads', async () => {
@@ -96,7 +101,7 @@ describe('OOADArtifactService', () => {
   it('writes files under the project root', async () => {
     const written = await service.writeFiles('p1', [{ path: 'docs/a.md', content: 'x' }]);
     expect(written).toEqual(['projects/p1/docs/a.md']);
-    expect(executeInSandbox.mock.calls[0][1]).toContain('cat > "projects/p1/docs/a.md"');
+    expect(await workspace.readFile('p1', 'docs/a.md')).toBe('x');
   });
 
   it('builds the Dev implementation context from persisted metadata', async () => {

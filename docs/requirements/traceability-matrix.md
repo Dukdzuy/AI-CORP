@@ -63,13 +63,13 @@ Requirements are organized into 7 subsystems:
 |--------|------------------|-------------|--------------|------------------|---------------------|----------|--------|
 | FR-AGENT-001 | BA Agent - Requirements Analysis | BA Agent shall analyze project goals and generate requirements documents (FR/NFR lists, use case outlines) | UC-009 | Class: BaAgent extends BaseAgent | apps/api/src/modules/agents/ba.agent.ts | TEST-AGENT-BA-001, TEST-AGENT-BA-002 | Planned |
 | FR-AGENT-002 | Architect Agent - System Design | Architect Agent shall design system architecture, generate PlantUML diagrams, and create ADRs | UC-010 | Class: ArchitectAgent extends BaseAgent | apps/api/src/modules/agents/architect.agent.ts | TEST-AGENT-ARCH-001, TEST-AGENT-ARCH-002 | Planned |
-| FR-AGENT-003 | DevOps Agent - Deployment Automation | DevOps Agent shall generate deployment artifacts (Dockerfile, docker-compose.yml) and execute deployments | UC-016 | Class: DevOpsAgent extends BaseAgent | apps/api/src/modules/agents/devops.agent.ts | TEST-AGENT-DEVOPS-001, TEST-AGENT-DEVOPS-002 | Planned |
+| FR-AGENT-003 | QC Agent - Use Case Verification | QC Agent shall derive acceptance tests from use cases and maintain the traceability matrix with coverage (replaces DevOps, 2026-10-26) | UC-016 | Class: QcAgent, QcActionStrategy, TraceabilityService | apps/api/src/modules/agents/qc.agent.ts | tests/unit/agents/traceability.spec.ts | Implemented |
 | FR-AGENT-004 | Base Agent Architecture | All agents shall extend BaseAgent and implement think() and act() methods (Template Method pattern) | UC-004, UC-009-016 | Abstract Class: BaseAgent | apps/api/src/modules/agents/base.agent.ts | TEST-AGENT-BASE-001 | Implemented |
 | FR-AGENT-005 | Agent State Management | Agents shall transition through states: IDLE→THINKING→ACTING→COMPLETED (State pattern) | UC-004 | Class: AgentStateMachine, Interface: IAgent | apps/api/src/domain/agent-state-machine.ts | TEST-AGENT-STATE-001, TEST-AGENT-STATE-002 | Implemented |
 | FR-AGENT-006 | Agent Memory Storage | Agents shall save observations to AgentMemory with importance [1-10] and namespace | UC-017 | Class: MemoryService (saveMemory method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-001, TEST-MEM-002 | Implemented |
 | FR-AGENT-007 | Agent Memory Search | Agents shall search memories using semantic similarity (pgvector cosine distance) | UC-017, UC-009-016 | Class: MemoryService (searchMemories method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-003, TEST-MEM-004 | Implemented |
 | FR-AGENT-008 | LLM Integration | Agents shall call LLM via callLLM() with dynamic model config from database | UC-018 | Class: BaseAgent (callLLM method), LLMProviderFactory | apps/api/src/modules/agents/base.agent.ts, apps/api/src/modules/llm/llm-provider.factory.ts | TEST-LLM-001, TEST-LLM-002 | Implemented |
-| FR-AGENT-009 | Sandbox Execution | Agents shall execute tools in isolated Docker containers with resource limits | UC-012, UC-016, UC-028 | Class: SandboxExecutor | apps/api/src/modules/tools/sandbox.executor.ts | TEST-SANDBOX-001, TEST-SANDBOX-002 | Implemented |
+| FR-AGENT-009 | Sandbox Execution | Agents shall execute tools in isolated Docker containers with resource limits | UC-012, UC-028 | Class: SandboxExecutor | apps/api/src/modules/tools/sandbox.executor.ts | TEST-SANDBOX-001, TEST-SANDBOX-002 | Implemented |
 | FR-AGENT-010 | Tool Authorization | System shall enforce tool authorization per agent role (e.g., DEV can run_code, CEO cannot) | UC-028 | Class: ToolRegistry (isToolAuthorizedForRole method) | apps/api/src/modules/tools/tool.registry.ts | TEST-TOOLS-001 | Implemented |
 | FR-AGENT-011 | Agent Configuration | Admin shall configure agent LLM models (provider, model, fallback) | UC-003 | Class: AgentsService (updateConfig method) | apps/api/src/modules/agents/agents.service.ts | TEST-AGENT-CONFIG-001 | Implemented |
 | FR-AGENT-012 | Agent Communication | Agents shall broadcast messages to Virtual Office meeting room | UC-021, UC-024 | Class: BaseAgent (emitMessage method), AppWebSocketGateway | apps/api/src/modules/agents/base.agent.ts, apps/api/src/modules/websocket/websocket.gateway.ts | TEST-AGENT-MSG-001 | Implemented |
@@ -140,7 +140,7 @@ Requirements are organized into 7 subsystems:
 |--------|------------------|-------------|--------------|------------------|----------------|----------|--------|
 | NFR-SEC-001 | Password Security | Passwords must be hashed with bcrypt salt rounds ≥12 | UC-001 | bcrypt library with rounds=12 | AuthService register method | TEST-SEC-001 | Implemented |
 | NFR-SEC-002 | Prompt Injection Prevention | All user inputs must be sanitized against prompt injection patterns | UC-002, UC-009-016 | Input sanitizer with 15+ injection patterns | security/input-sanitizer.ts (sanitizeUserInput) | TEST-SEC-002, TEST-SEC-003 | Implemented |
-| NFR-SEC-003 | Sandbox Isolation | Code execution must be isolated in Docker containers with resource limits | UC-012, UC-016, UC-028 | Docker node:18-alpine with CPU/memory limits | SandboxExecutor with Docker API | TEST-SEC-004, TEST-SEC-005 | Implemented |
+| NFR-SEC-003 | Sandbox Isolation | Code execution must be isolated in Docker containers with resource limits | UC-012, UC-028 | Docker node:18-alpine with CPU/memory limits | SandboxExecutor with Docker API | TEST-SEC-004, TEST-SEC-005 | Implemented |
 | NFR-SEC-004 | Tool Authorization | Agents must only execute authorized tools per role | UC-028 | ToolRegistry with role-based ACL | ToolRegistry.isToolAuthorizedForRole() | TEST-SEC-006 | Implemented |
 | NFR-SEC-005 | JWT Token Security | JWT tokens must expire after 24 hours, use HS256 algorithm | UC-001 | NestJS @nestjs/jwt with expiresIn: '24h' | AuthModule JwtModule.register() | TEST-SEC-007 | Implemented |
 | NFR-SEC-006 | Environment Variable Validation | System must validate all required environment variables on startup | All | EnvValidator class with Joi schema | security/env-validator.ts | TEST-SEC-008 | Implemented |
@@ -234,7 +234,7 @@ Requirements are organized into 7 subsystems:
 | Authentication | 8 tests | 4 tests | 2 tests | 95% | Complete |
 | Project Management | 15 tests | 8 tests | 5 tests | 92% | Complete |
 | Agent Framework (existing) | 20 tests | 6 tests | 3 tests | 88% | Complete |
-| Agent Framework (new: BA, Architect, DevOps) | 0 tests | 0 tests | 0 tests | 0% | Not Started |
+| Agent Framework (new: BA, Architect, QC) | 0 tests | 0 tests | 0 tests | 0% | Not Started |
 | Workflow Orchestration | 25 tests | 10 tests | 4 tests | 91% | Complete |
 | Approval System | 10 tests | 5 tests | 2 tests | 93% | Complete |
 | Cost Tracking | 12 tests | 4 tests | 2 tests | 90% | Complete |
@@ -299,7 +299,7 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 ### Planned Requirements (Priority for Next Sprint)
 1. FR-AGENT-001 (BA Agent)
 2. FR-AGENT-002 (Architect Agent)
-3. FR-AGENT-003 (DevOps Agent)
+3. FR-AGENT-003 (QC Agent)
 4. FR-WF-008 (Workflow Rollback)
 5. FR-MEM-005 (Memory Pruning)
 6. NFR-PERF-004 (Cost Dashboard Caching)

@@ -14,6 +14,10 @@ export * from './DevActionStrategy';
 export * from './QaThinkingStrategy';
 export * from './QaActionStrategy';
 
+// QC Strategies
+export * from './QcThinkingStrategy';
+export * from './QcActionStrategy';
+
 // Marketing Strategies
 export * from './MarketingThinkingStrategy';
 export * from './MarketingActionStrategy';
@@ -26,6 +30,3 @@ export * from './BAActionStrategy';
 export * from './ArchitectThinkingStrategy';
 export * from './ArchitectActionStrategy';
 
-// DevOps Strategies
-export * from './DevOpsThinkingStrategy';
-export * from './DevOpsActionStrategy';

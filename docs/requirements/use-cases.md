@@ -12,7 +12,7 @@
 
 ## 1. System Overview
 
-The AI-CORP Multi-Agent Platform is an enterprise-grade workflow automation system that leverages multiple AI agents to coordinate complex project management tasks. The system implements a sophisticated multi-agent architecture where specialized AI agents (CEO, PM, DEV, QA, Marketing, BA, Architect, DevOps) collaborate to transform high-level project goals into deliverable outputs through automated workflows.
+The AI-CORP Multi-Agent Platform is an enterprise-grade workflow automation system that leverages multiple AI agents to coordinate complex project management tasks. The system implements a sophisticated multi-agent architecture where specialized AI agents (CEO, PM, DEV, QA, QC, Marketing, BA, Architect) collaborate to transform high-level project goals into deliverable outputs through automated workflows.
 
 The platform is built on NestJS with TypeScript, using PostgreSQL for data persistence, Redis/BullMQ for asynchronous workflow orchestration, and Socket.IO for real-time communication. The system integrates with LLM providers through a gateway routing service (9Router/OpenCode) and executes untrusted code in isolated Docker sandboxes for security.
 
@@ -29,11 +29,11 @@ Human users (Board Members and Administrators) initiate projects, monitor progre
 | **CEO Agent** | AI Agent | Strategic planning agent | Define high-level milestones, formulate project vision, coordinate other agents, ensure alignment with business goals |
 | **PM Agent** | AI Agent | Project management agent | Break down milestones into tasks, prioritize backlog, estimate task complexity, manage sprint planning |
 | **DEV Agent** | AI Agent | Software development agent | Implement code, write unit tests, document code, execute development tasks in sandbox environment |
-| **QA Agent** | AI Agent | Quality assurance agent | Perform code reviews, run integration tests, conduct static analysis, report bugs and quality metrics |
+| **QA Agent** | AI Agent | Quality assurance agent (process) | Own the OOAD quality gate, review code against the approved design (use cases, domain model, patterns, layering), approve or reject implementation |
+| **QC Agent** | AI Agent | Quality control agent (product, NEW) | Derive acceptance tests from use cases, maintain the traceability matrix, report use case coverage |
 | **Marketing Agent** | AI Agent | Marketing and communication agent | Draft product announcements, create release notes, communicate with stakeholders |
 | **BA Agent** | AI Agent | Business analyst agent (NEW) | Analyze requirements, create use case specifications, define acceptance criteria, document functional requirements |
 | **Architect Agent** | AI Agent | Software architect agent (NEW) | Design system architecture, select technologies, create architecture decision records (ADR), generate component diagrams |
-| **DevOps Agent** | AI Agent | DevOps engineer agent (NEW) | Automate deployments, manage CI/CD pipelines, monitor infrastructure health, generate deployment artifacts |
 | **System** | Internal | Automated system processes | Route LLM requests, manage agent memory, orchestrate workflows, enforce resource limits, handle errors |
 
 ---
@@ -203,7 +203,7 @@ An Admin modifies the LLM model configuration for a specific agent role, includi
 
 **Pre-conditions:**
 1. User is authenticated with admin role.
-2. Agent record exists in database with valid role (CEO, PM, DEV, QA, MARKETING, BA, ARCHITECT, DEVOPS).
+2. Agent record exists in database with valid role (CEO, PM, DEV, QA, QC, MARKETING, BA, ARCHITECT).
 
 **Post-conditions:**
 1. Agent.modelRouteConfig is updated with new {provider, model, fallbackProvider} JSON.
@@ -1077,81 +1077,60 @@ CEO Agent orchestrates high-level workflow by delegating tasks to appropriate ag
 
 ---
 
-### UC-016: Deploy Application (DevOps Agent)
+### UC-016: Verify Implementation against Use Cases (QC Agent)
+
+> Revised 2026-10-26: replaces "Deploy Application (DevOps Agent)". DevOps was removed from the agent roster and QC was added (see Implementation_plan.md, Status & Audit).
 
 | Field | Value |
 |-------|-------|
 | **ID** | UC-016 |
-| **Name** | Deploy Application |
-| **Actors** | DevOps Agent |
-| **Priority** | Medium |
-| **Status** | Documented |
+| **Name** | Verify Implementation against Use Cases |
+| **Actors** | QC Agent |
+| **Priority** | High |
+| **Status** | Implemented |
 
 **Brief Description:**  
-DevOps Agent generates deployment artifacts (Dockerfile, docker-compose.yml, CI/CD pipeline config), deploys application to target environment, and monitors health checks.
+QC Agent derives acceptance tests from every use case written by the BA, writes them into the generated project, and builds the traceability matrix (use case → domain classes → implementation files → tests) with the use case coverage.
 
 **Pre-conditions:**
-1. Code is approved by QA Agent (all tasks done).
-2. Deployment environment is configured (staging/production).
-3. DevOps Agent is active.
+1. The OOAD quality gate passed (use cases, domain model and patterns exist in ooadMetadata).
+2. DEV Agent has written the implementation to the project workspace.
+3. QC Agent is active.
 
 **Post-conditions:**
-1. Application is deployed and running.
-2. Health checks pass.
-3. Deployment report is generated.
-4. Monitoring alerts are configured.
+1. One acceptance test file per untested use case exists under tests/ (describe('UC-xxx: ...')).
+2. docs/traceability-matrix.md is written to the project workspace.
+3. ooadMetadata.testCoverage and ooadMetadata.traceability are updated.
+4. Workflow variables qc_passed, testCoverage, missingUseCases and qcReport are available to QA.
 
 **Main Flow:**
-1. Workflow Engine invokes DevOps Agent with context: {codeFiles[], deploymentTarget: "staging", architectureConfig}.
-2. DevOps enters think() phase:
-3. DevOps loads memories from "deployment_patterns" namespace.
-4. DevOps constructs prompt: "Generate deployment artifacts for this application: {stack, services[]}. Target: Docker. Include Dockerfile, docker-compose.yml, Nginx config."
-5. DevOps calls LLM.
-6. LLM returns deployment files: {files: [{name: "Dockerfile", content}, {name: "docker-compose.yml", content}]}.
-7. DevOps enters act() phase:
-8. DevOps writes files to deployment directory.
-9. DevOps invokes executeTool("deploy", command: "docker-compose up -d", sandbox: true).
-10. Sandbox executes deployment in isolated environment (Docker-in-Docker).
-11. DevOps waits for containers to start (checks health endpoints).
-12. DevOps performs health check: HTTP GET /health every 5 seconds for 60 seconds.
-13. If health check passes:
-    - DevOps updates deployment status = "success".
-    - DevOps generates deployment report.
-14. If health check fails:
-    - DevOps rolls back deployment.
-    - DevOps logs error.
-    - DevOps notifies Board Member.
-15. DevOps saves memory: "Deployed {projectName} to {target}: {status}."
-16. DevOps returns AgentResult: {deploymentStatus, url, healthCheckResult}.
+1. Workflow Engine invokes QC Agent (node "test", after "develop").
+2. QC enters think(): loads memories from the "test_design" namespace.
+3. QC loads use cases from ooadMetadata (fallback: parses docs/use-cases.md) and entity names from the domain model.
+4. QC reads all source and test files of the project workspace.
+5. QC builds a first traceability pass to find use cases without tests.
+6. QC prompts the LLM with those use cases and the application services, asking for one Jest test file per use case (main, alternative and exception flows).
+7. QC writes the returned test files under tests/, rejecting unsafe or non-test paths.
+8. QC rebuilds the traceability matrix over the final file set and writes docs/traceability-matrix.md.
+9. QC persists testCoverage and the traceability summary to ooadMetadata.
+10. QC returns qc_passed = (coverage ≥ 80%).
 
 **Alternative Flows:**
-- **AF-1: Deployment Failure**
-  - At step 10, if docker-compose fails:
-    1. DevOps captures logs.
-    2. DevOps analyzes error (e.g., port conflict, missing env vars).
-    3. DevOps retries with fixes (up to 2 retries).
-    4. If retries exhausted, escalates to human.
-
-- **AF-2: Rollback Required**
-  - At step 13, if health check fails:
-    1. DevOps executes rollback script (restores previous version).
-    2. DevOps verifies rollback health checks.
-    3. DevOps notifies Board Member of rollback.
+- **AF-1: All Use Cases Already Covered**
+  - At step 5, if no use case is missing tests, QC skips steps 6–7 and only rebuilds the matrix.
 
 **Exception Flows:**
-- **EF-1: Production Deployment Requires Approval**
-  - If deploymentTarget = "production":
-    1. DevOps creates human_approval request before step 9.
-    2. Workflow pauses until Board Member approves.
+- **EF-1: Coverage Below 80%**
+  - At step 10, QC emits a quality_warning WebSocket event listing the missing use cases; QA takes the report into account.
+- **EF-2: No Project Context**
+  - QC returns a failed action result; the workflow node fails and is retried.
 
 **Special Requirements:**
-- **SR-1:** Deployment must support zero-downtime (blue-green or rolling update).
-- **SR-2:** Rollback must complete within 60 seconds.
-- **SR-3:** All secrets (API keys, passwords) must be injected via environment variables, not hardcoded.
+- **SR-1:** Test names must carry the use case id so the matrix can trace them.
+- **SR-2:** Files are written only inside projects/<projectId>/ of the project workspace.
 
 **Assumptions:**
-- Deployment target has Docker installed.
-- Network connectivity to container registry.
+- Executing the generated tests in the sandbox is Phase 3 Task 12.
 
 ---
 
@@ -1645,7 +1624,7 @@ Admin monitors system health metrics including database connection, Redis queue 
 | UC-002 | FR-PROJ-001 (Project Creation), FR-WF-001 (Workflow Initialization) | NFR-PERF-001, NFR-SEC-002 (Prompt Injection Prevention) |
 | UC-009 | FR-AGENT-001 (BA Agent Requirements Analysis) | NFR-QUALITY-001 (IEEE 830 Format) |
 | UC-010 | FR-AGENT-002 (Architect Agent System Design) | NFR-QUALITY-002 (UML 2.5 Compliance) |
-| UC-016 | FR-AGENT-003 (DevOps Agent Deployment) | NFR-DEPLOY-001 (Zero-Downtime Deployment) |
+| UC-016 | FR-AGENT-003 (QC Agent Use Case Verification) | NFR2 (Test Coverage) |
 | UC-017 | FR-MEMORY-001 (Agent Memory Management) | NFR-PERF-002 (Semantic Search <500ms) |
 | UC-018 | FR-LLM-001 (LLM Request Routing) | NFR-RELIABILITY-001 (Circuit Breaker) |
 | UC-023 | FR-AGENT-004 (QA Code Quality Analysis) | NFR-QUALITY-003 (Technical Debt Quantification) |

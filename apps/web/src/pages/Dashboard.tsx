@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Typography, Row, Col, Card, Statistic, Button, Empty, Skeleton, Tag, Progress, Space, Flex, Modal, Form, Input, InputNumber, message, Tabs, Dropdown } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   PlusOutlined,
   RocketOutlined,
@@ -59,7 +60,7 @@ const ProjectCard: React.FC<{
       danger: true,
       onClick: (e: any) => { e.domEvent.stopPropagation(); onDelete?.(project.id, project.name); },
     },
-  ].filter(Boolean);
+  ].filter(Boolean) as MenuProps['items'];
 
   // Calculate progress based on workflow status if available
   const workflowRun = project.workflowRuns?.[0];
@@ -194,7 +195,7 @@ export const Dashboard: React.FC = () => {
 
   const handlePauseProject = async (projectId: string) => {
     try {
-      await updateProject.mutateAsync({ id: projectId, status: 'paused' });
+      await updateProject.mutateAsync({ id: projectId, status: ProjectStatus.PAUSED });
       message.success('Project paused!');
     } catch (error) {
       message.error('Failed to pause project.');
@@ -203,7 +204,7 @@ export const Dashboard: React.FC = () => {
 
   const handleResumeProject = async (projectId: string) => {
     try {
-      await updateProject.mutateAsync({ id: projectId, status: 'active' });
+      await updateProject.mutateAsync({ id: projectId, status: ProjectStatus.ACTIVE });
       message.success('Project resumed!');
     } catch (error) {
       message.error('Failed to resume project.');
