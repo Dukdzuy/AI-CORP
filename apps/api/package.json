@@ -106,7 +106,8 @@
     ],
     "testPathIgnorePatterns": [
       "/node_modules/",
-      "/dist/"
+      "/dist/",
+      "<rootDir>/workspace/"
     ],
     "moduleNameMapper": {
       "^@domain/(.*)$": "<rootDir>/src/domain/$1",

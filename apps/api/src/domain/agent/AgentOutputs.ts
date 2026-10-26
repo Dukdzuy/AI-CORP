@@ -57,6 +57,12 @@ export interface QcOutput extends BaseAgentOutput {
   missingUseCases: string[];
   testsWritten: string[];
   qcReport: string;
+  /** True when coverage is based on executed tests (Task 12) */
+  testsExecuted: boolean;
+  /** Use cases whose executed tests fail */
+  failingUseCases: string[];
+  /** "UC-xxx: <test>: <first failure line>", read by QA */
+  failingTests: string[];
 }
 
 export interface QaOutput extends BaseAgentOutput {

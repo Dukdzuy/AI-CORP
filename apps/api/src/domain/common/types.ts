@@ -64,6 +64,8 @@ export interface AgentContext {
   architecture?: string;
   /** Traceability report written by QC, read by QA */
   qcReport?: string;
+  /** Failing acceptance tests reported by QC, read by QA */
+  failingTests?: string[];
 }
 
 /**

@@ -88,12 +88,16 @@ Engine -> DB: tasks todo/in_progress → review
 
 Engine -> Orch: invokeAgent('QC', {taskType: 'verify'})
 Orch -> QC: execute(context)
-QC -> WS: tests/UC-xxx.spec.ts, docs/traceability-matrix.md
-QC -> DB: ooadMetadata.{testCoverage, traceability}
-QC --> Orch: QcOutput { qc_passed, testCoverage, qcReport }
+QC -> WS: tests/UC-xxx.spec.ts
+participant "SandboxExecutor\n(runInWorkspace)" as Sandbox #LightYellow
+QC -> Sandbox: jest --json on projects/<id> (read-only mount, no network)
+Sandbox --> QC: Jest report → JestReportMapper (per UC-xxx)
+QC -> WS: docs/traceability-matrix.md (Passing / Failing / Missing)
+QC -> DB: ooadMetadata.{testCoverage, traceability (pass/fail counts)}
+QC --> Orch: QcOutput { qc_passed, testCoverage, failingTests, qcReport }
 Orch --> Engine: result
 
-Engine -> Orch: invokeAgent('QA', {taskType: 'review', code, qcReport})
+Engine -> Orch: invokeAgent('QA', {taskType: 'review', code, qcReport, failingTests})
 Orch -> QA: execute(context)
 QA --> Orch: QaOutput { qa_approved }
 Orch --> Engine: result

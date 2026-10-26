@@ -1080,6 +1080,7 @@ CEO Agent orchestrates high-level workflow by delegating tasks to appropriate ag
 ### UC-016: Verify Implementation against Use Cases (QC Agent)
 
 > Revised 2026-10-26: replaces "Deploy Application (DevOps Agent)". DevOps was removed from the agent roster and QC was added (see Implementation_plan.md, Status & Audit).
+> Revised 2026-10-26 (Phase 3, Task 12): QC now executes the tests in the sandbox, so coverage counts *passing* use cases.
 
 | Field | Value |
 |-------|-------|
@@ -1090,7 +1091,7 @@ CEO Agent orchestrates high-level workflow by delegating tasks to appropriate ag
 | **Status** | Implemented |
 
 **Brief Description:**  
-QC Agent derives acceptance tests from every use case written by the BA, writes them into the generated project, and builds the traceability matrix (use case → domain classes → implementation files → tests) with the use case coverage.
+QC Agent derives acceptance tests from every use case written by the BA, writes them into the generated project, runs the project's Jest suite in the sandbox, and builds the traceability matrix (use case → domain classes → implementation files → tests → Passing / Failing / Missing) with the use case coverage.
 
 **Pre-conditions:**
 1. The OOAD quality gate passed (use cases, domain model and patterns exist in ooadMetadata).
@@ -1101,7 +1102,8 @@ QC Agent derives acceptance tests from every use case written by the BA, writes 
 1. One acceptance test file per untested use case exists under tests/ (describe('UC-xxx: ...')).
 2. docs/traceability-matrix.md is written to the project workspace.
 3. ooadMetadata.testCoverage and ooadMetadata.traceability are updated.
-4. Workflow variables qc_passed, testCoverage, missingUseCases and qcReport are available to QA.
+4. Workflow variables qc_passed, testCoverage, missingUseCases, failingUseCases, failingTests, testsExecuted and qcReport are available to QA.
+5. The project workspace is unchanged by the test run (read-only mount).
 
 **Main Flow:**
 1. Workflow Engine invokes QC Agent (node "test", after "develop").
@@ -1111,23 +1113,29 @@ QC Agent derives acceptance tests from every use case written by the BA, writes 
 5. QC builds a first traceability pass to find use cases without tests.
 6. QC prompts the LLM with those use cases and the application services, asking for one Jest test file per use case (main, alternative and exception flows).
 7. QC writes the returned test files under tests/, rejecting unsafe or non-test paths.
-8. QC rebuilds the traceability matrix over the final file set and writes docs/traceability-matrix.md.
-9. QC persists testCoverage and the traceability summary to ooadMetadata.
-10. QC returns qc_passed = (coverage ≥ 80%).
+8. QC runs `jest --json` on a copy of projects/<id>/ through SandboxExecutor.runInWorkspace (read-only mount, tmpfs work dir, no network) and maps each test to its use case by the UC-xxx id in its title or file name.
+9. QC rebuilds the traceability matrix over the final file set and the executed results (Passing / Failing / Missing) and writes docs/traceability-matrix.md.
+10. QC persists testCoverage (passing use cases / all use cases) and the pass/fail counts to ooadMetadata.traceability.
+11. QC returns qc_passed = coverage ≥ 80% and no failing High-priority use case, plus failingTests for QA.
 
 **Alternative Flows:**
 - **AF-1: All Use Cases Already Covered**
-  - At step 5, if no use case is missing tests, QC skips steps 6–7 and only rebuilds the matrix.
+  - At step 5, if no use case is missing tests, QC skips steps 6–7.
+- **AF-2: Tests Cannot Be Executed**
+  - At step 8, if there is no Docker daemon (and the local fallback is not enabled with SANDBOX_ALLOW_LOCAL_RUN), the project has no package.json / jest.config.js, or the run times out, QC keeps the static coverage (use cases with tests count as Covered) and notes the reason in the matrix.
 
 **Exception Flows:**
 - **EF-1: Coverage Below 80%**
-  - At step 10, QC emits a quality_warning WebSocket event listing the missing use cases; QA takes the report into account.
+  - At step 11, QC emits a quality_warning WebSocket event listing the missing use cases; QA takes the report into account.
+- **EF-3: High-Priority Use Case Failing**
+  - At step 11, qc_passed is false even with coverage ≥ 80%; QC emits a quality_warning with the failing use cases and QA receives the failing tests (and rejects, sending the run back to DEV).
 - **EF-2: No Project Context**
   - QC returns a failed action result; the workflow node fails and is retried.
 
 **Special Requirements:**
 - **SR-1:** Test names must carry the use case id so the matrix can trace them.
 - **SR-2:** Files are written only inside projects/<projectId>/ of the project workspace.
+- **SR-3:** Generated code runs only in the sandbox container (read-only mount, no capabilities, no network unless a package registry is configured); the host fallback is opt-in.
 
 **Assumptions:**
 - Executing the generated tests in the sandbox is Phase 3 Task 12.

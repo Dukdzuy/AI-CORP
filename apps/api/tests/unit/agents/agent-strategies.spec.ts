@@ -4,6 +4,7 @@ import * as path from 'path';
 import { AgentRole } from '@ai-corp/shared-types';
 import { TemplateService } from '../../../src/modules/agents/services/template.service';
 import { OOADArtifactService } from '../../../src/modules/agents/services/ooad-artifact.service';
+import { JestReportMapper } from '../../../src/modules/agents/services/jest-report.mapper';
 import { TraceabilityService } from '../../../src/modules/agents/services/traceability.service';
 import { ProjectWorkspace } from '../../../src/modules/workspace/project-workspace.service';
 import { ROLE_PROFILES, RoleProfile } from '../../../src/modules/agents/profiles';
@@ -246,6 +247,9 @@ describe('Action strategies', () => {
   });
 
   describe('QC', () => {
+    const runner = { run: jest.fn() };
+    beforeEach(() => runner.run.mockResolvedValue(JestReportMapper.notExecuted('Docker is not available')));
+
     it('writes acceptance tests for untested use cases and reports coverage', async () => {
       const tests = useCaseData.useCases
         .slice(0, 4)
@@ -254,7 +258,7 @@ describe('Action strategies', () => {
       const h = harness([tests]);
       h.setMetadata(design);
       await workspace.writeFile(projectId, 'src/application/services/OrderService.ts', '// UC-001: Place Order\nexport class OrderService {}');
-      const strategy = new QcActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any, workspace, new TraceabilityService());
+      const strategy = new QcActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any, workspace, new TraceabilityService(), runner as any);
 
       const result = await strategy.act(ctx(), thought);
 
@@ -264,11 +268,42 @@ describe('Action strategies', () => {
       expect(result.output!.testsWritten).toHaveLength(4);
       expect(await workspace.exists(projectId, 'docs/traceability-matrix.md')).toBe(true);
       expect(h.metadata().testCoverage).toBe(80);
+      expect(result.output!.testsExecuted).toBe(false);
+      expect(await workspace.readFile(projectId, 'docs/traceability-matrix.md')).toContain('Tests not executed: Docker is not available');
+    });
+
+    it('runs the tests and fails QC when a High-priority use case fails', async () => {
+      const h = harness();
+      h.setMetadata(design);
+      for (const uc of useCaseData.useCases) {
+        await workspace.writeFile(projectId, `tests/${uc.id}.spec.ts`, `describe('${uc.id}: ${uc.name}', () => { it('main flow', () => {}); });`);
+      }
+      const byUseCase = Object.fromEntries(useCaseData.useCases.map(uc => [uc.id, { useCaseId: uc.id, passed: 1, failed: 0, failingTests: [] as string[] }]));
+      byUseCase['UC-001'] = { useCaseId: 'UC-001', passed: 0, failed: 1, failingTests: ['UC-001: Place Order main flow: expected 1, received 0'] };
+      runner.run.mockResolvedValue({ executed: true, passed: 4, failed: 1, total: 5, byUseCase, unmappedFailures: [], mode: 'local' });
+      const strategy = new QcActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any, workspace, new TraceabilityService(), runner as any);
+
+      const result = await strategy.act(ctx(), thought);
+
+      expect(h.prompts).toHaveLength(0); // every use case already has a test
+      expect(runner.run).toHaveBeenCalledWith(projectId, expect.arrayContaining([expect.objectContaining({ id: 'UC-001' })]));
+      expect(result.output).toEqual(expect.objectContaining({
+        testsExecuted: true,
+        testCoverage: 80,
+        qc_passed: false,
+        failingUseCases: ['UC-001'],
+        failingTests: ['UC-001: UC-001: Place Order main flow: expected 1, received 0'],
+      }));
+      expect(h.metadata().traceability).toEqual(expect.objectContaining({ executed: true, passingCount: 4, failingCount: 1, testsPassed: 4, testsFailed: 1 }));
+      expect(h.ws.sendToProject).toHaveBeenCalledWith(projectId, expect.objectContaining({
+        type: 'quality_warning',
+        payload: expect.objectContaining({ failingUseCases: ['UC-001'] }),
+      }));
     });
 
     it('fails without a project', async () => {
       const h = harness();
-      const strategy = new QcActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any, workspace, new TraceabilityService());
+      const strategy = new QcActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any, workspace, new TraceabilityService(), runner as any);
       const result = await strategy.act(ctx({ projectId: 'unknown' }), thought);
       expect(result).toEqual({ success: false, output: null, error: 'QC needs a project to verify' });
     });
@@ -280,10 +315,15 @@ describe('Action strategies', () => {
       h.setMetadata(design);
       const strategy = new QaActionStrategy(h.memory as any, h.agentLLM as any, h.ws as any, h.prisma as any);
 
-      const result = await strategy.act(ctx({ code: 'export class OrderService {}', qcReport: 'Missing tests for: UC-005' }), thought);
+      const result = await strategy.act(ctx({
+        code: 'export class OrderService {}',
+        qcReport: 'Missing tests for: UC-005',
+        failingTests: ['UC-001: Place Order main flow: expected 1, received 0'],
+      }), thought);
 
       expect(h.prompts[0].user).toContain('Entities: Order, Product, Payment');
       expect(h.prompts[0].user).toContain('Missing tests for: UC-005');
+      expect(h.prompts[0].user).toContain('FAILING TESTS (executed by QC):\n- UC-001: Place Order main flow');
       expect(result.output).toEqual(expect.objectContaining({ action: 'review', qa_approved: false, edgeCondition: 'onFail' }));
       expect(h.memory.saveMemory).toHaveBeenCalledWith('agent-1', 'QA', 'review_checklist', expect.any(String), expect.anything());
     });

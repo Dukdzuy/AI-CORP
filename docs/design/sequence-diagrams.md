@@ -515,8 +515,8 @@ This sequence diagram models how the eight agents collaborate in one workflow ru
 4. **OOAD gate**: `QualityGateStrategy` checks the counts and that the required docs exist in the workspace. Fail → back to the Architect; pass → PM.
 5. **PM – breakdownTasks**: one developer task per use case (title starts with the use case id); the engine creates Task rows in `todo`.
 6. **DEV – implement**: DEV receives the OOAD design context, writes code into the workspace (unsafe paths are rejected); the engine moves tasks to `review`.
-7. **QC – verify**: QC writes `tests/UC-xxx.spec.ts` for untested use cases, builds `docs/traceability-matrix.md` and stores coverage; below 80% it emits a `quality_warning`.
-8. **QA – review**: QA reviews the code against the approved design and the QC report. `qa_approved = false` → tasks back to `in_progress` and the run returns to DEV; `true` → tasks `done`.
+7. **QC – verify**: QC writes `tests/UC-xxx.spec.ts` for untested use cases, runs the project's Jest suite through `SandboxExecutor.runInWorkspace` (read-only mount of `projects/<id>`, no network), maps results per use case, builds `docs/traceability-matrix.md` (Passing / Failing / Missing) and stores coverage and pass/fail counts. `qc_passed` needs coverage ≥ 80% and no failing High-priority use case; otherwise it emits a `quality_warning`.
+8. **QA – review**: QA reviews the code against the approved design, the QC report and the failing tests. `qa_approved = false` → tasks back to `in_progress` and the run returns to DEV; `true` → tasks `done`.
 9. **Marketing – draftAnnouncement**, then **human approval** (`project_completion`).
 10. **CEO – complete_project**: close-out report; the run is `completed`.
 

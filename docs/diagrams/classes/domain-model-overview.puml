@@ -530,12 +530,32 @@ package "New Enterprise Features" <<domain>> {
   
   class TraceabilityReport <<value-object>> {
     - rows: TraceRow[]
+    - executed: boolean
     - coveredCount: number
+    - failingCount: number
     - totalCount: number
     - coveragePercent: number
     - missingUseCases: string[]
+    - failingUseCases: string[]
+    - failingTests: string[]
     --
     + markdown(): string
+    + {static} qcPassed(report): boolean
+  }
+
+  enum UseCaseTestStatus <<value-object>> {
+    Passing
+    Failing
+    Missing
+    Covered (not executed)
+  }
+
+  class TestExecutionSummary <<value-object>> {
+    - executed: boolean
+    - passed: number
+    - failed: number
+    - byUseCase: Map<UseCaseId, UseCaseExecution>
+    - reason?: string
   }
   
   enum DocumentStatus <<value-object>> {
@@ -626,6 +646,9 @@ TraceabilityReport --> Project : verifies
 BaAgent ..> BARequirementSpec : creates
 ArchitectAgent ..> ArchitectureDocument : creates
 QcAgent ..> TraceabilityReport : builds
+QcAgent ..> TestExecutionSummary : runs tests (ProjectTestRunner)
+TraceabilityReport ..> TestExecutionSummary : statuses from
+TraceabilityReport ..> UseCaseTestStatus
 
 note top of Agent
   **Aggregate Root**: Agent

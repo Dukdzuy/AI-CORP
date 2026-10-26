@@ -1,0 +1,15 @@
+/**
+ * Jest configuration of the generated project.
+ * QC runs `npx jest --json` with it: acceptance tests live in tests/UC-xxx.spec.ts and are
+ * named after their use case, so results map back to the traceability matrix.
+ */
+module.exports = {
+  testEnvironment: 'node',
+  roots: ['<rootDir>/tests', '<rootDir>/src'],
+  testMatch: ['**/*.spec.ts', '**/*.test.ts'],
+  transform: {
+    // isolatedModules: transpile only, so a type error fails the test that hits it, not the whole run
+    '^.+\\.tsx?$': ['ts-jest', { isolatedModules: true }],
+  },
+  moduleFileExtensions: ['ts', 'js', 'json'],
+};

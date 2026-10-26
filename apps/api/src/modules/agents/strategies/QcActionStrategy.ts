@@ -10,14 +10,17 @@ import { QC_PROFILE } from '../profiles';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { ProjectWorkspace } from '../../workspace/project-workspace.service';
 import { SourceFile, TraceabilityService, TraceUseCase } from '../services/traceability.service';
+import { ProjectTestRunner } from '../services/project-test-runner.service';
 
 /**
  * QC (Quality Control) action: product-side verification of the generated project.
  *
  * 1. Derives acceptance test suites from the BA's use cases (one describe('UC-xxx: ...') per use case)
  * 2. Writes them under tests/ in the project workspace
- * 3. Builds the traceability matrix use case → domain class → implementation → test
- * 4. Persists the coverage to ooadMetadata and alerts below 80%
+ * 3. Runs the project's Jest suite in the sandbox (ProjectTestRunner) and maps results to use cases
+ * 4. Builds the traceability matrix use case → domain class → implementation → test (Passing | Failing | Missing)
+ * 5. Persists coverage and pass/fail counts to ooadMetadata; qc_passed needs coverage >= 80%
+ *    and no failing High-priority use case (TraceabilityService.qcPassed)
  *
  * QA (process-side) then reviews the implementation against the design using this report.
  */
@@ -31,7 +34,8 @@ export class QcActionStrategy implements IActionStrategy<QcOutput> {
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly prisma: PrismaService,
     private readonly workspace: ProjectWorkspace,
-    private readonly traceability: TraceabilityService
+    private readonly traceability: TraceabilityService,
+    private readonly testRunner: ProjectTestRunner
   ) {}
 
   async act(context: AgentContext, thought: AgentThought): Promise<AgentActionResult<QcOutput>> {
@@ -56,20 +60,32 @@ export class QcActionStrategy implements IActionStrategy<QcOutput> {
       ? await this.writeAcceptanceTests(context, thought, useCases.filter(uc => before.missingUseCases.includes(uc.id)), sourceFiles)
       : [];
 
-    // 3. Traceability over the final set of files
-    const report = testsWritten.length > 0
-      ? this.traceability.build(useCases, entities, await this.loadFiles(projectId))
-      : before;
+    // 3. Execute the tests
+    const execution = await this.testRunner.run(projectId, useCases);
+    if (!execution.executed) {
+      this.logger.warn(`QC could not execute the tests of ${projectId}: ${execution.reason}; coverage counts existing tests`);
+    }
+
+    // 4. Traceability over the final set of files and the executed results
+    const files = testsWritten.length > 0 ? await this.loadFiles(projectId) : sourceFiles;
+    const report = this.traceability.build(useCases, entities, files, execution);
     await this.workspace.writeFile(projectId, 'docs/traceability-matrix.md', report.markdown);
 
-    // 4. Persist coverage for the OOAD metrics dashboard
+    // 5. Persist coverage for the OOAD metrics dashboard
     const updatedMetadata = JSON.parse(JSON.stringify({
       ...metadata,
       testCoverage: report.coveragePercent,
       traceability: {
+        executed: report.executed,
         coveredCount: report.coveredCount,
+        passingCount: report.executed ? report.coveredCount : undefined,
+        failingCount: report.failingCount,
         totalCount: report.totalCount,
         missingUseCases: report.missingUseCases,
+        failingUseCases: report.failingUseCases,
+        testsPassed: execution.passed,
+        testsFailed: execution.failed,
+        notExecutedReason: execution.executed ? undefined : execution.reason,
         generatedAt: new Date().toISOString(),
       },
     }));
@@ -78,13 +94,17 @@ export class QcActionStrategy implements IActionStrategy<QcOutput> {
       data: { ooadMetadata: updatedMetadata as Prisma.InputJsonValue },
     });
 
-    const qcPassed = report.totalCount > 0 && report.coveragePercent >= TraceabilityService.COVERAGE_THRESHOLD;
+    const qcPassed = TraceabilityService.qcPassed(report);
     if (!qcPassed) {
+      const reason = report.coveragePercent < TraceabilityService.COVERAGE_THRESHOLD
+        ? `Use case test coverage is ${report.coveragePercent}% (below ${TraceabilityService.COVERAGE_THRESHOLD}%)`
+        : `High-priority use cases have failing tests: ${report.failingUseCases.join(', ')}`;
       this.websocketGateway.sendToProject(projectId, {
         type: 'quality_warning',
         payload: {
-          message: `Use case test coverage is ${report.coveragePercent}% (below ${TraceabilityService.COVERAGE_THRESHOLD}%)`,
+          message: reason,
           missingUseCases: report.missingUseCases,
+          failingUseCases: report.failingUseCases,
           severity: 'warning',
         },
       });
@@ -96,7 +116,9 @@ export class QcActionStrategy implements IActionStrategy<QcOutput> {
         agentId,
         QC_PROFILE.role,
         QC_PROFILE.primaryNamespace,
-        `Verified ${report.totalCount} use cases, coverage ${report.coveragePercent}%, wrote ${testsWritten.length} test file(s)`,
+        `Verified ${report.totalCount} use cases, coverage ${report.coveragePercent}%`
+          + (report.executed ? ` (${execution.passed} tests passed, ${execution.failed} failed)` : ' (tests not executed)')
+          + `, wrote ${testsWritten.length} test file(s)`,
         { importance: 6, projectId }
       );
     }
@@ -108,8 +130,14 @@ export class QcActionStrategy implements IActionStrategy<QcOutput> {
         agentRole: QC_PROFILE.role,
         taskId: context.taskId || 'none',
         actionType: 'verify',
-        toolName: 'llm+traceability',
-        parameters: { coverage: report.coveragePercent, testsWritten },
+        toolName: 'llm+jest+traceability',
+        parameters: {
+          coverage: report.coveragePercent,
+          testsWritten,
+          testsExecuted: report.executed,
+          testsPassed: execution.passed,
+          testsFailed: execution.failed,
+        },
       },
     });
 
@@ -123,6 +151,9 @@ export class QcActionStrategy implements IActionStrategy<QcOutput> {
         missingUseCases: report.missingUseCases,
         testsWritten,
         qcReport: report.markdown,
+        testsExecuted: report.executed,
+        failingUseCases: report.failingUseCases,
+        failingTests: report.failingTests,
       },
     };
   }

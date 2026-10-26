@@ -55,7 +55,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 
 **Verification**: `nest build` 0 errors, Jest 21/21 suites (351 tests), web `tsc` clean. Full workflow run end-to-end against PostgreSQL with a mock LLM: gate passed, 2 use-case tasks moved todo → review → done, every role logged usage, 28 files persisted in the workspace (an unsafe `../../etc/evil.ts` path from the "LLM" was rejected), traceability 80%, metrics endpoint correct, human approval → CEO close-out → `completed`.
 
-**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); `EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing (Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); generated tests are written but not executed yet (Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
+**Known gaps carried into later phases** (not regressions): ~~`domain/agent/strategies/ThinkingStrategy.ts` duplicates the module strategies~~ (removed in Task 11); `MetricsHandler` / `AuditLogHandler` / `NotificationHandler` are stubs (Phase 5); `EmbeddingService` needs `OPENAI_API_KEY` or memory search returns nothing (Task 14); Jest's 90% global coverage threshold fails `jest --coverage` today (Task 27); ~~generated tests are written but not executed yet~~ (executed since Task 12). ~~Phase 1 class/sequence/activity diagrams still mention DevOps~~ (refreshed in Task 11).
 
 ### **Agent role review**
 
@@ -1102,7 +1102,7 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
 
 ---
 
-**Task 12: Executable QC Verification**
+**Task 12: Executable QC Verification** — ✅ Done (2026-10-26)
 - **Objective**: QC runs the generated acceptance tests, so traceability reports *passing* use cases, not just *existing* tests.
 - **Implementation**:
   1. Extend the Architect skeleton with `package.json`, `tsconfig.json` and `jest.config.js` templates for the generated project.
@@ -1115,6 +1115,14 @@ CEO (milestones) → BA (use cases) → Architect (domain model, diagrams, patte
   - Jest JSON → per-use-case status mapping
   - Coverage/`qc_passed` rules (all pass, one High failing, missing tests)
 - **Demo**: Break `OrderService.placeOrder`, rerun: traceability shows UC-001 *Failing*, QA rejects, DEV fixes, QC passes.
+- **Result (2026-10-26)**:
+  1. The Architect skeleton now also renders `package.json` (jest, ts-jest, typescript), `tsconfig.json` and `jest.config.js` (`ts-jest` with `isolatedModules`, so a type error fails only the test that hits it).
+  2. `SandboxExecutor.runInWorkspace(dir, command, limits, options)` takes the project folder (from `ProjectWorkspace.projectDir`) rather than an id, to keep the tools module independent of the workspace module. The folder is bind-mounted **read-only** at `/workspace` and copied to a tmpfs `/work` before the command runs. The root filesystem is read-only, all capabilities are dropped, `no-new-privileges` and a PID limit are set, and the network is `none` unless `SANDBOX_REGISTRY_URL` names a package mirror. Docker log frames are demultiplexed so a large JSON report stays intact. Without Docker, a local fallback runs in a temp copy with a `node_modules` link. It is **opt-in** (`SANDBOX_ALLOW_LOCAL_RUN=true`) because it runs generated code on the API host.
+  3. `ProjectTestRunner` (agents/services) runs `jest --json` and prints the report after a marker, so the workspace is never written. `JestReportMapper` maps each test to a use case by the `UC-xxx` id in its titles, else in its file name, else by use case name. A file that fails to load counts as a failure of its use cases. `TraceabilityService.build(..., execution)` sets `Passing | Failing | Missing` (or the old `Covered | Missing` when the tests could not run, with the reason in the matrix). Coverage counts passing use cases. `ooadMetadata.traceability` stores `executed`, passing and failing counts, `failingUseCases` and `testsPassed`/`testsFailed`.
+  4. `TraceabilityService.qcPassed`: coverage ≥ 80% and no failing High-priority use case. `QcOutput` adds `testsExecuted`, `failingUseCases` and `failingTests`. The workflow merges them into the variables, and QA's prompt lists the failing tests and rejects when one belongs to a High-priority use case.
+  5. Not done (optional): a separate `qc_condition` node. The QA reject edge already sends failing High-priority use cases back to DEV, so a second loop would only duplicate it.
+  - Side fix: the API's Jest config now ignores `apps/api/workspace/`. Before, generated projects' `tests/*.spec.ts` would have run as part of the platform's own suite.
+  - **Verification**: `nest build` 0 errors. Jest 25/25 suites, 394 tests. The new `qc-verification.spec.ts` covers the read-only, confined mount options, refusal of the local fallback, that the project folder is unchanged after a run, the Jest JSON mapping, the `qc_passed` rules (all pass, one High failing at 80%, Low failing tolerated, missing tests) and a **real Jest run** of a generated project whose broken `placeOrder` comes out as UC-001 *Failing*.
 
 ---
 

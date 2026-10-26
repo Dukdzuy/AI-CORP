@@ -38,11 +38,13 @@ export class QaActionStrategy implements IActionStrategy<QaOutput> {
     const projectId = context.projectId;
     const designSummary = await this.loadDesignSummary(projectId);
     const qcReport = typeof context.qcReport === 'string' ? context.qcReport : '';
+    const failingTests = Array.isArray(context.failingTests) ? context.failingTests.slice(0, 30) : [];
 
     const prompt = `You are reviewing code from an AI developer against the approved design.
 ${memoryContext}
 ${designSummary ? `APPROVED DESIGN:\n${designSummary}\n` : ''}
 ${qcReport ? `QC VERIFICATION REPORT:\n${qcReport}\n` : ''}
+${failingTests.length ? `FAILING TESTS (executed by QC):\n${failingTests.map(t => `- ${t}`).join('\n')}\n` : ''}
 Code to review:
 ${hasCode ? code : 'No code was provided by the developer.'}
 
@@ -51,12 +53,12 @@ Review checklist:
 2. Entities and value objects match the domain model
 3. Application service methods carry their use case comment (// UC-xxx)
 4. Listed design patterns are applied where the design says
-5. QC report: use cases without tests
+5. QC report: use cases without tests, and the failing tests listed above (name the code that causes each failure)
 
 List findings for each checklist item, then give your verdict.
 Rules for your verdict:
 - If real implementation code exists and broadly follows the design (even if imperfect), reply: VERDICT: PASS
-- Reply VERDICT: FAIL only if there is NO real code, the code is a placeholder, or it ignores the design entirely
+- Reply VERDICT: FAIL if there is NO real code, the code is a placeholder, it ignores the design entirely, or a failing test belongs to a High priority use case
 
 Reply with EXACTLY one of these on the last line:
 VERDICT: PASS
@@ -95,7 +97,7 @@ VERDICT: FAIL`;
         taskId: context.taskId || 'none',
         actionType: 'review',
         toolName: 'llm',
-        parameters: { codeLength: code.length, approved }
+        parameters: { codeLength: code.length, approved, failingTests: failingTests.length }
       }
     });
 

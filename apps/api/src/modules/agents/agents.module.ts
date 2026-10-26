@@ -7,6 +7,7 @@ import { TemplateService } from './services/template.service';
 import { OOADArtifactService } from './services/ooad-artifact.service';
 import { AgentLLMService } from './services/agent-llm.service';
 import { TraceabilityService } from './services/traceability.service';
+import { ProjectTestRunner } from './services/project-test-runner.service';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AGENTS, AGENT_CLASSES, agentsProvider } from './agents.registry';
@@ -39,6 +40,7 @@ import {
     OOADArtifactService,
     AgentLLMService,
     TraceabilityService,
+    ProjectTestRunner,
     
     // Strategy Pattern implementations
     CeoThinkingStrategy,

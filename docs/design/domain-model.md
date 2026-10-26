@@ -542,15 +542,17 @@ Entities are the core domain objects with unique identity and lifecycle manageme
 **Purpose**: QC's verification result for a generated project (use case → domain classes → implementation files → tests).
 
 **Attributes**:
-- `rows: TraceRow[]` - One row per use case (domain classes, implementation files, test cases, coverage `Covered | Missing`)
-- `coveredCount: number` / `totalCount: number`
-- `coveragePercent: number` - Covered use cases / all use cases
-- `missingUseCases: string[]` - Use case ids without tests
+- `rows: TraceRow[]` - One row per use case (domain classes, implementation files, test cases, passed/failed counts, status `Passing | Failing | Missing`, or `Covered | Missing` when the tests could not be executed)
+- `executed: boolean` - Whether the statuses come from an executed Jest run (`ProjectTestRunner` → `JestReportMapper`)
+- `coveredCount: number` / `failingCount: number` / `totalCount: number`
+- `coveragePercent: number` - Passing use cases / all use cases (static: use cases with tests / all)
+- `missingUseCases: string[]`, `failingUseCases: string[]`, `failingTests: string[]`
 - `markdown: string` - Rendered `docs/traceability-matrix.md`
 
 **Invariants**:
 1. Every use case of the project appears exactly once
-2. `qc_passed` requires coverage ≥ 80% (Task 12 adds: no failing High-priority use case)
+2. A use case with at least one failing test, or with tests that did not run, is `Failing`
+3. `qc_passed` (`TraceabilityService.qcPassed`) requires coverage ≥ 80% and no failing High-priority use case
 
 ---
 

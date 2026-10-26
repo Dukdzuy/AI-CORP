@@ -1,7 +1,41 @@
-import { Injectable, InternalServerErrorException, BadRequestException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { Logger } from '@nestjs/common';
 import Docker, { Container, ContainerCreateOptions } from 'dockerode';
 import { ResourceLimits, ToolResult } from '@ai-corp/shared-types';
+import { spawn } from 'child_process';
+import { promises as fsp } from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+
+/** Options for running a command against a generated project's folder */
+export interface WorkspaceRunOptions {
+  /**
+   * Package registry the container may reach (e.g. a Verdaccio mirror). When unset the
+   * container has no network at all. Defaults to SANDBOX_REGISTRY_URL.
+   */
+  registryUrl?: string;
+  /** Docker image; defaults to SANDBOX_TEST_IMAGE or node:18-alpine */
+  image?: string;
+  /**
+   * node_modules folder linked into the copy when Docker is not available (local fallback).
+   * Defaults to SANDBOX_LOCAL_NODE_MODULES or <cwd>/node_modules.
+   */
+  localNodeModules?: string;
+  /**
+   * Allow the local fallback when Docker is not available. It runs generated code on the
+   * API host (in a temp copy, but without container isolation), so it is opt-in:
+   * defaults to SANDBOX_ALLOW_LOCAL_RUN === 'true'.
+   */
+  allowLocal?: boolean;
+}
+
+export interface WorkspaceRunResult {
+  exitCode: number;
+  output: string;
+  timedOut: boolean;
+  mode: 'docker' | 'local';
+  executionTimeMs: number;
+}
 
 /**
  * SandboxExecutor
@@ -206,6 +240,174 @@ export class SandboxExecutor {
       if (container) {
         await this.cleanupContainer(container);
       }
+    }
+  }
+
+  /**
+   * Run a command against a project folder without letting it change that folder.
+   *
+   * Docker: the folder is bind-mounted **read-only** at /workspace and copied into a tmpfs at
+   * /work, where the command runs (node_modules, reports and build output stay in the tmpfs).
+   * The root filesystem is read-only, all capabilities are dropped, and the network is
+   * disabled unless a package registry is configured.
+   *
+   * Local fallback (no Docker daemon): the folder is copied to a temp directory and the
+   * command runs there with a node_modules link, so the workspace is never modified either.
+   * It has no container isolation, so it only runs when allowLocal / SANDBOX_ALLOW_LOCAL_RUN is set.
+   *
+   * Unlike executeInSandbox, a non-zero exit code is a result (e.g. failing tests), not an error.
+   */
+  async runInWorkspace(
+    workspaceDir: string,
+    command: string,
+    limits: ResourceLimits,
+    options: WorkspaceRunOptions = {}
+  ): Promise<WorkspaceRunResult> {
+    this.validateResourceLimits(limits);
+    const dir = path.resolve(workspaceDir);
+    const stat = await fsp.stat(dir).catch(() => null);
+    if (!stat?.isDirectory()) {
+      throw new BadRequestException(`Workspace folder does not exist: ${dir}`);
+    }
+    const timeout = limits.timeout || 120000;
+    const startTime = Date.now();
+
+    if (!this.dockerAvailable) {
+      const allowLocal = options.allowLocal ?? process.env.SANDBOX_ALLOW_LOCAL_RUN === 'true';
+      if (!allowLocal) {
+        throw new ServiceUnavailableException(
+          'Docker is not available and the local fallback is disabled (set SANDBOX_ALLOW_LOCAL_RUN=true to allow it)'
+        );
+      }
+      return this.runLocallyInCopy(dir, command, timeout, options, startTime);
+    }
+
+    const container = await this.docker.createContainer(this.workspaceContainerOptions(dir, command, limits, options));
+    try {
+      await container.start();
+      let timedOut = false;
+      const timer = new Promise<{ StatusCode: number }>(resolve =>
+        setTimeout(() => {
+          timedOut = true;
+          resolve({ StatusCode: 124 });
+        }, timeout)
+      );
+      const result = await Promise.race([container.wait(), timer]);
+      if (timedOut) {
+        await container.stop({ t: 1 }).catch(() => undefined);
+      }
+      const logs = await container.logs({ stdout: true, stderr: true });
+      const output = SandboxExecutor.demuxLogs(logs as unknown as Buffer);
+      return { exitCode: result.StatusCode, output, timedOut, mode: 'docker', executionTimeMs: Date.now() - startTime };
+    } finally {
+      await this.cleanupContainer(container);
+    }
+  }
+
+  /**
+   * Docker multiplexes stdout/stderr of a non-TTY container into frames with an 8-byte
+   * header (stream type, 3 zero bytes, big-endian payload size). Concatenate the payloads
+   * so a large JSON report is not broken by frame headers.
+   */
+  static demuxLogs(buffer: Buffer): string {
+    const chunks: Buffer[] = [];
+    let offset = 0;
+    while (offset + 8 <= buffer.length) {
+      const type = buffer[offset];
+      const size = buffer.readUInt32BE(offset + 4);
+      if (type > 2 || buffer[offset + 1] !== 0 || buffer[offset + 2] !== 0 || buffer[offset + 3] !== 0) {
+        // Not multiplexed (TTY container): return as-is
+        return buffer.toString('utf-8');
+      }
+      chunks.push(buffer.subarray(offset + 8, offset + 8 + size));
+      offset += 8 + size;
+    }
+    if (offset < buffer.length && chunks.length === 0) return buffer.toString('utf-8');
+    return Buffer.concat(chunks).toString('utf-8');
+  }
+
+  /** Container options for runInWorkspace (public for the confinement tests) */
+  workspaceContainerOptions(
+    workspaceDir: string,
+    command: string,
+    limits: ResourceLimits,
+    options: WorkspaceRunOptions = {}
+  ): ContainerCreateOptions {
+    const registryUrl = options.registryUrl ?? process.env.SANDBOX_REGISTRY_URL;
+    const env = [
+      'HOME=/work',
+      'CI=true',
+      'npm_config_cache=/work/.npm',
+      'npm_config_update_notifier=false',
+      'PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+    ];
+    if (registryUrl) env.push(`npm_config_registry=${registryUrl}`);
+
+    return {
+      Image: options.image || process.env.SANDBOX_TEST_IMAGE || this.SANDBOX_IMAGE,
+      name: `sandbox-workspace-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+      Cmd: ['/bin/sh', '-c', `cp -R /workspace/. /work/ && cd /work && ${command}`],
+      User: this.SANDBOX_USER,
+      WorkingDir: '/work',
+      Env: env,
+      HostConfig: {
+        Binds: [`${workspaceDir}:/workspace:ro`],
+        ReadonlyRootfs: true,
+        Tmpfs: {
+          '/work': `rw,exec,nosuid,size=${limits.maxDiskMB}m,mode=1777`,
+          '/tmp': 'rw,nosuid,size=64m,mode=1777',
+        },
+        NetworkMode: registryUrl ? 'bridge' : 'none',
+        Memory: limits.maxMemoryMB * 1024 * 1024,
+        MemorySwap: limits.maxMemoryMB * 1024 * 1024,
+        CpuPeriod: 100000,
+        CpuQuota: Math.round((limits.maxCPUPercent / 100) * 100000),
+        CapDrop: ['ALL'],
+        SecurityOpt: ['no-new-privileges=true'],
+        PidsLimit: 256,
+      },
+    };
+  }
+
+  private async runLocallyInCopy(
+    dir: string,
+    command: string,
+    timeout: number,
+    options: WorkspaceRunOptions,
+    startTime: number
+  ): Promise<WorkspaceRunResult> {
+    const work = await fsp.mkdtemp(path.join(os.tmpdir(), 'ai-corp-run-'));
+    try {
+      await fsp.cp(dir, work, { recursive: true, filter: src => path.basename(src) !== 'node_modules' });
+      const nodeModules = options.localNodeModules || process.env.SANDBOX_LOCAL_NODE_MODULES || path.join(process.cwd(), 'node_modules');
+      if (await fsp.stat(nodeModules).catch(() => null)) {
+        await fsp.symlink(nodeModules, path.join(work, 'node_modules'), 'dir');
+      }
+
+      const result = await new Promise<{ exitCode: number; output: string; timedOut: boolean }>(resolve => {
+        const child = spawn('/bin/sh', ['-c', command], { cwd: work, env: { ...process.env, CI: 'true' } });
+        let output = '';
+        let timedOut = false;
+        const timer = setTimeout(() => {
+          timedOut = true;
+          child.kill('SIGKILL');
+        }, timeout);
+        child.stdout.on('data', d => (output += d.toString()));
+        child.stderr.on('data', d => (output += d.toString()));
+        child.on('close', code => {
+          clearTimeout(timer);
+          resolve({ exitCode: timedOut ? 124 : code ?? 1, output, timedOut });
+        });
+        child.on('error', err => {
+          clearTimeout(timer);
+          resolve({ exitCode: 127, output: output + err.message, timedOut });
+        });
+      });
+
+      this.logger.log(JSON.stringify({ event: 'workspace_run', mode: 'local', exitCode: result.exitCode, command: command.substring(0, 100) }));
+      return { ...result, mode: 'local', executionTimeMs: Date.now() - startTime };
+    } finally {
+      await fsp.rm(work, { recursive: true, force: true }).catch(() => undefined);
     }
   }
 
