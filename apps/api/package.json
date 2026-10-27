@@ -44,7 +44,7 @@
     "dockerode": "^4.0.0",
     "handlebars": "^4.7.8",
     "jsonwebtoken": "^9.0.2",
-    "openai": "^4.24.0",
+    "openai": "^4.26.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.0",
     "pdfkit": "0.15.0",

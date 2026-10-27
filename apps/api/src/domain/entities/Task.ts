@@ -34,6 +34,7 @@
  * @principle Kanban Workflow Rules
  */
 
+import { randomUUID } from 'crypto';
 import { Money, TaskStatus, AgentRole } from '../value-objects';
 
 export interface CreateTaskProps {
@@ -70,7 +71,7 @@ export class Task {
     }
 
     const task = new Task(
-      crypto.randomUUID(),
+      randomUUID(),
       props.projectId,
       props.milestoneId ?? null,
       props.title.trim(),

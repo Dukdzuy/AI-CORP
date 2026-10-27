@@ -10,6 +10,9 @@
  * Interaction protocol (what may answer what) is enforced by AgentMessageBus through
  * AclProtocol.allowsReply.
  */
+
+import { randomUUID } from 'crypto';
+
 export enum Performative {
   REQUEST = 'REQUEST',
   INFORM = 'INFORM',
@@ -117,6 +120,6 @@ export class AclMessage {
   }
 
   private static newId(): string {
-    return globalThis.crypto?.randomUUID?.() ?? `acl-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    return randomUUID();
   }
 }
