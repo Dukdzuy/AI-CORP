@@ -13,90 +13,86 @@ state RUNNING {
     LoadingNode --> ValidatingNode
     ValidatingNode --> ExecutingNode
     ExecutingNode --> NodeComplete
-    --
-    <b>Entry:</b> Load node definition
-    <b>Do:</b> Execute node logic
-    <b>Exit:</b> Save node result
   }
+  NODE_EXECUTION : <b>Entry:</b> Load node definition
+  NODE_EXECUTION : <b>Do:</b> Execute node logic
+  NODE_EXECUTION : <b>Exit:</b> Save node result
   
   state PARALLEL_EXECUTION {
+    state fork_branches <<fork>>
+    state join_branches <<join>>
     [*] --> ForkingBranches
-    ForkingBranches --> [fork] ParallelWork
-    --
+    ForkingBranches --> fork_branches
+    fork_branches --> ParallelWork
     state ParallelWork {
       [*] --> Branch1
       [*] --> Branch2
       [*] --> Branch3
-      --
-      <b>Entry:</b> Allocate resources
-      <b>Do:</b> Execute in parallel
-      <b>Exit:</b> Join results
     }
-    ParallelWork --> [join] JoiningResults
+    ParallelWork : <b>Entry:</b> Allocate resources
+    ParallelWork : <b>Do:</b> Execute in parallel
+    ParallelWork : <b>Exit:</b> Join results
+    ParallelWork --> join_branches
+    join_branches --> JoiningResults
     JoiningResults --> SynchronizationPoint
-    --
-    <b>Entry:</b> Fork execution paths
-    <b>Exit:</b> Merge all results
   }
+  PARALLEL_EXECUTION : <b>Entry:</b> Fork execution paths
+  PARALLEL_EXECUTION : <b>Exit:</b> Merge all results
   
   state APPROVAL_WAITING {
     [*] --> SendingRequest
     SendingRequest --> AwaitingDecision
     AwaitingDecision --> DecisionReceived
-    --
-    <b>Entry:</b> Pause workflow, send approval request
-    <b>Exit:</b> Resume workflow with decision
   }
+  APPROVAL_WAITING : <b>Entry:</b> Pause workflow, send approval request
+  APPROVAL_WAITING : <b>Exit:</b> Resume workflow with decision
   
   NODE_EXECUTION --> PARALLEL_EXECUTION : [guard: isParallelNode()]\naction: fork()
   PARALLEL_EXECUTION --> NODE_EXECUTION : [guard: allBranchesComplete()]\naction: join()
   NODE_EXECUTION --> APPROVAL_WAITING : [guard: requiresApproval()]\naction: pause()
   APPROVAL_WAITING --> NODE_EXECUTION : [guard: approved()]\naction: resume()
   
-  --
-  <b>Composite State Entry:</b> Set status = "running"
-  <b>Composite State Exit:</b> Save execution context
-  <b>Invariant:</b> currentNodeId is set
 }
+RUNNING : <b>Composite State Entry:</b> Set status = "running"
+RUNNING : <b>Composite State Exit:</b> Save execution context
+RUNNING : <b>Invariant:</b> currentNodeId is set
 
 state PAUSED {
   [*] --> WaitingForApproval
   WaitingForApproval --> CheckingTimeout
-  CheckingTimeout --> [choice]
-  --
-  <b>Entry:</b> Pause all agents, persist state
-  <b>Exit:</b> Restore execution context
-  <b>Internal:</b> Heartbeat every 1min
+  state timeout_check <<choice>>
+  CheckingTimeout --> timeout_check
+  timeout_check --> WaitingForApproval : [timeout not reached]
 }
+PAUSED : <b>Entry:</b> Pause all agents, persist state
+PAUSED : <b>Exit:</b> Restore execution context
+PAUSED : <b>Internal:</b> Heartbeat every 1min
 
 state COMPLETED {
   [*] --> GeneratingReport
   GeneratingReport --> ArchivingData
   ArchivingData --> FinalCleanup
-  --
-  <b>Entry:</b> Calculate final metrics, close all tasks
-  <b>Exit:</b> Store completion timestamp
-  <b>Invariant:</b> completedAt is set
 }
+COMPLETED : <b>Entry:</b> Calculate final metrics, close all tasks
+COMPLETED : <b>Exit:</b> Store completion timestamp
+COMPLETED : <b>Invariant:</b> completedAt is set
 
 state FAILED {
   [*] --> LoggingFailure
   LoggingFailure --> RollingBack
   RollingBack --> NotifyingStakeholders
-  --
-  <b>Entry:</b> Capture error, cancel pending tasks
-  <b>Exit:</b> Mark project as needs attention
-  <b>Data:</b> Error details in context.error
 }
+FAILED : <b>Entry:</b> Capture error, cancel pending tasks
+FAILED : <b>Exit:</b> Mark project as needs attention
+FAILED : <b>Data:</b> Error details in context.error
 
 state CANCELLED {
   [*] --> StoppingAgents
   StoppingAgents --> CleanupResources
-  --
-  <b>Entry:</b> Stop all execution, cancel tasks
-  <b>Exit:</b> Release resources
-  <b>Trigger:</b> User cancellation
 }
+CANCELLED : <b>Entry:</b> Stop all execution, cancel tasks
+CANCELLED : <b>Exit:</b> Release resources
+CANCELLED : <b>Trigger:</b> User cancellation
 
 RUNNING --> PAUSED : <b>approvalRequired()</b>\n[guard: approvalNode]\naction: requestApproval()
 

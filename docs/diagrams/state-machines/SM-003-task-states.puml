@@ -10,55 +10,50 @@ state TODO {
   [*] --> Backlog
   Backlog --> ReadyForDev
   ReadyForDev --> Assigned
-  --
-  <b>Entry:</b> Set priority, estimate cost
-  <b>Exit:</b> Assign to agent, log start time
-  <b>Internal:</b> Can update priority
-  <b>Invariant:</b> assignedAgent == null
 }
+TODO : <b>Entry:</b> Set priority, estimate cost
+TODO : <b>Exit:</b> Assign to agent, log start time
+TODO : <b>Internal:</b> Can update priority
+TODO : <b>Invariant:</b> assignedAgent == null
 
 state IN_PROGRESS {
   [*] --> Analyzing
   Analyzing --> Implementing
   Implementing --> Testing
   Testing --> Documenting
-  --
-  <b>Entry:</b> Agent claims task, start timer
-  <b>Exit:</b> Stop timer, calculate actualCost
-  <b>Internal:</b> Progress updates every 15min
-  <b>Invariant:</b> assignedAgent != null
 }
+IN_PROGRESS : <b>Entry:</b> Agent claims task, start timer
+IN_PROGRESS : <b>Exit:</b> Stop timer, calculate actualCost
+IN_PROGRESS : <b>Internal:</b> Progress updates every 15min
+IN_PROGRESS : <b>Invariant:</b> assignedAgent != null
 
 state REVIEW {
   [*] --> CodeReview
   CodeReview --> QualityChecks
   QualityChecks --> AwaitingApproval
-  --
-  <b>Entry:</b> Submit for QA, run automated checks
-  <b>Exit:</b> Approval decision recorded
-  <b>Internal:</b> QA agent adds comments
-  <b>Invariant:</b> Implementation complete
 }
+REVIEW : <b>Entry:</b> Submit for QA, run automated checks
+REVIEW : <b>Exit:</b> Approval decision recorded
+REVIEW : <b>Internal:</b> QA agent adds comments
+REVIEW : <b>Invariant:</b> Implementation complete
 
 state DONE {
   [*] --> VerifyingCompletion
   VerifyingCompletion --> RecordingMetrics
   RecordingMetrics --> Archived
-  --
-  <b>Entry:</b> Mark complete, update project cost
-  <b>Exit:</b> Release agent, archive data
-  <b>Internal:</b> Cannot be modified
-  <b>Invariant:</b> actualCost recorded
 }
+DONE : <b>Entry:</b> Mark complete, update project cost
+DONE : <b>Exit:</b> Release agent, archive data
+DONE : <b>Internal:</b> Cannot be modified
+DONE : <b>Invariant:</b> actualCost recorded
 
 state CANCELLED {
   [*] --> RecordingReason
   RecordingReason --> CleaningUp
-  --
-  <b>Entry:</b> Stop work, cancel subtasks
-  <b>Exit:</b> Archive partial work
-  <b>Reason:</b> Stored in metadata
 }
+CANCELLED : <b>Entry:</b> Stop work, cancel subtasks
+CANCELLED : <b>Exit:</b> Archive partial work
+CANCELLED : <b>Reason:</b> Stored in metadata
 
 TODO --> IN_PROGRESS : <b>agentPicksUp()</b>\n[guard: agentAvailable]\naction: assignAgent()
 

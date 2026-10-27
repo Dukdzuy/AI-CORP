@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Badge, Dropdown, Typography, Space, Button, Tag, Empty, Avatar } from 'antd';
+import { Badge, Dropdown, Typography, Space, Button, Tag, Empty, Avatar, message } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { WebSocketEventType, ApprovalRequiredEvent } from '@ai-corp/shared-types';
 import socketClient from '../../lib/websocket/socket-client';
+import { respondToApproval, approvalErrorMessage } from '../../lib/api/hooks/approvals';
 import { ApprovalModal } from './ApprovalModal';
 
 const { Text } = Typography;
@@ -61,28 +62,18 @@ export const ApprovalNotification: React.FC<ApprovalNotificationProps> = () => {
     };
   }, []);
 
-  const handleApprove = useCallback((approvalId: string) => {
-    socketClient.emit('human:approval_response', {
-      approvalId,
-      status: 'approved',
-      respondedAt: new Date().toISOString(),
-    });
-    setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
-    setModalOpen(false);
-    setSelectedApproval(null);
+  const respond = useCallback(async (approvalId: string, decision: 'approve' | 'reject', comment?: string) => {
+    try {
+      await respondToApproval(approvalId, decision, comment);
+      setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+      setModalOpen(false);
+      setSelectedApproval(null);
+    } catch (error) {
+      message.error(approvalErrorMessage(error));
+    }
   }, []);
-
-  const handleReject = useCallback((approvalId: string, comment?: string) => {
-    socketClient.emit('human:approval_response', {
-      approvalId,
-      status: 'rejected',
-      comment,
-      respondedAt: new Date().toISOString(),
-    });
-    setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
-    setModalOpen(false);
-    setSelectedApproval(null);
-  }, []);
+  const handleApprove = useCallback((approvalId: string) => respond(approvalId, 'approve'), [respond]);
+  const handleReject = useCallback((approvalId: string, comment?: string) => respond(approvalId, 'reject', comment), [respond]);
 
   const handleOpenApproval = (approval: PendingApproval) => {
     setSelectedApproval(approval);

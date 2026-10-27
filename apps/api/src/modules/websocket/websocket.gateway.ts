@@ -9,33 +9,20 @@ import {
   ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { Logger, Inject, forwardRef, OnModuleInit, OnApplicationBootstrap } from '@nestjs/common';
-import { ModuleRef } from '@nestjs/core';
+import { Logger, Inject, forwardRef, OnModuleInit } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
+import { corsOrigins, jwtSecret } from '../security/runtime-config';
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: corsOrigins(),
   },
 })
-export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnApplicationBootstrap {
+export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
 
   private readonly logger = new Logger(AppWebSocketGateway.name);
-  private approvalService: any = null;
-
-  constructor(private readonly moduleRef: ModuleRef) {}
-
-  onApplicationBootstrap() {
-    try {
-      const { ApprovalService } = require('../approvals/approval.service');
-      this.approvalService = this.moduleRef.get(ApprovalService, { strict: false });
-      this.logger.log('ApprovalService wired into WebSocket gateway');
-    } catch (e: any) {
-      this.logger.warn(`Could not wire ApprovalService: ${e.message}`);
-    }
-  }
 
   afterInit(server: Server) {
     this.logger.log('WebSocket Gateway Initialized');
@@ -49,10 +36,7 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
       }
 
       const token = authHeader.replace('Bearer ', '');
-      // In production, use ConfigService for JWT_SECRET
-      const secret = process.env.JWT_SECRET || 'fallback_secret';
-      
-      const decoded = jwt.verify(token, secret) as any;
+      const decoded = jwt.verify(token, jwtSecret()) as any;
       // Attach user info to socket
       (client as any).user = decoded;
 
@@ -87,29 +71,16 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
     return { status: 'success', event: 'subscribed', projectId: data.projectId };
   }
 
+  /**
+   * Approvals are answered through POST /api/approvals/:id/approve|reject only. This socket
+   * message used to approve or reject any approval for any connected user, skipping the
+   * APPROVAL_GRANT permission, the assignee check and the audit log (found in Phase 7).
+   */
   @SubscribeMessage('human:approval_response')
-  async handleApprovalResponse(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { approvalId: string; status: 'approved' | 'rejected'; comment?: string; respondedAt?: string }
-  ) {
-    this.logger.log(`Received approval response: ${data.approvalId} -> ${data.status}`);
-
-    if (!this.approvalService) {
-      this.logger.error('ApprovalService not initialized');
-      return { status: 'error', message: 'Approval service not available' };
-    }
-
-    try {
-      const result = await this.approvalService.handleApprovalResponse(
-        data.approvalId,
-        data.status,
-        data.comment
-      );
-      return { status: 'success', approval: result };
-    } catch (error: any) {
-      this.logger.error(`Approval response failed: ${error.message}`);
-      return { status: 'error', message: error.message };
-    }
+  handleApprovalResponse(@ConnectedSocket() client: Socket, @MessageBody() data: { approvalId?: string }) {
+    const userId = (client as any).user?.sub;
+    this.logger.warn(`Refused approval response over WebSocket for ${data?.approvalId} from user ${userId}`);
+    return { status: 'error', message: 'Answer approvals with POST /api/approvals/:id/approve or /reject' };
   }
 
   /**

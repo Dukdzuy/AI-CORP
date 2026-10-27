@@ -4,7 +4,7 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 title SD-002: Agent Think-Act Cycle
-subtitle Demonstrating State Machine, Strategy, and Observer Patterns
+caption Demonstrating State Machine, Strategy, and Observer Patterns
 
 participant "WorkflowEngine" as Engine #Orange
 participant "BaseAgent" as Agent #Pink

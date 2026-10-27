@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { Typography, Space, Avatar, Empty, Button, Tag } from 'antd';
+import { Typography, Space, Avatar, Empty, Button, Tag, message } from 'antd';
 import { RobotOutlined, BulbOutlined, ThunderboltOutlined, MessageOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { AgentRole } from '@ai-corp/shared-types';
 import { MeetingMessage } from '../../stores/meetingStore';
-import socketClient from '../../lib/websocket/socket-client';
+import { respondToApproval, approvalErrorMessage } from '../../lib/api/hooks/approvals';
 import { performativeStyle, protocolLabel } from './performatives';
 
 const { Text } = Typography;
@@ -30,25 +30,16 @@ const MessageBubble: React.FC<{ msg: MeetingMessage }> = ({ msg }) => {
   const isSystem = msg.type === 'notification';
   const isApproval = msg.type === 'approval';
 
-  const handleApprove = useCallback(() => {
-    if (msg.approvalId) {
-      socketClient.emit('human:approval_response', {
-        approvalId: msg.approvalId,
-        status: 'approved',
-        respondedAt: new Date().toISOString(),
-      });
+  const respond = useCallback(async (decision: 'approve' | 'reject') => {
+    if (!msg.approvalId) return;
+    try {
+      await respondToApproval(msg.approvalId, decision);
+    } catch (error) {
+      message.error(approvalErrorMessage(error));
     }
   }, [msg.approvalId]);
-
-  const handleReject = useCallback(() => {
-    if (msg.approvalId) {
-      socketClient.emit('human:approval_response', {
-        approvalId: msg.approvalId,
-        status: 'rejected',
-        respondedAt: new Date().toISOString(),
-      });
-    }
-  }, [msg.approvalId]);
+  const handleApprove = useCallback(() => respond('approve'), [respond]);
+  const handleReject = useCallback(() => respond('reject'), [respond]);
 
   if (isSystem) {
     return (

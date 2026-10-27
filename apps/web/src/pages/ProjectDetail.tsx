@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Space, Card, Button, Spin, Skeleton, Tabs, Empty, Tag, Collapse, Badge, Alert } from 'antd';
+import { Typography, Space, Card, Button, Spin, Skeleton, Tabs, Empty, Tag, Collapse, Badge, Alert, message } from 'antd';
 import { ArrowLeftOutlined, RocketOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, ThunderboltOutlined, FileTextOutlined, ExclamationCircleOutlined, FolderOpenOutlined, CodeOutlined } from '@ant-design/icons';
 import { Task, WebSocketEventType, TaskUpdatedEvent, ApprovalRequiredEvent } from '@ai-corp/shared-types';
 import { useProject } from '../lib/api/hooks/projects';
 import { useTasks, taskKeys } from '../lib/api/hooks/tasks';
 import { useMilestones } from '../lib/api/hooks/milestones';
-import { usePendingApprovals, approvalKeys } from '../lib/api/hooks/approvals';
+import { usePendingApprovals, approvalKeys, respondToApproval, approvalErrorMessage } from '../lib/api/hooks/approvals';
 import { KanbanBoard } from '../components/kanban/KanbanBoard';
 import { TaskDetailModal } from '../components/kanban/TaskDetailModal';
 import socketClient from '../lib/websocket/socket-client';
@@ -90,25 +90,17 @@ export const ProjectDetail: React.FC = () => {
     };
   }, [id, queryClient]);
 
-  const handleApprove = useCallback((approvalId: string) => {
-    socketClient.emit('human:approval_response', {
-      approvalId,
-      status: 'approved',
-      respondedAt: new Date().toISOString(),
-    });
-    setWsApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+  const respond = useCallback(async (approvalId: string, decision: 'approve' | 'reject') => {
+    try {
+      await respondToApproval(approvalId, decision);
+      setWsApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+    } catch (error) {
+      message.error(approvalErrorMessage(error));
+    }
     queryClient.invalidateQueries({ queryKey: approvalKeys.pending(id) });
   }, [id, queryClient]);
-
-  const handleReject = useCallback((approvalId: string) => {
-    socketClient.emit('human:approval_response', {
-      approvalId,
-      status: 'rejected',
-      respondedAt: new Date().toISOString(),
-    });
-    setWsApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
-    queryClient.invalidateQueries({ queryKey: approvalKeys.pending(id) });
-  }, [id, queryClient]);
+  const handleApprove = useCallback((approvalId: string) => respond(approvalId, 'approve'), [respond]);
+  const handleReject = useCallback((approvalId: string) => respond(approvalId, 'reject'), [respond]);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);

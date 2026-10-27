@@ -84,8 +84,12 @@ package "domain/integration" {
 }
 
 package "domain/reporting" {
-  class CostReportBuilder { + build(projectId, usage, budget) }
-  class PerformanceReportBuilder { + build(projectId, steps) }
+  class CostReportBuilder {
+    + build(projectId, usage, budget)
+  }
+  class PerformanceReportBuilder {
+    + build(projectId, steps)
+  }
   interface IProjectExporter <<strategy>> {
     + format
     + export(snapshot): ExportedFile
@@ -111,9 +115,19 @@ package "modules (application)" {
   class AuthenticationGuard <<APP_GUARD 1>>
   class RateLimitGuard <<APP_GUARD 2>>
   class PermissionGuard <<APP_GUARD 3>>
-  class AuthorizationService { + assertProjectOwner()\n+ assertRunOwner()\n+ assertApprovalAssignee() }
+  class AuthorizationService {
+    + assertProjectOwner()
+    + assertRunOwner()
+    + assertApprovalAssignee()
+  }
   class ApiKeyAuthenticator
-  class AuditLogService { + record()\n+ recordDenied()\n+ query()\n+ exportCsv()\n+ detectAnomalies() }
+  class AuditLogService {
+    + record()
+    + recordDenied()
+    + query()
+    + exportCsv()
+    + detectAnomalies()
+  }
   class AuditInterceptor <<APP_INTERCEPTOR>>
   class AuditSnapshotRegistry
   class AuditLogHandler <<observer>>

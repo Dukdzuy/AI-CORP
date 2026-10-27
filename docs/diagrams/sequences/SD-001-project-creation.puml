@@ -4,7 +4,7 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 title SD-001: Project Creation Workflow
-subtitle Multi-Agent Enterprise Workflow Automation System
+caption Multi-Agent Enterprise Workflow Automation System
 
 actor "Board Member" as BoardMember #LightBlue
 participant "AuthService" as Auth #LightGreen

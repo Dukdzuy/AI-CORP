@@ -18,6 +18,7 @@ import {
 import { useProjects, useCreateProject, useDeleteProject, useUpdateProject } from '../lib/api/hooks/projects';
 import { Permission } from '@ai-corp/shared-types';
 import { hasPermission, usePermission } from '../lib/permissions';
+import { projectProgress } from '../lib/projectProgress';
 import { useAuthStore } from '../stores/authStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useNavigate } from 'react-router-dom';
@@ -69,36 +70,7 @@ const ProjectCard: React.FC<{
     },
   ].filter(Boolean) as MenuProps['items'];
 
-  // Calculate progress based on workflow status if available
-  const workflowRun = project.workflowRuns?.[0];
-  let workflowProgress = 0;
-  let progressLabel = 'Starting...';
-  
-  if (workflowRun) {
-    // Map workflow status to progress
-    if (workflowRun.status === 'completed') {
-      workflowProgress = 100;
-      progressLabel = 'Completed';
-    } else if (workflowRun.status === 'failed') {
-      workflowProgress = 50;
-      progressLabel = 'Failed';
-    } else if (workflowRun.status === 'paused') {
-      workflowProgress = 75;
-      progressLabel = 'Paused';
-    } else {
-      // running - estimate based on current node
-      const nodes = ['start', 'breakdown', 'develop', 'review', 'market', 'approval', 'end'];
-      const nodeIndex = nodes.indexOf(workflowRun.currentNodeId || 'start');
-      workflowProgress = nodeIndex >= 0 ? Math.round((nodeIndex / nodes.length) * 100) : 25;
-      progressLabel = `Running: ${workflowRun.currentNodeId || 'start'}`;
-    }
-  } else {
-    // Fallback: calculate progress based on cost/budget if available
-    if (project.budget != null && project.budget > 0) {
-      workflowProgress = Math.min(100, Math.round((Number(project.costAccrued ?? 0) / Number(project.budget ?? 1)) * 100));
-      progressLabel = `${workflowProgress}% of budget`;
-    }
-  }
+  const { percent: workflowProgress, label: progressLabel } = projectProgress(project);
 
   return (
     <Card
@@ -493,6 +465,7 @@ export const Dashboard: React.FC = () => {
               <Statistic
                 title={<Text style={{ color: '#8b949e' }}>Total Cost</Text>}
                 value={totalCost}
+                precision={2}
                 prefix="$"
                 valueStyle={{ color: '#e6edf3' }}
               />
