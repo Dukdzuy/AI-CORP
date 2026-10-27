@@ -18,11 +18,18 @@ import {
   UniqueConstraintViolationException,
 } from '../../domain/exceptions';
 
+/** Project columns that make up a ProjectDTO (see mapToDTO) */
+const DTO_COLUMNS = {
+  id: true, name: true, description: true, goal: true, status: true, budget: true,
+  costAccrued: true, createdById: true, createdAt: true, updatedAt: true,
+} satisfies Prisma.ProjectSelect;
+
 /**
  * Prisma implementation of IProjectRepository
  * Infrastructure layer - depends on domain interfaces
  * Persistence only: domain events are raised by ProjectApplicationService
  */
+
 @Injectable()
 export class PrismaProjectRepository implements IProjectRepository {
   private readonly logger = new Logger(PrismaProjectRepository.name);
@@ -50,14 +57,10 @@ export class PrismaProjectRepository implements IProjectRepository {
   }): Promise<ProjectDTO[]> {
     try {
       const projects = await this.prisma.project.findMany({
+        // Only the columns mapToDTO returns: the latest run's context JSON and the project's
+        // ooadMetadata were loaded and dropped for every project (found by the Phase 6 load test)
         orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
-        include: {
-          _count: { select: { tasks: true, milestones: true } },
-          workflowRuns: {
-            orderBy: { startedAt: 'desc' },
-            take: 1,
-          },
-        },
+        select: DTO_COLUMNS,
       });
       return projects.map((p) => this.mapToDTO(p));
     } catch (error) {

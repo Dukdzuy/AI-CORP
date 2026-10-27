@@ -19,9 +19,10 @@ import { PrismaWorkflowDefinitionRepository } from './persistence/prisma-workflo
 import { BUILT_IN_TEMPLATES, WORKFLOW_TEMPLATES, WorkflowTemplateCatalog } from './templates/workflow-template.catalog';
 import { WorkflowRunQueryService } from './workflow-run-query.service';
 import { WorkflowsController } from './workflows.controller';
+import { EstimationModule } from '../estimation/estimation.module';
 
 @Module({
-  imports: [WebSocketModule, OrchestratorModule, InfrastructureModule, WorkspaceModule, PrismaModule],
+  imports: [WebSocketModule, OrchestratorModule, InfrastructureModule, WorkspaceModule, PrismaModule, EstimationModule],
   controllers: [WorkflowsController],
   providers: [
     WorkflowAuditSnapshots,

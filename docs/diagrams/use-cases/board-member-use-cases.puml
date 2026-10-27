@@ -19,7 +19,7 @@ rectangle "Board Member Capabilities" {
   
   package "Task Management" #C2DFF2 {
     usecase "UC-020\nManage Task Kanban" as UC020
-    usecase "UC-024\nEstimate Task\nComplexity" as UC024
+    usecase "UC-024\nForecast Project\nEffort and Cost" as UC024
   }
   
   package "Cost & Budget Control" #B0D5ED {
@@ -36,6 +36,8 @@ rectangle "Board Member Capabilities" {
   
   package "Collaboration & Monitoring" #8CC1E3 {
     usecase "UC-021\nView Agent Meeting\nRoom (Virtual Office)" as UC021
+    usecase "UC-033\nReview Agent\nPerformance Analytics" as UC033
+    usecase "UC-023\nView Code Quality\nof Generated Code" as UC023
   }
   
   package "Supporting Use Cases" #CCCCCC {
@@ -50,6 +52,9 @@ BoardMember --> UC001
 BoardMember --> UC002
 BoardMember --> UC007
 BoardMember --> UC008
+BoardMember --> UC033
+BoardMember --> UC023
+UC033 .> UC024 : <<include>>\nforecast accuracy
 BoardMember --> UC020
 BoardMember --> UC021
 BoardMember --> UC022

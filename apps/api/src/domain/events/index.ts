@@ -23,3 +23,5 @@ export * from './QualityGateEvaluatedEvent';
 // Phase 5
 export * from './WorkflowFailedEvent';
 export * from './ReportGeneratedEvent';
+// Phase 6
+export * from './AgentAnomalyDetectedEvent';

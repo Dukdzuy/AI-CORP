@@ -13,6 +13,7 @@ import { AgentSettings } from './pages/AgentSettings';
 import { UsersPage } from './pages/UsersPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
+import { AgentAnalyticsPage } from './pages/AgentAnalyticsPage';
 import { RequirePermission } from './components/auth/RequirePermission';
 import { Permission } from '@ai-corp/shared-types';
 import { apiClient } from './lib/api/client';
@@ -79,6 +80,7 @@ export function App() {
             <Route path="/agents" element={<AgentSettings />} />
             <Route path="/users" element={<RequirePermission permission={Permission.USER_MANAGE}><UsersPage /></RequirePermission>} />
             <Route path="/audit" element={<RequirePermission permission={Permission.AUDIT_VIEW}><AuditLogPage /></RequirePermission>} />
+            <Route path="/analytics" element={<RequirePermission permission={Permission.REPORT_VIEW}><AgentAnalyticsPage /></RequirePermission>} />
             <Route path="/integrations" element={<RequirePermission permission={Permission.INTEGRATION_MANAGE}><IntegrationsPage /></RequirePermission>} />
           </Route>
         </Routes>

@@ -1,0 +1,105 @@
+{
+  "projectId": "7b94849a-c2ad-49ff-814d-2e6a72b46702",
+  "current": {
+    "durationMs": 5187,
+    "cost": 0.069254,
+    "confidence": "medium",
+    "byRole": [
+      {
+        "role": "ARCHITECT",
+        "durationMs": 732,
+        "cost": 0.021527,
+        "method": "regression",
+        "samples": 8
+      },
+      {
+        "role": "BA",
+        "durationMs": 120,
+        "cost": 0.007294,
+        "method": "regression",
+        "samples": 8
+      },
+      {
+        "role": "CEO",
+        "durationMs": 170,
+        "cost": 0.002093,
+        "method": "regression",
+        "samples": 8
+      },
+      {
+        "role": "DEV",
+        "durationMs": 801,
+        "cost": 0.022348,
+        "method": "regression",
+        "samples": 8
+      },
+      {
+        "role": "MARKETING",
+        "durationMs": 94,
+        "cost": 0.001064,
+        "method": "regression",
+        "samples": 8
+      },
+      {
+        "role": "PM",
+        "durationMs": 125,
+        "cost": 0.001608,
+        "method": "regression",
+        "samples": 8
+      },
+      {
+        "role": "QA",
+        "durationMs": 359,
+        "cost": 0.004983,
+        "method": "regression",
+        "samples": 8
+      },
+      {
+        "role": "QC",
+        "durationMs": 2786,
+        "cost": 0.008337,
+        "method": "regression",
+        "samples": 8
+      }
+    ],
+    "features": {
+      "descriptionLength": 1113,
+      "useCaseCount": 5
+    },
+    "imputed": [],
+    "unknownRoles": [],
+    "trainingProjects": 8
+  },
+  "history": [
+    {
+      "id": "9c7d4e59-5fc7-48b6-aff0-df1be614d14d",
+      "stage": "start",
+      "createdAt": "2026-10-26T08:43:12.322Z",
+      "durationMs": 5941,
+      "cost": 0.077625,
+      "confidence": "medium"
+    },
+    {
+      "id": "9e1b62d4-6bcf-4c3c-87dd-65d37ed9876e",
+      "stage": "planned",
+      "createdAt": "2026-10-26T08:43:13.484Z",
+      "durationMs": 5941,
+      "cost": 0.077625,
+      "confidence": "medium"
+    }
+  ],
+  "actual": {
+    "durationMs": 4376,
+    "cost": 0.060234,
+    "finished": true
+  },
+  "comparison": {
+    "stage": "start",
+    "predictedDurationMs": 5941,
+    "actualDurationMs": 4376,
+    "predictedCost": 0.077625,
+    "actualCost": 0.060234,
+    "durationError": -0.2634,
+    "costError": -0.224
+  }
+}

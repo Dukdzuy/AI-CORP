@@ -32,6 +32,7 @@ export const AUDITED_EVENTS: Record<string, Mapper> = {
   'task.completed': e => ({ action: 'agent.task_completed', actor: agent(e.agentRole), resourceType: 'Task', resourceId: e.taskId, projectId: e.projectId, changes: { title: e.taskTitle, executionTimeMs: e.executionTimeMs } }),
   'agent.error': e => ({ actor: { type: 'agent', label: e.agentId }, resourceType: 'Task', resourceId: e.taskId, projectId: e.projectId, success: false, errorMessage: e.error }),
   'task.status.changed': e => ({ actor: SYSTEM, resourceType: 'Task', resourceId: e.taskId, projectId: e.projectId, changes: { diff: [{ field: 'status', from: e.oldStatus, to: e.newStatus }] } }),
+  'agent.anomaly': e => ({ actor: { type: 'system', label: 'agent-analytics' }, resourceType: 'Agent', resourceId: e.agentRole, projectId: e.projectId, success: false, errorMessage: e.message, changes: { type: e.anomalyType, severity: e.severity, value: e.value, threshold: e.threshold } }),
   'report.generated': e => ({ actor: { type: 'system', label: 'report-scheduler' }, resourceType: 'Report', resourceId: e.path, projectId: e.projectId, changes: { period: e.period, totalCost: e.totalCost } }),
 };
 

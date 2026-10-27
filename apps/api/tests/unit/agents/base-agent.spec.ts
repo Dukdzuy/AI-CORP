@@ -89,6 +89,31 @@ describe('BaseAgent.execute()', () => {
     expect(eventBus.publish.mock.calls.map(c => c[0]).some(e => e instanceof AgentErrorEvent)).toBe(true);
   });
 
+  it('runs tasks of concurrent workflow runs side by side (one lifecycle per task, Phase 6 fix)', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => (release = r));
+    const act = jest.fn().mockImplementationOnce(async () => { await gate; return action; }).mockResolvedValue(action);
+    const { agent } = setup(act);
+
+    const slow = agent.execute(createMockAgentContext({ taskId: 'slow' }));
+    await new Promise(r => setImmediate(r));
+    expect(agent.getState()).toBe(AgentState.ACTING);
+    await expect(agent.execute(createMockAgentContext({ taskId: 'fast' }))).resolves.toEqual({ thought, action });
+    expect(agent.getState()).toBe(AgentState.ACTING); // the slow task is still running
+    release();
+    await expect(slow).resolves.toEqual({ thought, action });
+    expect(agent.getState()).toBe(AgentState.IDLE);
+  });
+
+  it('a permanent failure does not block the next task of the role', async () => {
+    const act = jest.fn().mockRejectedValueOnce(new Error('Invalid API key')).mockResolvedValueOnce(action);
+    const { agent } = setup(act);
+    await expect(agent.execute(createMockAgentContext())).rejects.toThrow('Invalid API key');
+    expect(agent.getState()).toBe(AgentState.ERROR);
+    await expect(agent.execute(createMockAgentContext())).resolves.toEqual({ thought, action });
+    expect(agent.getState()).toBe(AgentState.IDLE);
+  });
+
   it('resets to IDLE after a transient failure so it can be retried', async () => {
     const act = jest.fn().mockRejectedValueOnce(new Error('Request timeout')).mockResolvedValueOnce(action);
     const { agent, states } = setup(act);

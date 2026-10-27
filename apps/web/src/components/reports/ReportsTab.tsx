@@ -4,6 +4,8 @@ import { DownloadOutlined, FileExcelOutlined, FilePdfOutlined, FileTextOutlined 
 import { ExportFormat, Permission } from '@ai-corp/shared-types';
 import { CostBucket, RolePerformance, exportProject, useCostReport, usePerformanceReport } from '../../lib/api/hooks/reports';
 import { usePermission } from '../../lib/permissions';
+import { ForecastCard } from './ForecastCard';
+import { CodeQualityCard } from './CodeQualityCard';
 
 const { Text } = Typography;
 const usd = (n: number) => `$${n.toFixed(4)}`;
@@ -11,7 +13,8 @@ const pct = (n: number | null) => (n === null ? '–' : `${Math.round(n * 100)}%
 
 /**
  * Reports tab of a project (Phase 5, Task 23): cost by agent and model, agent
- * performance, and the JSON / CSV / PDF exports.
+ * performance, and the JSON / CSV / PDF exports. Phase 6 adds the effort and cost
+ * forecast (Task 25) and the static analysis of the generated code (Task 26).
  */
 export const ReportsTab: React.FC<{ projectId: string }> = ({ projectId }) => {
   const { data: cost, isLoading: costLoading } = useCostReport(projectId);
@@ -68,6 +71,9 @@ export const ReportsTab: React.FC<{ projectId: string }> = ({ projectId }) => {
           </Card>
         </Col>
       </Row>
+
+      <ForecastCard projectId={projectId} />
+      <CodeQualityCard projectId={projectId} />
 
       <Card size="small" title="Agent performance (workflow steps)">
         <Table

@@ -1,0 +1,31 @@
+      Shop 1: completed
+      Shop 2: completed
+      Shop 3: completed
+      Legacy Billing: completed
+      Shop 5: completed
+      Unsafe Portal: completed
+      Shop 7: completed
+      Shop 8: completed
+PASS  8 projects completed through the OOAD workflow
+PASS  the model is trained on the finished projects  — 8 projects, 8 roles
+PASS  roles with enough history use regression  — DEV regression, LOO time error 0.3028
+PASS  forecasts were stored at start and compared with the outcome  — 7 projects, mean |error| time 0.2136, cost 0.2003
+PASS  a project keeps its start and planned forecasts  — start 5941 ms / $0.077625, planned 5941 ms / $0.077625
+PASS  the finished project is compared with its first forecast  — time -0.2634, cost -0.224
+PASS  the PM's tasks carry an estimated cost  — 5 tasks at $0.01
+PASS  without history the first project has no estimate
+PASS  Legacy Billing: the refined code is clean  — score 100
+PASS  the report says what the refinement changed  — Score before refinement: 77. Refined: src/domain/entities/Order.ts.
+PASS  Unsafe Portal: QA rejected the unsafe code and DEV ran again  — DEV ran 2×
+PASS  Unsafe Portal ends with clean code  — score 100
+PASS  analytics cover the 8 roles  — 1.MARKETING 2.CEO 3.PM 4.QA 5.QC 6.BA 7.ARCHITECT 8.DEV
+PASS  DEV quality is the QA approval rate  — 0.8889 over 9 reviews
+PASS  QA prediction accuracy is measured  — {"samples":9,"truePass":8,"trueFail":1,"falsePass":0,"falseFail":0,"accuracy":1}
+PASS  no anomaly while everything works
+PASS  3 runs fail at the Marketing step while the model is down
+PASS  the repeated Marketing failures are an anomaly  — MARKETING failed its last 10 steps in a row
+PASS  the anomaly reached the webhook  — MARKETING:repeated_failures, MARKETING:low_quality
+PASS  the anomaly is in the audit log  — 2 entries
+PASS  the failed runs were announced  — 3 workflow.failed deliveries
+
+21/21 checks passed

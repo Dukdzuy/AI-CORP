@@ -9,6 +9,7 @@ import { AgentLLMService } from './services/agent-llm.service';
 import { TraceabilityService } from './services/traceability.service';
 import { ProjectTestRunner } from './services/project-test-runner.service';
 import { WorkspaceModule } from '../workspace/workspace.module';
+import { CodeQualityModule } from '../code-quality/code-quality.module';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AGENTS, AGENT_CLASSES, agentsProvider } from './agents.registry';
 
@@ -33,7 +34,7 @@ import {
 } from './strategies';
 
 @Module({
-  imports: [MemoryModule, LLMModule, ToolsModule, WebSocketModule, PrismaModule, WorkspaceModule],
+  imports: [MemoryModule, LLMModule, ToolsModule, WebSocketModule, PrismaModule, WorkspaceModule, CodeQualityModule],
   providers: [
     // Services
     TemplateService,

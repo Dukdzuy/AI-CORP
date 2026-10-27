@@ -4,7 +4,9 @@ import { AgentOrchestratorService } from '../../orchestrator/agent-orchestrator.
 import { Milestone } from '../../../domain/entities/Milestone';
 import { Task } from '../../../domain/entities/Task';
 import { TaskStatus } from '../../../domain/value-objects/TaskStatus';
+import { Money } from '../../../domain/value-objects/Money';
 import { IMilestoneRepository, ITaskRepository } from '../../../domain/repositories';
+import { ITaskCostEstimator } from '../../../domain/estimation';
 import { IWorkflowEngineRepository, WorkflowRunRecord } from '../persistence/workflow-engine.repository';
 import { NodeExecutionStrategy, NodeExecutionContext } from './node-execution-strategy';
 
@@ -21,7 +23,8 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
     private readonly websocketGateway: AppWebSocketGateway,
     private readonly orchestrator: AgentOrchestratorService,
     private readonly milestoneRepository: IMilestoneRepository,
-    private readonly taskRepository: ITaskRepository
+    private readonly taskRepository: ITaskRepository,
+    private readonly taskCostEstimator?: ITaskCostEstimator
   ) {}
 
   async execute(node: WorkflowNode, run: WorkflowRunRecord, ctx: NodeExecutionContext): Promise<NodeResult> {
@@ -175,32 +178,32 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
    */
   private async createTasksFromOutput(projectId: string, output: string, ctx: NodeExecutionContext): Promise<void> {
     try {
-      // Parse task items from PM output
-      const lines = output.split('\n').filter(l => l.trim().length > 0);
-      const taskLines = lines.filter(l =>
-        l.match(/^[\s]*[-*•]\s/) || l.match(/^[\s]*\d+[.)]\s/) || l.match(/^task/i)
-      );
-
-      if (taskLines.length === 0) {
-        // Fallback: create a single task
-        const firstMeaningful = lines.find(l => l.length > 5) || 'Implement feature';
-        await this.addTask(
-          projectId,
-          firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim().slice(0, 200),
-          firstMeaningful.trim(),
-        );
-      } else {
-        for (const line of taskLines.slice(0, 20)) {
-          const title = line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^task[:\s]*/i, '').trim();
-          if (title.length > 2) {
-            await this.addTask(projectId, title.slice(0, 200), title);
-          }
-        }
+      const titles = AgentTaskStrategy.parseTaskTitles(output);
+      // Phase 6, Task 25: each planned task carries its share of the forecast implementation cost
+      const estimatedCost = this.taskCostEstimator ? await this.taskCostEstimator.estimateTaskCost(projectId, titles.length) : null;
+      for (const title of titles) {
+        await this.addTask(projectId, title.slice(0, 200), title, estimatedCost);
       }
-      ctx.logger.log(`Created tasks from PM output for project ${projectId}`);
+      ctx.logger.log(`Created ${titles.length} tasks from PM output for project ${projectId}${estimatedCost !== null ? ` (estimated $${estimatedCost} each)` : ''}`);
     } catch (error) {
       ctx.logger.warn(`Failed to create tasks from output: ${(error as Error).message}`);
     }
+  }
+
+  /** Task titles in the PM's numbered or bulleted list; the first meaningful line when there is no list */
+  static parseTaskTitles(output: string): string[] {
+    const lines = output.split('\n').filter(l => l.trim().length > 0);
+    const taskLines = lines.filter(l =>
+      l.match(/^[\s]*[-*•]\s/) || l.match(/^[\s]*\d+[.)]\s/) || l.match(/^task/i)
+    );
+    if (taskLines.length === 0) {
+      const firstMeaningful = lines.find(l => l.length > 5) || 'Implement feature';
+      return [firstMeaningful.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').trim()];
+    }
+    return taskLines
+      .slice(0, 20)
+      .map(line => line.replace(/^[\s]*[-*•]\s*/, '').replace(/^[\s]*\d+[.)]\s*/, '').replace(/^task[:\s]*/i, '').trim())
+      .filter(title => title.length > 2);
   }
 
   /**
@@ -221,8 +224,8 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
   /**
    * Create an agent-planned task through the Task entity (starts in TODO)
    */
-  private async addTask(projectId: string, title: string, description: string): Promise<void> {
-    const state = Task.create({ projectId, title, description }).toPrimitives();
+  private async addTask(projectId: string, title: string, description: string, estimatedCost: number | null = null): Promise<void> {
+    const state = Task.create({ projectId, title, description, ...(estimatedCost !== null ? { estimatedCost: Money.dollars(estimatedCost) } : {}) }).toPrimitives();
     await this.taskRepository.create({
       id: state.id,
       projectId: state.projectId,
@@ -230,6 +233,7 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
       description: state.description,
       status: state.status,
       priority: state.priority,
+      estimatedCost: state.estimatedCost,
     });
   }
 

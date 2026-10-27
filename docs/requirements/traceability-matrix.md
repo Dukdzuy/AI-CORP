@@ -68,7 +68,7 @@ Requirements are organized into 8 subsystems:
 | FR-AGENT-002 | Architect Agent - System Design | Architect Agent shall design system architecture, generate PlantUML diagrams, and create ADRs | UC-010 | Class: ArchitectAgent, ArchitectActionStrategy, OOADArtifactService, ARCHITECT_PROFILE | apps/api/src/modules/agents/architect.agent.ts | apps/api/tests/unit/agents/agent-strategies.spec.ts, apps/api/tests/unit/agents/ooad-artifacts.spec.ts | Implemented |
 | FR-AGENT-003 | QC Agent - Use Case Verification | QC Agent shall derive acceptance tests from use cases, execute them in the sandbox and maintain the traceability matrix with passing / failing / missing use cases (replaces DevOps, 2026-10-26; tests executed since Task 12) | UC-016 | Class: QcAgent, QcActionStrategy, TraceabilityService, ProjectTestRunner, JestReportMapper, SandboxExecutor.runInWorkspace | apps/api/src/modules/agents/qc.agent.ts, apps/api/src/modules/agents/services/project-test-runner.service.ts | apps/api/tests/unit/agents/traceability.spec.ts, apps/api/tests/unit/agents/agent-strategies.spec.ts, apps/api/tests/unit/agents/qc-verification.spec.ts | Implemented |
 | FR-AGENT-004 | Base Agent Architecture | All agents shall extend BaseAgent, which runs the injected thinking/action strategies in one execute() flow (Template Method + Strategy) | UC-004, UC-009-016 | Abstract Class: BaseAgent<TOutput> implements IAgent; RoleProfile | apps/api/src/modules/agents/base.agent.ts | apps/api/tests/unit/agents/base-agent.spec.ts | Implemented |
-| FR-AGENT-005 | Agent State Management | Agents shall transition through states: IDLE→THINKING→ACTING→COMPLETED (State pattern) | UC-004 | Class: AgentStateMachine, Interface: IAgent | apps/api/src/domain/agent/AgentStateMachine.ts, apps/api/src/modules/agents/base.agent.ts | tests/unit/domain/agent/AgentStateMachine.spec.ts, apps/api/tests/unit/agents/base-agent.spec.ts | Implemented |
+| FR-AGENT-005 | Agent State Management | Agents shall transition through states: IDLE→THINKING→ACTING→COMPLETED (State pattern), one lifecycle per execution so concurrent runs of a role do not collide (fixed in Phase 6) | UC-004 | Class: AgentStateMachine, Interface: IAgent | apps/api/src/domain/agent/AgentStateMachine.ts, apps/api/src/modules/agents/base.agent.ts | tests/unit/domain/agent/AgentStateMachine.spec.ts, apps/api/tests/unit/agents/base-agent.spec.ts | Implemented |
 | FR-AGENT-006 | Agent Memory Storage | Agents shall save observations to AgentMemory with importance [1-10] and namespace | UC-017 | Class: MemoryService (saveMemory method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-001, TEST-MEM-002 | Implemented |
 | FR-AGENT-007 | Agent Memory Search | Agents shall search memories using semantic similarity (pgvector cosine distance) | UC-017, UC-009-016 | Class: MemoryService (searchMemories method) | apps/api/src/modules/memory/memory.service.ts | TEST-MEM-003, TEST-MEM-004 | Implemented |
 | FR-AGENT-008 | LLM Integration | Agent strategies shall call the LLM through AgentLLMService (role model from Agent Settings or RoleProfile default, usage costed per project) | UC-018 | Class: AgentLLMService (Facade), UsageTrackingLLMProvider (Decorator), LLMProviderFactory | apps/api/src/modules/agents/services/agent-llm.service.ts, apps/api/src/modules/llm/usage-tracking.provider.ts | TEST-LLM-001, TEST-LLM-002 | Implemented |
@@ -144,6 +144,20 @@ Requirements are organized into 8 subsystems:
 
 ---
 
+### 3.9 Analytics, Estimation & Code Quality Subsystem (Phase 6)
+
+| Req ID | Requirement Name | Description | Use Case IDs | Design Artifacts | Implementation Files | Test IDs | Status |
+|--------|------------------|-------------|--------------|------------------|---------------------|----------|--------|
+| FR-ANA-001 | Agent Metrics & Ranking | System shall report per agent role, over 7/30/90 days: steps, success rate, average and p95 duration, cost per success, a role-specific quality measure, trend against the previous period, rank, daily series and activity heatmap | UC-033 | AgentPerformanceAnalyzer, IQualitySignal (Strategy: QaApproval, QcPass, OoadGate, FirstAttempt); `classes/analytics-phase6.puml` | apps/api/src/domain/analytics/, apps/api/src/modules/analytics/, apps/web/src/pages/AgentAnalyticsPage.tsx | tests/unit/analytics/agent-analytics-domain.spec.ts, phase6-services.spec.ts | Implemented |
+| FR-ANA-002 | Agent Anomaly Detection | System shall detect success-rate drops, repeated failures, cost spikes, slowdowns and low quality, and publish each once per day as `agent.anomaly` (audit log, webhooks) | UC-033, UC-030, UC-031 | AgentAnomalyDetector, IAgentAnomalyRule (Strategy), AgentAnomalyMonitor (Observer), AgentAnomalyDetectedEvent | apps/api/src/domain/analytics/AgentAnomalyDetector.ts, apps/api/src/modules/analytics/agent-anomaly.monitor.ts | tests/unit/analytics/agent-analytics-domain.spec.ts, phase6-services.spec.ts; docs/phase6-e2e | Implemented |
+| FR-EST-001 | Effort & Cost Model | System shall learn per role how agent time and LLM cost grow with the request (ridge regression, median below 6 samples) and report its leave-one-out error | UC-024 | EstimationModel, RegressionEstimator, MedianEstimator (Strategy), LinearRegression | apps/api/src/domain/estimation/, apps/api/src/modules/estimation/training-data.collector.ts | tests/unit/analytics/estimation-domain.spec.ts | Implemented |
+| FR-EST-002 | Project Forecast | System shall store a forecast when a workflow starts and when the plan is known (`ProjectEstimate`) | UC-024 | ProjectEstimationService, EstimationHandler (Observer of workflow.started) | apps/api/src/modules/estimation/, apps/web/src/components/reports/ForecastCard.tsx | tests/unit/analytics/phase6-services.spec.ts | Implemented |
+| FR-EST-003 | Task Estimates | Tasks created by the PM agent shall carry an estimated cost derived from the forecast | UC-024 | ITaskCostEstimator (port), AgentTaskStrategy | apps/api/src/domain/estimation/ITaskCostEstimator.ts, apps/api/src/modules/workflow/strategies/agent-task.strategy.ts | tests/unit/analytics/phase6-services.spec.ts | Implemented |
+| FR-EST-004 | Forecast Accuracy | System shall compare each finished project with its first forecast | UC-024, UC-033 | EstimationModel.compareForecast | apps/api/src/modules/estimation/project-estimation.service.ts | tests/unit/analytics/estimation-domain.spec.ts; docs/phase6-e2e | Implemented |
+| FR-CQ-001 | Static Analysis of Generated Code | System shall measure generated TypeScript: syntax, cyclomatic complexity, maintainability index, unsafe calls, hard-coded secrets, OOAD layer violations, use case references | UC-023 | ICodeAnalyzer (port) / TypeScriptCodeAnalyzer (adapter), CodeQualityPolicy, LayerRules | apps/api/src/domain/quality/, apps/api/src/infrastructure/code-analysis/, apps/api/src/modules/code-quality/ | tests/unit/analytics/code-quality.spec.ts | Implemented |
+| FR-CQ-002 | Refinement Round | The DEV agent shall rewrite code predicted to fail QA once, and keep the result only if it scores higher | UC-023 | DevActionStrategy.assureQuality | apps/api/src/modules/agents/strategies/DevActionStrategy.ts | tests/unit/analytics/phase6-services.spec.ts; docs/phase6-e2e | Implemented |
+| FR-CQ-003 | QA Evidence & Prediction | The QA review shall receive the analysis, and the predicted verdict shall be measured against QA's real verdicts | UC-023, UC-033 | QaActionStrategy, AgentPerformanceAnalyzer (qaPrediction) | apps/api/src/modules/agents/strategies/QaActionStrategy.ts, apps/web/src/components/reports/CodeQualityCard.tsx | tests/unit/analytics/phase6-services.spec.ts, agent-analytics-domain.spec.ts | Implemented |
+
 ## 4. Non-Functional Requirements Traceability
 
 ### 4.1 Performance Requirements
@@ -154,6 +168,7 @@ Requirements are organized into 8 subsystems:
 | NFR-PERF-002 | Semantic Search Performance | Memory search must return results <500ms for databases with <100k memories | UC-017 | pgvector HNSW index on embeddings | SQL HNSW index creation migration | TEST-PERF-003 | Implemented |
 | NFR-PERF-003 | Workflow Visualization Load Time | Workflow visualization must update within 1 second of state change | UC-007 | WebSocket push notifications instead of polling | Socket.IO real-time events | TEST-PERF-004 | Implemented |
 | NFR-PERF-004 | Cost Dashboard Load Time | Cost dashboard must load <3 seconds for projects with <10k API calls | UC-008 | Aggregation pipelines, caching layer | Prisma aggregation queries, Redis cache | TEST-PERF-005 | Planned |
+| NFR-PERF-006 | Load Budgets | Dashboard reads must stay within p50/p95/p99 budgets for 20 concurrent users, with error rate ≤ 1 % | UC-022, UC-023, UC-024, UC-033 | Budgets file, dependency-free load generator; caching and lean queries where the test found slow paths | scripts/perf/load-test.mjs, scripts/perf/budgets.json | docs/phase6-e2e/load-test.md | Implemented |
 | NFR-PERF-005 | Concurrent Workflows | System must support 100 concurrent workflows | UC-004 | Redis/BullMQ horizontal scaling, connection pooling | BullMQ queue configuration, Prisma pool size | TEST-PERF-006 | Planned |
 
 ### 4.2 Security Requirements
@@ -200,7 +215,9 @@ Requirements are organized into 8 subsystems:
 
 | Req ID | Requirement Name | Description | Use Case IDs | Design Decisions | Implementation | Test IDs | Status |
 |--------|------------------|-------------|--------------|------------------|----------------|----------|--------|
-| NFR-TEST-001 | Unit Test Coverage | Code coverage must be ≥90% for branches, functions, lines, statements | All | Jest test framework, coverage thresholds in jest.config.js | jest.config.js (coverageThreshold) | All TEST-* | Implemented |
+| NFR-TEST-001 | Unit Test Coverage | The domain layer must keep ≥90% functions, lines and statements and ≥85% branches; the whole API keeps a floor (70% lines and statements) | All | Jest coverage thresholds per path (re-scoped in Phase 6: 90% everywhere would mean testing framework glue) | apps/api/package.json (jest.coverageThreshold), `pnpm --filter @ai-corp/api test:cov` | tests/README.md | Implemented |
+| NFR-QUALITY-003 | Generated Code Quality Score | Generated code gets a 0–100 score with its findings and a predicted QA verdict | UC-023 | CodeQualityPolicy | apps/api/src/domain/quality/CodeQualityPolicy.ts | tests/unit/analytics/code-quality.spec.ts | Implemented |
+| NFR-ACCURACY-001 | Measured Estimation Error | Each role's model reports its leave-one-out error; each forecast carries a confidence level | UC-024 | EstimationModel (evaluation, confidence) | apps/api/src/domain/estimation/EstimationModel.ts | tests/unit/analytics/estimation-domain.spec.ts | Implemented |
 | NFR-TEST-002 | Integration Tests | All API endpoints must have integration tests | All | Jest + Supertest for HTTP testing | **/*.e2e-spec.ts files | TEST-INT-001 to TEST-INT-050 | Partial |
 | NFR-TEST-003 | Mocking External Dependencies | Tests must mock LLM providers, Redis, Docker sandbox | All | Jest mock functions, dependency injection | Test files with jest.mock() | All TEST-* | Implemented |
 | NFR-TEST-004 | Test Isolation | Each test must be independent and not affect other tests | All | beforeEach/afterEach setup/teardown, in-memory database | Test suites with setup/teardown | All TEST-* | Implemented |
@@ -228,6 +245,8 @@ Requirements are organized into 8 subsystems:
 |---------|-----------|-------------------|---------|--------|
 | **Strategy** | UC-009-016 | IThinkingStrategy, IActionStrategy, BaseAgent | Encapsulate agent reasoning/action algorithms, allow runtime swapping | Implemented |
 | **State** | UC-004, UC-005 | AgentStateMachine, WorkflowStateMachine | Manage agent/workflow state transitions with validation | Implemented |
+| **Strategy** (Phase 6) | UC-023, UC-024, UC-033 | IQualitySignal, IAgentAnomalyRule, IEstimator | Role-specific quality, anomaly rules and estimators chosen per role/sample size | Implemented |
+| **Port / Adapter** (Phase 6) | UC-023, UC-024 | ICodeAnalyzer → TypeScriptCodeAnalyzer; ITaskCostEstimator → ProjectEstimationService | Keep the domain free of the TypeScript compiler and of Nest modules | Implemented |
 | **Observer** | UC-021, UC-024 | IAgentObserver, AppWebSocketGateway | Decouple agents from WebSocket gateway, broadcast events | Implemented |
 | **Template Method** | UC-009-016 | BaseAgent.execute() | Define agent execution skeleton (think→act), subclasses implement details | Implemented |
 | **Factory** | UC-018 | LLMProviderFactory | Create LLM provider instances based on configuration | Implemented |
@@ -250,6 +269,7 @@ Requirements are organized into 8 subsystems:
 | Approval System | Application Layer | ApprovalsModule, ApprovalService | Human-in-the-loop coordination |
 | Cost Tracking | Application Layer | CostModule, ApiUsageService | Cross-cutting concern for budget monitoring |
 | Memory & Learning | Infrastructure Layer + Domain Layer | MemoryModule, AgentMemory entity | Vector search infrastructure, memory domain logic |
+| Analytics, Estimation & Code Quality (Phase 6) | Domain + Application + Infrastructure | domain/analytics, domain/estimation, domain/quality; AnalyticsModule, EstimationModule, CodeQualityModule; infrastructure/code-analysis | Pure domain calculations (testable without a database), application services load data, the compiler sits behind a port |
 
 ---
 
@@ -266,6 +286,7 @@ Requirements are organized into 8 subsystems:
 | Cost Tracking | 12 tests | 4 tests | 2 tests | 90% | Complete |
 | Memory & Learning | 15 tests | 6 tests | 1 test | 89% | Complete |
 | Security, Audit, Integration & Reporting (Phase 5) | 91 tests (9 suites) | 2 suites over real HTTP (guards, webhook receiver) | 44 checks (docs/phase5-e2e) | – | Complete |
+| Analytics, Estimation & Code Quality (Phase 6) | 5 suites (+ domain entity tests) | – | 21 checks (docs/phase6-e2e) + load test | domain 96% lines | Complete |
 | **TOTAL** | **105 tests** | **43 tests** | **19 tests** | **90%** | **In Progress** |
 
 ---
@@ -318,12 +339,12 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Implemented | 95 | 91.3% |
-| Partial | 1 | 1.0% |
-| Planned | 8 | 7.7% |
-| **TOTAL** | **104** | **100%** |
+| Implemented | 107 | 92.2% |
+| Partial | 1 | 0.9% |
+| Planned | 8 | 6.9% |
+| **TOTAL** | **116** | **100%** |
 
-_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above. Recounted again 2026-10-26 after Phase 5: FR-AUTH-005, FR-AUD-001–003, FR-INT-001–003, FR-REP-001–003 and NFR-SEC-007–010 added; FR-WF-008 implemented in Phase 4._
+_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above. Recounted again 2026-10-26 after Phase 5: FR-AUTH-005, FR-AUD-001–003, FR-INT-001–003, FR-REP-001–003 and NFR-SEC-007–010 added; FR-WF-008 implemented in Phase 4. Recounted after Phase 6: FR-ANA-001–002, FR-EST-001–004, FR-CQ-001–003, NFR-PERF-006, NFR-QUALITY-003 and NFR-ACCURACY-001 added (the last two were cited by UC-023/UC-024 but had no row)._
 
 ### Planned Requirements (Priority for Next Sprint)
 1. FR-MEM-005 (Memory Pruning)

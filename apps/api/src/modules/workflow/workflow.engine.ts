@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { WorkflowDefinition, WorkflowNode, WorkflowContext, NodeResult, NodeType } from '@ai-corp/shared-types';
 import { WorkflowDefinitionRegistry } from './workflow-definition.registry';
 import { WorkflowGraph } from '../../domain/workflow/WorkflowGraph';
@@ -18,6 +18,7 @@ import {
   MILESTONE_REPOSITORY,
   TASK_REPOSITORY,
 } from '../../domain/repositories';
+import { ITaskCostEstimator, TASK_COST_ESTIMATOR } from '../../domain/estimation';
 import {
   WORKFLOW_ENGINE_REPOSITORY,
   IWorkflowEngineRepository,
@@ -63,7 +64,9 @@ export class WorkflowEngine {
     private readonly orchestrator: AgentOrchestratorService,
     private readonly eventBus: EventBus,
     @Inject(MILESTONE_REPOSITORY) private readonly milestoneRepository: IMilestoneRepository,
-    @Inject(TASK_REPOSITORY) private readonly taskRepository: ITaskRepository
+    @Inject(TASK_REPOSITORY) private readonly taskRepository: ITaskRepository,
+    // Phase 6, Task 25: estimated cost of the tasks the PM agent plans (optional port)
+    @Optional() @Inject(TASK_COST_ESTIMATOR) private readonly taskCostEstimator?: ITaskCostEstimator
   ) {
     this.snapshots = new WorkflowSnapshotCaretaker(this.repository);
 
@@ -73,7 +76,8 @@ export class WorkflowEngine {
       this.websocketGateway,
       this.orchestrator,
       this.milestoneRepository,
-      this.taskRepository
+      this.taskRepository,
+      this.taskCostEstimator
     ));
     this.registerStrategy(new HumanApprovalStrategy(this.repository, this.websocketGateway, this.eventBus));
     this.registerStrategy(new ConditionStrategy(this.websocketGateway));

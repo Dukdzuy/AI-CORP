@@ -1,0 +1,125 @@
+@startuml Analytics, Estimation and Code Quality - Phase 6
+!theme plain
+title Agent analytics, estimation and code quality after Phase 6 (Tasks 24-28)
+skinparam classAttributeIconSize 0
+
+package "domain/analytics" {
+  class AgentPerformanceAnalyzer <<domain service>> {
+    + analyze(input, period, now): AgentAnalytics
+  }
+  interface IQualitySignal <<strategy>> {
+    + basis: string
+    + score(role, steps, input, period): QualityScore
+  }
+  class QaApprovalSignal
+  class QcPassSignal
+  class OoadGateSignal
+  class FirstAttemptSignal
+  class AgentAnomalyDetector <<domain service>> {
+    + detect(analytics): AgentAnomaly[]
+  }
+  interface IAgentAnomalyRule <<strategy>> {
+    + type: AgentAnomalyType
+    + detect(row): AgentAnomaly | null
+  }
+  class SuccessRateDropRule
+  class RepeatedFailureRule
+  class CostSpikeRule
+  class SlowdownRule
+  class LowQualityRule
+  IQualitySignal <|.. QaApprovalSignal
+  IQualitySignal <|.. QcPassSignal
+  IQualitySignal <|.. OoadGateSignal
+  IQualitySignal <|.. FirstAttemptSignal
+  AgentPerformanceAnalyzer o-- "role ->" IQualitySignal
+  IAgentAnomalyRule <|.. SuccessRateDropRule
+  IAgentAnomalyRule <|.. RepeatedFailureRule
+  IAgentAnomalyRule <|.. CostSpikeRule
+  IAgentAnomalyRule <|.. SlowdownRule
+  IAgentAnomalyRule <|.. LowQualityRule
+  AgentAnomalyDetector o-- "*" IAgentAnomalyRule
+}
+
+package "domain/estimation" {
+  class EstimationModel <<aggregate>> {
+    + {static} train(samples, options): EstimationModel
+    + forecast(features, roles): Forecast
+    + summary(): RoleModelSummary[]
+  }
+  interface IEstimator <<strategy>> {
+    + method: regression | median
+    + predict(features): number
+  }
+  class RegressionEstimator
+  class MedianEstimator
+  class LinearRegression {
+    + {static} fit(rows, targets, lambda): LinearRegression
+    + predict(x): number
+  }
+  interface ITaskCostEstimator <<port>> {
+    + estimateTaskCost(projectId, taskCount)
+  }
+  IEstimator <|.. RegressionEstimator
+  IEstimator <|.. MedianEstimator
+  RegressionEstimator --> LinearRegression
+  EstimationModel o-- "role -> time, cost" IEstimator
+}
+
+package "domain/quality" {
+  interface ICodeAnalyzer <<port>> {
+    + analyze(path, content): FileMetrics | null
+  }
+  class CodeQualityPolicy <<policy>> {
+    + threshold: number
+    + assess(metrics): CodeQualityAssessment
+    + {static} summarize(assessment)
+  }
+  class LayerRules <<module>> {
+    + layerOf(path)
+    + layerViolation(from, import)
+  }
+}
+
+package "domain/events" {
+  class AgentAnomalyDetectedEvent <<domain event>> {
+    eventType = agent.anomaly
+  }
+}
+
+package "infrastructure/code-analysis" {
+  class TypeScriptCodeAnalyzer <<adapter>>
+}
+ICodeAnalyzer <|.. TypeScriptCodeAnalyzer
+TypeScriptCodeAnalyzer ..> LayerRules
+
+package "modules (application)" {
+  class AgentAnalyticsService <<application service>>
+  class AgentAnomalyMonitor <<observer>>
+  class TrainingDataCollector
+  class ProjectEstimationService <<application service>>
+  class EstimationHandler <<observer>>
+  class CodeQualityService <<application service>> {
+    + assessFiles(files)
+    + assessProject(projectId)
+    + invalidate(projectId)
+    + writeReport(projectId, assessment)
+  }
+  class DevActionStrategy <<strategy>>
+  class QaActionStrategy <<strategy>>
+  class AgentTaskStrategy <<strategy>>
+}
+
+AgentAnalyticsService --> AgentPerformanceAnalyzer
+AgentAnalyticsService --> AgentAnomalyDetector
+AgentAnomalyMonitor --> AgentAnalyticsService : on workflow.completed / failed
+AgentAnomalyMonitor ..> AgentAnomalyDetectedEvent : publishes
+ProjectEstimationService --> EstimationModel
+ProjectEstimationService --> TrainingDataCollector
+ITaskCostEstimator <|.. ProjectEstimationService
+EstimationHandler --> ProjectEstimationService : on workflow.started
+AgentTaskStrategy --> ITaskCostEstimator : sets Task.estimatedCost
+CodeQualityService --> ICodeAnalyzer
+CodeQualityService --> CodeQualityPolicy
+DevActionStrategy --> CodeQualityService : assess, refine once, report
+QaActionStrategy ..> CodeQualityService : reads codeQuality from the DEV output
+@enduml

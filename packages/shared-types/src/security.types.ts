@@ -36,6 +36,7 @@ export enum WebhookEventName {
   QUALITY_GATE_EVALUATED = 'quality.gate.evaluated',
   BUDGET_EXCEEDED = 'project.budget.exceeded',
   REPORT_GENERATED = 'report.generated',
+  AGENT_ANOMALY = 'agent.anomaly', // Phase 6, Task 24
 }
 
 export type ExportFormat = 'json' | 'csv' | 'pdf';
