@@ -1,0 +1,103 @@
+# Production / demo stack (Phase 7, Task 32)
+#   cp .env.production.example .env.production   # fill in the secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# Scripted LLM for an offline demo (no 9Router needed): add `--profile demo` and set
+#   NINE_ROUTER_URL=http://demo-llm:20128/v1 in .env.production
+# The web app is served on WEB_PORT (default 8080); only nginx is published.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aicorp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_corp}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-aicorp} -d ${POSTGRES_DB:-ai_corp}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: ai-corp-api:latest
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-aicorp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ai_corp}
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      PROJECTS_WORKSPACE_DIR: /data/workspace
+    volumes:
+      # Generated projects (docs, code, tests, reports) outlive the container
+      - workspace_data:/data/workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [backend]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: ai-corp-web:latest
+    restart: unless-stopped
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    depends_on:
+      api:
+        condition: service_healthy
+      plantuml:
+        condition: service_started
+    networks: [backend]
+
+  # Renders the generated projects' UML in the Artifacts tab without sending it to plantuml.com
+  plantuml:
+    image: plantuml/plantuml-server:jetty
+    restart: unless-stopped
+    networks: [backend]
+
+  # Offline demo: the scripted OpenAI-compatible LLM used by the end-to-end runs
+  demo-llm:
+    image: node:20-alpine
+    profiles: ['demo']
+    working_dir: /repo
+    command: ['node', 'scripts/demo/demo-llm.cjs']
+    environment:
+      DEMO_LLM_HOST: 0.0.0.0
+      DEMO_LLM_DELAY_MS: ${DEMO_LLM_DELAY_MS:-400}
+    volumes:
+      - ./scripts/demo:/repo/scripts/demo:ro
+      - ./docs/phase3-e2e:/repo/docs/phase3-e2e:ro
+      - ./docs/phase6-e2e:/repo/docs/phase6-e2e:ro
+    networks: [backend]
+
+volumes:
+  postgres_data:
+  redis_data:
+  workspace_data:
+
+networks:
+  backend:

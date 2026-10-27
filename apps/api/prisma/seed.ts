@@ -8,8 +8,12 @@ async function main() {
   console.log('Starting database seed...');
 
   // Seed Admin user
-  const adminEmail = 'admin@aicorp.com';
-  const adminPassword = 'admin123';
+  // Production seeds need their own admin password; the well-known demo one is refused there
+  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@aicorp.com';
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'admin123';
+  if (process.env.NODE_ENV === 'production' && (!process.env.SEED_ADMIN_PASSWORD || adminPassword.length < 12)) {
+    throw new Error('Set SEED_ADMIN_PASSWORD (at least 12 characters) to seed a production database');
+  }
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
 
   if (!existingAdmin) {
@@ -22,7 +26,7 @@ async function main() {
         passwordHash,
       },
     });
-    console.log(`Created admin user: ${adminEmail} / ${adminPassword}`);
+    console.log(`Created admin user: ${adminEmail}`);
   } else {
     console.log(`Admin user ${adminEmail} already exists`);
   }
@@ -88,9 +92,7 @@ async function main() {
 
   console.log('Database seed completed successfully!');
   console.log('');
-  console.log('Admin credentials:');
-  console.log('  Email:    admin@aicorp.com');
-  console.log('  Password: admin123');
+  console.log(`Admin: ${adminEmail}${process.env.SEED_ADMIN_PASSWORD ? '' : ' / admin123 (development default)'}`);
 }
 
 main()

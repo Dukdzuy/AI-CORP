@@ -4,7 +4,7 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 title SD-004: Task Delegation Chain (default OOAD workflow v2.0.0)
-subtitle Each agent hands its output to the next through workflow variables
+caption Each agent hands its output to the next through workflow variables
 
 actor "Board Member" as User #LightBlue
 participant "WorkflowEngine" as Engine #Orange

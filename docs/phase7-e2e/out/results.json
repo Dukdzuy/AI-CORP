@@ -1,0 +1,86 @@
+[
+  {
+    "name": "readiness through nginx: database, Redis and LLM gateway healthy",
+    "ok": true
+  },
+  {
+    "name": "liveness endpoint",
+    "ok": true
+  },
+  {
+    "name": "Swagger disabled in production (ENABLE_SWAGGER=false)",
+    "ok": true
+  },
+  {
+    "name": "CORS only for CORS_ORIGIN",
+    "ok": true
+  },
+  {
+    "name": "single-page app routes served by nginx",
+    "ok": true
+  },
+  {
+    "name": "realtime: Socket.IO through nginx accepts the login token",
+    "ok": true
+  },
+  {
+    "name": "realtime: a forged token is disconnected",
+    "ok": true
+  },
+  {
+    "name": "demo projects present",
+    "ok": true
+  },
+  {
+    "name": "4 demo projects completed",
+    "ok": true
+  },
+  {
+    "name": "Online Bookstore has its OOAD artifacts, code and tests",
+    "ok": true
+  },
+  {
+    "name": "Online Bookstore: OOAD gate passed and acceptance tests executed",
+    "ok": true
+  },
+  {
+    "name": "Legacy Billing: DEV refined the code before QA",
+    "ok": true
+  },
+  {
+    "name": "Unsafe Portal: QA sent the code back to DEV once",
+    "ok": true
+  },
+  {
+    "name": "RBAC: the viewer cannot create a project",
+    "ok": true
+  },
+  {
+    "name": "Clinic Booking waits for the board member's approval",
+    "ok": true
+  },
+  {
+    "name": "viewer cannot answer the approval",
+    "ok": true
+  },
+  {
+    "name": "viewer cannot answer the approval over the WebSocket either",
+    "ok": true
+  },
+  {
+    "name": "after the approval the CEO closes Clinic Booking",
+    "ok": true
+  },
+  {
+    "name": "PDF export of a demo project",
+    "ok": true
+  },
+  {
+    "name": "agent analytics cover the 8 roles",
+    "ok": true
+  },
+  {
+    "name": "audit log records the demo (logins, project creation, approval)",
+    "ok": true
+  }
+]

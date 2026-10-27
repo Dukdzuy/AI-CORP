@@ -63,7 +63,7 @@ package "Presentation Layer" as PRESENTATION #EBF5FB {
 package "Application Layer" as APPLICATION #EBF5FB {
 
   package "Agent Module" as AGENT_MOD {
-    [AGENTS token (IAgent[])] as REGISTRY
+    [AGENTS token (IAgent list)] as REGISTRY
     [agentsProvider factory] as FACTORY
     [Role Profiles] as PROFILES
     [CEO Agent] as CEO

@@ -4,7 +4,7 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 title SD-005: Agent Learning Cycle
-subtitle Semantic Memory Storage and Retrieval with Vector Embeddings
+caption Semantic Memory Storage and Retrieval with Vector Embeddings
 
 participant "BaseAgent" as Agent #Pink
 participant "TaskResult" as Result #LightYellow

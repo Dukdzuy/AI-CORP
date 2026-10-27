@@ -12,84 +12,71 @@ state PENDING {
   NotificationSent --> AwaitingDecision
   AwaitingDecision --> CheckingTimeout
   CheckingTimeout --> AwaitingDecision : [timeout not reached]
-  --
-  <b>Entry:</b> 
-  - Create approval record
-  - Send WebSocket notification
-  - Set requestedAt timestamp
-  - Pause workflow execution
-  
-  <b>Internal:</b>
-  - Check timeout every 5 minutes
-  - Reminder notifications every 30 min
-  
-  <b>Exit:</b>
-  - Record respondedAt timestamp
-  - Resume workflow execution
-  
-  <b>Invariant:</b>
-  - respondedAt == null
-  - comment == null
-  - Workflow status = PAUSED
-  
-  <b>Timeout Rule:</b>
-  - Auto-reject after 2 hours
-  - Configurable per approval type
 }
+PENDING : <b>Entry:</b>
+PENDING : - Create approval record
+PENDING : - Send WebSocket notification
+PENDING : - Set requestedAt timestamp
+PENDING : - Pause workflow execution
+PENDING : <b>Internal:</b>
+PENDING : - Check timeout every 5 minutes
+PENDING : - Reminder notifications every 30 min
+PENDING : <b>Exit:</b>
+PENDING : - Record respondedAt timestamp
+PENDING : - Resume workflow execution
+PENDING : <b>Invariant:</b>
+PENDING : - respondedAt == null
+PENDING : - comment == null
+PENDING : - Workflow status = PAUSED
+PENDING : <b>Timeout Rule:</b>
+PENDING : - Auto-reject after 2 hours
+PENDING : - Configurable per approval type
 
 state APPROVED {
   [*] --> RecordingDecision
   RecordingDecision --> ResumingWorkflow
   ResumingWorkflow --> TransitioningToNextNode
-  --
-  <b>Entry:</b>
-  - Set status = "approved"
-  - Record respondedAt
-  - Log approval comment
-  - Resume workflow with "onApprove" edge
-  
-  <b>Exit:</b>
-  - Workflow continues execution
-  - Notify all stakeholders
-  
-  <b>Business Impact:</b>
-  - Deployment proceeds
-  - Budget released
-  - Task marked complete
-  - Agent continues work
-  
-  <b>Audit:</b>
-  - Who approved
-  - When approved
-  - Reason (comment)
 }
+APPROVED : <b>Entry:</b>
+APPROVED : - Set status = "approved"
+APPROVED : - Record respondedAt
+APPROVED : - Log approval comment
+APPROVED : - Resume workflow with "onApprove" edge
+APPROVED : <b>Exit:</b>
+APPROVED : - Workflow continues execution
+APPROVED : - Notify all stakeholders
+APPROVED : <b>Business Impact:</b>
+APPROVED : - Deployment proceeds
+APPROVED : - Budget released
+APPROVED : - Task marked complete
+APPROVED : - Agent continues work
+APPROVED : <b>Audit:</b>
+APPROVED : - Who approved
+APPROVED : - When approved
+APPROVED : - Reason (comment)
 
 state REJECTED {
   [*] --> RecordingRejection
   RecordingRejection --> InitiatingRollback
   InitiatingRollback --> NotifyingAgents
-  --
-  <b>Entry:</b>
-  - Set status = "rejected"
-  - Record respondedAt
-  - Log rejection reason
-  - Trigger rollback with "onReject" edge
-  
-  <b>Exit:</b>
-  - Workflow aborts or rolls back
-  - Resources released
-  
-  <b>Compensation Actions:</b>
-  - Undo partial changes
-  - Restore previous state
-  - Cancel pending tasks
-  - Notify failure
-  
-  <b>Audit:</b>
-  - Who rejected
-  - When rejected
-  - Reason (required)
 }
+REJECTED : <b>Entry:</b>
+REJECTED : - Set status = "rejected"
+REJECTED : - Record respondedAt
+REJECTED : - Log rejection reason
+REJECTED : - Trigger rollback with "onReject" edge
+REJECTED : <b>Exit:</b>
+REJECTED : - Workflow aborts or rolls back
+REJECTED : - Resources released
+REJECTED : <b>Compensation Actions:</b>
+REJECTED : - Undo partial changes
+REJECTED : - Restore previous state
+REJECTED : - Cancel pending tasks
+REJECTED : - Notify failure
+REJECTED : <b>Audit:</b>
+REJECTED : - Who rejected
+REJECTED : - When rejected
+REJECTED : - Reason (required)
 
 PENDING --> APPROVED : <b>boardMemberApproves()</b>\n[guard: user.role == 'board_member']\naction: resumeWorkflow('onApprove')
 note on link

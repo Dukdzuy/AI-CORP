@@ -36,7 +36,7 @@ The AI-CORP platform is a multi-agent system for enterprise workflow automation,
 | Phase 4 – Workflow Engine Enhancement | **Done** (2026-10-26) | Re-scoped below: sub-workflows as child runs, immutable versions + snapshot rollback, parallel with dependencies, typed templates; 5 engine defects fixed. End-to-end run in `docs/phase4-e2e/` |
 | Phase 5 – Enterprise Features & Security | **Done** (2026-10-26) | Re-scoped below: roles admin / board member / viewer plus project ownership, append-only audit log, API keys on `/api/v1`, signed webhooks, PDF/CSV/JSON export and a weekly workspace report instead of email; 5 defects fixed. End-to-end run in `docs/phase5-e2e/` |
 | Phase 6 – AI/ML Features & Testing | **Done** (2026-10-26) | Re-scoped below: role-specific agent analytics with anomaly alerts, a per-role effort/cost regression measured by leave-one-out error, static analysis of generated code with one DEV refinement round, 90% coverage gate on the domain, a budgeted load test; 4 defects fixed. End-to-end run in `docs/phase6-e2e/` |
-| Phase 7 | Not started | DevOps references removed |
+| Phase 7 – Documentation & Demo Preparation | **Done** (2026-10-27) | Re-scoped below: thesis with measured numbers only, all 39 UML diagrams rendering, a repeatable demo on the production stack, Docker Compose deployment with migrations and a production config check; 10 defects fixed, including a WebSocket approval bypass. End-to-end run in `docs/phase7-e2e/` |
 
 ### **Audit findings and fixes**
 
@@ -1420,424 +1420,51 @@ _Status 2026-10-26: all met. `nest build` 0 errors, Jest 28/28 suites (452 passe
 
 ---
 
-### **Phase 7: Documentation & Demo Preparation (Week 7)**
+### **Phase 7: Documentation & Demo Preparation (Week 7)** — ✅ Done (2026-10-27)
+
+> **Re-scoped on 2026-10-27.** The tasks keep their numbers and goals, with these corrections against the original text:
+> - **The thesis reports measured numbers only** (Task 29). The original outline claimed 92% coverage, a 15% improvement from learning and 50 projects/s; none of these was measured. The thesis uses the numbers of the e2e and load-test runs, and says plainly that the learning improvement cannot be measured with the scripted LLM (section 7.3) and what the experiment with a real LLM would be. Written in Vietnamese with an English title, as Markdown chapters in `docs/thesis/` built to PDF.
+> - **Diagrams are rendered and checked, not redrawn** (Task 30). The 39 PlantUML sources already covered the views the plan asked for; 12 of them did not parse. A render script fails on the first broken diagram, so the catalogue stays correct.
+> - **The demo runs on the production stack with a scripted LLM** (Task 31), so it is repeatable without an API key or network, and a recorded walkthrough is the fallback.
+> - **Deployment is Docker Compose on one host** (Task 32), with migrations instead of `db push`, a production config check and real health checks. No cloud provider or Kubernetes.
+
+**Defects found and fixed during Phase 7**
+
+| # | Finding | Fix |
+|---|---------|-----|
+| E1 | `prisma/migrations` held only the initial schema (8 tables and many columns were added with `db push`), `migration_lock.toml` sat inside `0_init`, and the `vector` extension was never created, so a production database could not be built | Lock file moved to the migrations root, `CREATE EXTENSION vector` in `0_init`, new migration `20261027000000_platform_schema`; `migrate deploy` on an empty database then `migrate diff --exit-code` = no drift (`npm run db:check`) |
+| E2 | **A viewer could approve over the WebSocket**: `human:approval_response` called the approval service directly, skipping permissions, the assignee check and the audit log (REST correctly returned 403) | The gateway refuses the message; the web app answers approvals over REST (`respondToApproval`); unit test and e2e check |
+| E3 | Three different JWT fallbacks: REST and the WebSocket gateway signed and verified with different secrets when `JWT_SECRET` was unset | One `jwtSecret()` in `runtime-config.ts` |
+| E4 | Production started with missing or placeholder secrets | `EnvValidator`: in production `JWT_SECRET` (≥ 32 characters) and `CORS_ORIGIN` are required and `CHANGE_ME`-style values are rejected; the API exits with every error listed |
+| E5 | nginx stripped the `/api` prefix (every API call 404) and did not proxy Socket.IO | `apps/web/nginx.conf` proxies `/api/`, `/socket.io/` (upgrade) and `/plantuml/` |
+| E6 | The API Dockerfile ran a file that does not exist and health-checked the wrong path | Two-stage build, `tini`, non-root user, `docker-entrypoint.sh` (migrate, optional seed, start), healthcheck on `/api/health/live` |
+| E7 | `GET /health` answered 200 whatever the database state and did not check Redis | Redis `PING`, status unhealthy when the database is down → 503; `GET /health/live` for liveness |
+| E8 | The seed printed the admin password and used a fixed one in production | `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (≥ 12 characters in production); compiled seed for the runtime image |
+| E9 | 12 of 39 PlantUML diagrams did not render (4 state machines, 6 sequences, 1 class, 1 component) | Sources fixed; `scripts/docs/render-diagrams.sh` renders all 39 to SVG and fails on a syntax error |
+| E10 | Dashboard cards always showed "Starting… 0%" (the project list has no runs) and the total cost was not rounded | `projectProgress()` falls back to the project status (unit test); cost with 2 decimals |
 
 ---
 
-**Task 29: Write IEEE-Format Thesis Documentation**
-- **Objective**: Complete academic thesis document
-- **Implementation**:
-  1. **Abstract** (200-300 words):
-     - Problem: Manual software development workflows lack automation and optimization
-     - Solution: AI-CORP multi-agent platform with OOAD architecture
-     - Methods: Applied SOLID principles, 20+ design patterns, domain-driven design
-     - Results: 90%+ test coverage, <2s workflow node execution, extensible architecture
-     - Conclusion: Demonstrates viability of AI-driven software development automation
-  2. **Introduction** (4-5 pages):
-     - Background on software development challenges
-     - Motivation for multi-agent systems
-     - Research questions:
-       - RQ1: Can OOAD principles improve multi-agent system architecture?
-       - RQ2: What design patterns are most effective for agent coordination?
-       - RQ3: How can agents learn from past executions to improve performance?
-     - Thesis contributions:
-       - Comprehensive OOAD refactoring of multi-agent platform
-       - Novel agent collaboration patterns
-       - ML-based task estimation and code quality prediction
-     - Document structure outline
-  3. **Literature Review** (10-12 pages):
-     - Section 2.1: Object-Oriented Analysis and Design
-       - UML methodology (Booch, Rumbaugh, Jacobson)
-       - SOLID principles (Martin, 2000)
-       - Design patterns (Gang of Four, 1994; Fowler, 2002)
-     - Section 2.2: Multi-Agent Systems
-       - BDI architecture (Rao & Georgeff, 1995)
-       - Agent communication (FIPA-ACL)
-       - Agent coordination patterns
-     - Section 2.3: Workflow Orchestration
-       - BPMN 2.0 standard
-       - Petri nets for process modeling
-       - State machines for workflow control
-     - Section 2.4: AI in Software Development
-       - Code generation with LLMs
-       - Automated testing and QA
-       - Performance prediction models
-     - Research gap: Lack of comprehensive OOAD application in multi-agent platforms
-  4. **Methodology** (8-10 pages):
-     - Section 3.1: System Architecture Design
-       - Layered architecture with DDD
-       - Domain, application, infrastructure layers
-       - Dependency inversion and abstractions
-     - Section 3.2: Design Pattern Selection
-       - Table mapping patterns to problems
-       - Rationale for each pattern choice
-     - Section 3.3: Agent Design
-       - Strategy pattern for thinking/acting
-       - State machine for lifecycle management
-       - Event-driven communication
-     - Section 3.4: Workflow Engine Design
-       - DAG-based orchestration
-       - Parallel execution with dependency resolution
-       - Memento pattern for rollback
-     - Section 3.5: Testing Strategy
-       - TDD approach
-       - Unit, integration, E2E test layers
-       - Performance and load testing
-  5. **Implementation** (15-20 pages):
-     - Section 4.1: Domain Layer Implementation
-       - Entity design (Project, Agent, Workflow, Task)
-       - Value objects (Money, AgentRole, TaskStatus)
-       - Repository interfaces
-     - Section 4.2: Design Pattern Implementation
-       - Code examples for key patterns (Factory, Strategy, Observer, Repository)
-       - UML diagrams for each pattern
-     - Section 4.3: Agent System Implementation
-       - BaseAgent refactoring
-       - New agent roles (BA, Architect, QC) and the QA/QC split
-       - Agent learning and memory system
-     - Section 4.4: Workflow Engine Implementation
-       - Sub-workflows and composition
-       - Versioning and rollback
-       - Parallel execution optimization
-     - Section 4.5: Enterprise Features
-       - RBAC implementation
-       - Audit logging
-       - Integration APIs
-     - Section 4.6: AI/ML Features
-       - Task estimation model architecture
-       - Code quality prediction
-       - Agent performance analytics
-  6. **Results** (8-10 pages):
-     - Section 5.1: Test Coverage Results
-       - Table showing coverage metrics (90%+ achieved)
-       - Comparison before/after refactoring
-     - Section 5.2: Performance Benchmarks
-       - Workflow node execution times (p50, p95, p99)
-       - Load test results (max throughput, latency)
-       - Resource utilization (CPU, memory)
-     - Section 5.3: Code Quality Metrics
-       - Cyclomatic complexity reduction
-       - Maintainability index improvement
-       - Code smell reduction
-     - Section 5.4: Agent Performance
-       - Success rate improvements with learning
-       - Cost efficiency metrics
-       - Quality score trends
-     - Section 5.5: Case Studies
-       - Case 1: Full-stack web app project
-       - Case 2: REST API backend project
-       - Case 3: ML pipeline project
-  7. **Discussion** (5-7 pages):
-     - RQ1 Answer: OOAD principles significantly improve modularity and testability
-     - RQ2 Answer: Strategy, Repository, and Event-driven patterns most effective
-     - RQ3 Answer: Agent learning shows 15% performance improvement over 10 executions
-     - Limitations:
-       - LLM quality dependency
-       - Limited domain-specific knowledge
-       - Computational cost of learning
-     - Future work:
-       - More sophisticated ML models
-       - Human-agent collaboration patterns
-       - Cross-project knowledge transfer
-  8. **Conclusion** (2-3 pages):
-     - Summary of contributions
-     - Achievement of research objectives
-     - Practical implications for industry
-     - Academic contributions to multi-agent systems research
-  9. **References** (50+ citations):
-     - IEEE citation format
-     - Include all cited works from literature review
-  10. **Appendices**:
-      - Appendix A: Complete UML diagrams
-      - Appendix B: API documentation
-      - Appendix C: Test coverage reports
-      - Appendix D: Performance benchmark data
-      - Appendix E: User guide
-- **Tests**: N/A (documentation task)
-- **Demo**: Present formatted thesis document (100-120 pages) following IEEE template
+**Task 29: Write IEEE-Format Thesis Documentation** — ✅ Done (2026-10-27, re-scoped)
+- **Deliverable**: `docs/thesis/` — front matter (cover and declaration placeholders for the student, abstract, abbreviations), 8 chapters (introduction, background, requirements, design, implementation, testing and evaluation, discussion of RQ1–RQ3 with threats to validity, conclusion and future work), 55 IEEE references, appendices A–E (UML catalogue, API, test reproduction, performance, user guide).
+- **Build**: `node scripts/docs/build-thesis.mjs` (pandoc + Playwright, A4, figures numbered per chapter) → `docs/thesis/AI-CORP-thesis.pdf`, 73 pages.
+- **Numbers**: all from recorded runs (sections 6.2–6.8); no claim without a source.
 
----
+**Task 30: Create Comprehensive UML Diagrams** — ✅ Done (2026-10-27, re-scoped)
+- 39 diagrams in 6 views (4 use case, 13 class, 11 sequence, 4 activity, 4 state machine, 3 architecture); catalogue in `docs/diagrams/INDEX.md`, SVGs in `docs/diagrams/rendered/`.
+- Fixes: E9; deployment diagram rewritten to match `docker-compose.prod.yml`.
+- `scripts/docs/render-diagrams.sh`: downloads PlantUML 1.2024.7 (SHA-1 checked), renders every `.puml`, exits non-zero on the first error.
 
-**Task 30: Create Comprehensive UML Diagrams**
-- **Objective**: Generate all UML diagrams for thesis appendix
-- **Implementation**:
-  1. Use PlantUML for all diagrams:
-     ```bash
-     npm install -g node-plantuml
-     ```
-  2. Create use case diagrams:
-     ```plantuml
-     @startuml
-     left to right direction
-     actor "Board Member" as BM
-     actor "Admin" as Admin
-     actor "AI Agent" as Agent
-     
-     rectangle "AI-CORP System" {
-       usecase "Create Project" as UC1
-       usecase "Approve Workflow Step" as UC2
-       usecase "View Analytics" as UC3
-       usecase "Execute Task" as UC4
-       usecase "Analyze Requirements" as UC5
-       usecase "Design Architecture" as UC6
-       usecase "Deploy Application" as UC7
-       
-       BM --> UC1
-       BM --> UC2
-       BM --> UC3
-       Admin --> UC3
-       Agent --> UC4
-       Agent --> UC5
-       Agent --> UC6
-       Agent --> UC7
-     }
-     @enduml
-     ```
-  3. Create class diagrams:
-     ```plantuml
-     @startuml
-     abstract class BaseAgent {
-       - id: AgentId
-       - role: AgentRole
-       - stateMachine: AgentStateMachine
-       + execute(context: AgentContext): Promise<AgentResult>
-       # emitEvent(event: DomainEvent): void
-     }
-     
-     interface IThinkingStrategy {
-       + think(context: AgentContext): Promise<ThinkingResult>
-     }
-     
-     interface IActionStrategy {
-       + act(thought: ThinkingResult, context: AgentContext): Promise<ActionResult>
-     }
-     
-     class CEOThinkingStrategy implements IThinkingStrategy
-     class PMThinkingStrategy implements IThinkingStrategy
-     class DEVThinkingStrategy implements IThinkingStrategy
-     
-     BaseAgent --> IThinkingStrategy : uses
-     BaseAgent --> IActionStrategy : uses
-     
-     class Project {
-       - id: ProjectId
-       - name: string
-       - status: ProjectStatus
-       - budget: Money
-       + addMilestone(milestone: Milestone): void
-       + accrueCost(cost: Money): void
-     }
-     
-     class Milestone {
-       - id: MilestoneId
-       - name: string
-       - status: MilestoneStatus
-       + complete(): void
-     }
-     
-     Project "1" *-- "0..*" Milestone : contains
-     @enduml
-     ```
-  4. Create sequence diagrams (already documented in Task 3)
-  5. Create activity diagrams (already documented in Task 4)
-  6. Create state machine diagrams (already documented in Task 4)
-  7. Create component diagram:
-     ```plantuml
-     @startuml
-     package "Presentation Layer" {
-       component [REST Controllers]
-       component [WebSocket Gateway]
-     }
-     
-     package "Application Layer" {
-       component [Use Case Services]
-       component [Application Services]
-       component [DTO Mappers]
-     }
-     
-     package "Domain Layer" {
-       component [Entities]
-       component [Domain Services]
-       component [Event Bus]
-       component [Repository Interfaces]
-     }
-     
-     package "Infrastructure Layer" {
-       component [Prisma Repositories]
-       component [LLM Adapters]
-       component [Sandbox Executor]
-     }
-     
-     [REST Controllers] --> [Use Case Services]
-     [Use Case Services] --> [Domain Services]
-     [Domain Services] --> [Repository Interfaces]
-     [Prisma Repositories] ..|> [Repository Interfaces] : implements
-     @enduml
-     ```
-  8. Create deployment diagram:
-     ```plantuml
-     @startuml
-     node "Client Browser" {
-       component [React Frontend]
-     }
-     
-     node "API Server" {
-       component [NestJS Backend]
-       component [WorkflowEngine]
-       component [AgentOrchestrator]
-     }
-     
-     node "Database Server" {
-       database [PostgreSQL]
-     }
-     
-     node "Cache Server" {
-       database [Redis]
-     }
-     
-     node "LLM Gateway" {
-       component [9Router]
-     }
-     
-     node "Docker Host" {
-       component [Code Sandbox]
-     }
-     
-     [React Frontend] --> [NestJS Backend] : HTTPS
-     [NestJS Backend] --> [PostgreSQL] : TCP/5432
-     [NestJS Backend] --> [Redis] : TCP/6379
-     [WorkflowEngine] --> [9Router] : HTTPS
-     [AgentOrchestrator] --> [Code Sandbox] : Docker API
-     @enduml
-     ```
-  9. Generate all diagrams:
-     ```bash
-     for file in docs/uml/*.puml; do
-       node-plantuml "$file" -o docs/diagrams/
-     done
-     ```
-- **Tests**: N/A (documentation task)
-- **Demo**: Present diagram portfolio (30+ diagrams) with explanations
+**Task 31: Prepare Demo Presentation** — ✅ Done (2026-10-27, re-scoped)
+- `scripts/demo/demo-llm.cjs` (scripted OpenAI-compatible LLM, port 20128) and `scripts/demo/seed-demo.mjs` (board and viewer accounts, five projects: Online Bookstore, Legacy Billing, Unsafe Portal, Library Loans, Clinic Booking left waiting for approval; idempotent, ~25 s).
+- `docs/demo/DEMO_SCRIPT.md`: 15-minute script in Vietnamese with setup, timeline, numbers to quote, fallbacks and Q&A.
+- `docs/demo/record-walkthrough.cjs`: Playwright video of the walkthrough (fallback if the live demo fails).
+- Slides: 14-slide deck for the defence (Claude artifact, exportable to PDF/PPTX).
 
----
+**Task 32: Final Integration & Deployment** — ✅ Done (2026-10-27, re-scoped)
+- `docker-compose.prod.yml`: PostgreSQL (pgvector), Redis (AOF), API, web (nginx), PlantUML server, and the scripted LLM under the `demo` profile; only the web port is published. `.env.production.example`.
+- API: `runtime-config.ts` (JWT secret, CORS origins, Swagger switch), `EnvValidator` (E4), `enableShutdownHooks`, health (E7), WebSocket fixes (E2, E3). Migrations (E1), Dockerfiles (E6), nginx (E5), seed (E8).
+- **Tests**: `tests/unit/deployment/production-readiness.spec.ts` (17 tests).
+- **End-to-end**: `docs/phase7-e2e/` — 21/21 checks through nginx on the production build: config check, migrations without drift, health 503/200, Swagger off, CORS, WebSocket auth, viewer refused over REST and WebSocket, board approval, PDF export, analytics, audit trail.
 
-**Task 31: Prepare Demo Presentation**
-- **Objective**: Create compelling demo for thesis defense
-- **Implementation**:
-  1. Create demo script:
-     ```markdown
-     # AI-CORP Demo Script (15 minutes)
-     
-     ## Introduction (1 min)
-     - Project overview: Multi-agent platform for enterprise workflow automation
-     - Key innovations: OOAD architecture, 20+ design patterns, agent learning
-     
-     ## Architecture Overview (2 min)
-     - Show layered architecture diagram
-     - Explain domain-driven design approach
-     - Highlight SOLID principles application
-     
-     ## Live Demo Part 1: Project Creation (3 min)
-     1. Login as board member
-     2. Create new project: "E-commerce Platform"
-     3. Show workflow visualization with new agents (BA, Architect, QC) and the OOAD quality gate
-     4. Real-time Virtual Office showing agents thinking/acting
-     5. Watch BA agent extract requirements
-     6. Watch Architect agent design system
-     
-     ## Live Demo Part 2: Agent Collaboration (3 min)
-     1. Show pair programming between DEV and Architect
-     2. Display collaboration transcript in Meeting Room
-     3. Show code quality metrics (complexity, maintainability)
-     4. Watch QC agent write use-case tests and QA agent review design conformance
-     5. Show auto-refinement when quality score low
-     
-     ## Live Demo Part 3: Enterprise Features (2 min)
-     1. Show RBAC: login as viewer vs admin
-     2. Display audit log of all actions
-     3. Show cost analytics dashboard
-     4. Display agent performance metrics
-     5. Demonstrate workflow rollback
-     
-     ## Live Demo Part 4: AI/ML Features (2 min)
-     1. Create new task → show ML prediction (duration, cost)
-     2. Compare prediction vs actual after completion
-     3. Show agent learning curve (success rate improvement)
-     4. Display code quality prediction
-     
-     ## Results Summary (1 min)
-     - Test coverage: 92%
-     - Workflow execution: 1.8s average per node
-     - Agent learning: 15% improvement over 10 executions
-     - Load test: 50 projects/sec sustained throughput
-     
-     ## Q&A (1 min)
-     ```
-  2. Create presentation slides (PowerPoint/Google Slides):
-     - Title slide
-     - Problem statement slide
-     - Solution overview slide
-     - Architecture diagram slide
-     - Key design patterns slide
-     - Demo transition slides
-     - Results summary slide
-     - Conclusion slide
-  3. Set up demo environment:
-     - Clean database with seed data
-     - Pre-configured projects at various stages
-     - Mock LLM responses for consistent demo (optional)
-     - Recording software (OBS Studio) for backup video
-  4. Practice demo:
-     - Rehearse full script 5+ times
-     - Time each section
-     - Prepare for common questions
-     - Have fallback plan if live demo fails
-  5. Create demo video (backup):
-     - Record full demo walkthrough
-     - Add voiceover narration
-     - Edit with captions and highlights
-     - Upload to YouTube (unlisted)
-- **Tests**: N/A (presentation task)
-- **Demo**: Full 15-minute live demo with Q&A
-
----
-
-**Task 32: Final Integration & Deployment**
-- **Objective**: Deploy production-ready system for demo
-- **Implementation**:
-  1. Environment configuration:
-     ```bash
-     # Production .env
-     NODE_ENV=production
-     DATABASE_URL=postgresql://user:pass@host:5432/ai-corp-prod
-     REDIS_URL=redis://host:6379
-     JWT_SECRET=<strong-secret>
-     NINE_ROUTER_URL=https://api.opencode.ai/v1
-     NINE_ROUTER_API_KEY=<api-key>
-     LOG_LEVEL=info
-     ENABLE_SWAGGER=false
-     CORS_ORIGIN=https://ai-corp-demo.com
-     ```
-  2. Database migration:
-     ```bash
-     cd apps/api
-     npx prisma migrate deploy
-     npx prisma db seed
-     ```
-  3. Build and deploy:
-     ```bash
-     # Build
-     pnpm build
-     
-     # Deploy to server (Docker Compose)
-     docker-compose -f docker-compose.prod.yml up -d
-     ```
-  4. Health checks:
-     ```typescript
-     @Get('/health')
-     async healthCheck(): Promise<HealthCheckResult> {
-       const dbCheck = await this.prisma.$queryRaw`SELECT 1`;
-       const redisCheck = await this.redis.ping();
-       const llmCheck = await this.llmProvider.healthCheck();
-       
-       
+**Phase 7 verification (2026-10-27)**: `nest build` 0 errors; API Jest 47/47 suites, 674 passed (15 skipped); web Vitest 41/41, `tsc` clean; Phase 7 e2e 21/21. Traceability: NFR-SEC-006 extended, NFR-SEC-011, NFR-REL-006 and NFR-DEPLOY-001–002 added in `docs/requirements/traceability-matrix.md`.

@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, Logger } from '@nestjs/commo
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Socket } from 'socket.io';
+import { jwtSecret } from '../../security/runtime-config';
 
 @Injectable()
 export class WsJwtGuard implements CanActivate {
@@ -26,7 +27,7 @@ export class WsJwtGuard implements CanActivate {
     }
 
     try {
-      const secret = this.configService.get<string>('JWT_SECRET', 'super-secret-fallback-key');
+      const secret = jwtSecret({ JWT_SECRET: this.configService.get<string>('JWT_SECRET') });
       const payload = this.jwtService.verify(token, { secret });
       
       // Attach user to the socket data

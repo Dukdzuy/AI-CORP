@@ -1,3 +1,6 @@
+-- pgvector must exist before the AgentMemory.embedding column (scripts/init-postgres.sql only runs in the dev compose)
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- CreateEnum
 CREATE TYPE "AgentRole" AS ENUM ('CEO', 'PM', 'DEV', 'QA', 'MARKETING');
 

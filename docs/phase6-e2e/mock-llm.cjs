@@ -56,7 +56,8 @@ function phase6Answer(user) {
   return answer(user);
 }
 
-http.createServer((req, res) => {
+// Started directly: serve the Phase 6 run; required (scripts/demo/demo-llm.cjs): reuse the server
+function createServer({ delayMs = () => 0 } = {}) { return http.createServer((req, res) => {
   let body = '';
   req.on('data', c => (body += c));
   req.on('end', () => {
@@ -81,6 +82,10 @@ http.createServer((req, res) => {
         choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: 'stop' }],
         usage: { prompt_tokens: Math.ceil(user.length / 4), completion_tokens: Math.ceil(content.length / 4), total_tokens: Math.ceil((user.length + content.length) / 4) },
       }));
-    }, 20 + Math.round(user.length / 25));
+    }, 20 + Math.round(user.length / 25) + delayMs(user));
   });
-}).listen(20128, '127.0.0.1', () => console.log('phase 6 mock LLM on 20128'));
+}); }
+
+module.exports = { createServer, phase6Answer };
+
+if (require.main === module) createServer().listen(20128, '127.0.0.1', () => console.log('phase 6 mock LLM on 20128'));

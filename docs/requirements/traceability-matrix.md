@@ -180,11 +180,12 @@ Requirements are organized into 8 subsystems:
 | NFR-SEC-003 | Sandbox Isolation | Code execution must be isolated in Docker containers with resource limits | UC-012, UC-028 | Docker node:18-alpine with CPU/memory limits | SandboxExecutor with Docker API | TEST-SEC-004, TEST-SEC-005 | Implemented |
 | NFR-SEC-004 | Tool Authorization | Agents must only execute authorized tools per role | UC-028 | ToolRegistry with role-based ACL | ToolRegistry.isToolAuthorizedForRole() | TEST-SEC-006 | Implemented |
 | NFR-SEC-005 | JWT Token Security | JWT tokens must expire after 24 hours, use HS256 algorithm | UC-001 | NestJS @nestjs/jwt with expiresIn: '24h' | AuthModule JwtModule.register() | TEST-SEC-007 | Implemented |
-| NFR-SEC-006 | Environment Variable Validation | System must validate all required environment variables on startup | All | EnvValidator class with Joi schema | security/env-validator.ts | TEST-SEC-008 | Implemented |
+| NFR-SEC-006 | Environment Variable Validation | System must validate all required environment variables on startup; in production also `JWT_SECRET` (≥ 32 characters) and `CORS_ORIGIN`, and refuse placeholder values | All | EnvValidator lists every error and stops the API in production; one `jwtSecret()` for REST and WebSocket | apps/api/src/modules/security/env-validator.ts, runtime-config.ts | tests/unit/deployment/production-readiness.spec.ts, docs/phase7-e2e (bad config exits 1) | Implemented |
 | NFR-SEC-007 | Least Privilege | API keys can only hold scopes their owner's role allows; a key's permissions are its scopes ∩ the owner's current role | UC-029, UC-031, UC-032 | Principal.forApiKey | apps/api/src/domain/security/Principal.ts | tests/unit/enterprise/security-domain.spec.ts | Implemented |
 | NFR-SEC-008 | Secret Redaction | Audit entries never store passwords, tokens, secrets or keys | UC-030 | ChangeSet.redact | apps/api/src/domain/audit/ChangeSet.ts | tests/unit/enterprise/audit-domain.spec.ts | Implemented |
 | NFR-SEC-009 | Webhook Safety | Webhook URLs to private networks are refused (also after DNS); payloads are HMAC-signed with a timestamp | UC-031 | WebhookUrl, WebhookSignature | apps/api/src/domain/integration/ | tests/unit/enterprise/integration-domain.spec.ts, webhooks.spec.ts | Implemented |
 | NFR-SEC-010 | Export Safety | CSV exports escape formula cells; login and register are rate limited | UC-022, UC-001 | csvCell, @RateLimit | apps/api/src/domain/reporting/Csv.ts, apps/api/src/modules/auth/auth.controller.ts | tests/unit/enterprise/reporting-domain.spec.ts, access-http.spec.ts | Implemented |
+| NFR-SEC-011 | Single Write Path for Approvals | Approvals can only be answered through the REST endpoints that check permission, assignee and write the audit log; the WebSocket refuses `human:approval_response` | UC-003, UC-030 | One control point for every write (Phase 7 defect E2) | modules/websocket/websocket.gateway.ts, apps/web/src/lib/api/hooks/approvals.ts | tests/unit/deployment/production-readiness.spec.ts, docs/phase7-e2e (viewer refused over REST and WebSocket) | Implemented |
 
 ### 4.3 Reliability Requirements
 
@@ -195,6 +196,9 @@ Requirements are organized into 8 subsystems:
 | NFR-REL-003 | Workflow Recovery | System must recover running workflows on restart | UC-015 | State persistence in PostgreSQL, recovery on bootstrap | WorkflowEngine.onModuleInit() | TEST-REL-004 | Implemented |
 | NFR-REL-004 | Database Connection Resilience | System must gracefully handle database connection loss | All | PrismaService with connection retry, health checks | PrismaService.onModuleInit() | TEST-REL-005 | Implemented |
 | NFR-REL-005 | Idempotent Workflow Steps | Workflow steps must be idempotent (safe to retry) | UC-004 | Idempotency keys for state-changing operations | WorkflowStep.id as idempotency key | TEST-REL-006 | Planned |
+| NFR-REL-006 | Health Checks | `GET /api/health` checks the database, Redis and the LLM gateway and answers 503 when the database is down; `GET /api/health/live` for liveness | All | Container healthcheck on liveness; readiness reports degraded services | modules/health/health.service.ts, health.controller.ts | tests/unit/deployment/production-readiness.spec.ts, docs/phase7-e2e (503 with PostgreSQL stopped, 200 after restart) | Implemented |
+| NFR-DEPLOY-001 | Reproducible Schema | A production database is built from migrations only, and the migrated schema has no drift from the Prisma model | All | `prisma migrate deploy` in the container entrypoint; `npm run db:check` (`migrate diff --exit-code`) | apps/api/prisma/migrations/, apps/api/docker-entrypoint.sh | docs/phase7-e2e (deploy on an empty database, diff exit 0) | Implemented |
+| NFR-DEPLOY-002 | Containerised Deployment | The platform runs with one command on one host: database, queue, API, web and diagram server, only the web port published, non-root API | All | Docker Compose, two-stage images, nginx same-origin proxy for `/api`, `/socket.io`, `/plantuml` | docker-compose.prod.yml, apps/api/Dockerfile, apps/web/Dockerfile, apps/web/nginx.conf | docs/phase7-e2e (21/21 through nginx) | Implemented |
 
 ### 4.4 Maintainability Requirements (SOLID Principles & Design Patterns)
 
@@ -339,12 +343,12 @@ This section demonstrates how the RTM enables impact analysis for proposed chang
 
 | Status | Count | Percentage |
 |--------|-------|------------|
-| Implemented | 107 | 92.2% |
-| Partial | 1 | 0.9% |
-| Planned | 8 | 6.9% |
-| **TOTAL** | **116** | **100%** |
+| Implemented | 111 | 92.5% |
+| Partial | 1 | 0.8% |
+| Planned | 8 | 6.7% |
+| **TOTAL** | **120** | **100%** |
 
-_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above. Recounted again 2026-10-26 after Phase 5: FR-AUTH-005, FR-AUD-001–003, FR-INT-001–003, FR-REP-001–003 and NFR-SEC-007–010 added; FR-WF-008 implemented in Phase 4. Recounted after Phase 6: FR-ANA-001–002, FR-EST-001–004, FR-CQ-001–003, NFR-PERF-006, NFR-QUALITY-003 and NFR-ACCURACY-001 added (the last two were cited by UC-023/UC-024 but had no row)._
+_Recounted 2026-10-26 (Phase 3, Tasks 13–15: FR-PROJ-008, FR-MEM-006/007, FR-AGENT-014, FR-WF-011 added) from the tables above. Recounted again 2026-10-26 after Phase 5: FR-AUTH-005, FR-AUD-001–003, FR-INT-001–003, FR-REP-001–003 and NFR-SEC-007–010 added; FR-WF-008 implemented in Phase 4. Recounted after Phase 6: FR-ANA-001–002, FR-EST-001–004, FR-CQ-001–003, NFR-PERF-006, NFR-QUALITY-003 and NFR-ACCURACY-001 added (the last two were cited by UC-023/UC-024 but had no row). Recounted after Phase 7: NFR-SEC-011, NFR-REL-006, NFR-DEPLOY-001–002 added, NFR-SEC-006 extended to production secrets._
 
 ### Planned Requirements (Priority for Next Sprint)
 1. FR-MEM-005 (Memory Pruning)

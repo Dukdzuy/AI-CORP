@@ -1,0 +1,152 @@
+{
+  "score": 100,
+  "files": [
+    {
+      "path": "src/application/services/OrderService.ts",
+      "score": 100,
+      "loc": 20,
+      "maxComplexity": 2,
+      "maintainabilityIndex": 49.9,
+      "findings": []
+    },
+    {
+      "path": "src/application/services/PaymentService.ts",
+      "score": 100,
+      "loc": 21,
+      "maxComplexity": 2,
+      "maintainabilityIndex": 52.6,
+      "findings": []
+    },
+    {
+      "path": "src/application/services/ProductService.ts",
+      "score": 100,
+      "loc": 21,
+      "maxComplexity": 2,
+      "maintainabilityIndex": 52.6,
+      "findings": []
+    },
+    {
+      "path": "src/composition-root.ts",
+      "score": 100,
+      "loc": 26,
+      "maxComplexity": 1,
+      "maintainabilityIndex": 48.6,
+      "findings": []
+    },
+    {
+      "path": "src/domain/entities/Order.ts",
+      "score": 100,
+      "loc": 12,
+      "maxComplexity": 2,
+      "maintainabilityIndex": 55.9,
+      "findings": []
+    },
+    {
+      "path": "src/domain/entities/Payment.ts",
+      "score": 100,
+      "loc": 15,
+      "maxComplexity": 1,
+      "maintainabilityIndex": 58.1,
+      "findings": []
+    },
+    {
+      "path": "src/domain/entities/Product.ts",
+      "score": 100,
+      "loc": 14,
+      "maxComplexity": 1,
+      "maintainabilityIndex": 59.4,
+      "findings": []
+    },
+    {
+      "path": "src/domain/repositories/IOrderRepository.ts",
+      "score": 100,
+      "loc": 11,
+      "maxComplexity": 0,
+      "maintainabilityIndex": 59.9,
+      "findings": []
+    },
+    {
+      "path": "src/domain/repositories/IPaymentRepository.ts",
+      "score": 100,
+      "loc": 11,
+      "maxComplexity": 0,
+      "maintainabilityIndex": 59.9,
+      "findings": []
+    },
+    {
+      "path": "src/domain/repositories/IProductRepository.ts",
+      "score": 100,
+      "loc": 11,
+      "maxComplexity": 0,
+      "maintainabilityIndex": 59.9,
+      "findings": []
+    },
+    {
+      "path": "src/domain/value-objects/Money.ts",
+      "score": 100,
+      "loc": 15,
+      "maxComplexity": 1,
+      "maintainabilityIndex": 57.2,
+      "findings": []
+    },
+    {
+      "path": "src/infrastructure/persistence/InMemoryOrderRepository.ts",
+      "score": 100,
+      "loc": 21,
+      "maxComplexity": 2,
+      "maintainabilityIndex": 50.3,
+      "findings": []
+    },
+    {
+      "path": "src/infrastructure/persistence/InMemoryPaymentRepository.ts",
+      "score": 100,
+      "loc": 21,
+      "maxComplexity": 2,
+      "maintainabilityIndex": 50.3,
+      "findings": []
+    },
+    {
+      "path": "src/infrastructure/persistence/InMemoryProductRepository.ts",
+      "score": 100,
+      "loc": 21,
+      "maxComplexity": 2,
+      "maintainabilityIndex": 50.3,
+      "findings": []
+    },
+    {
+      "path": "src/presentation/controllers/OrderController.ts",
+      "score": 100,
+      "loc": 23,
+      "maxComplexity": 1,
+      "maintainabilityIndex": 51,
+      "findings": []
+    },
+    {
+      "path": "src/presentation/controllers/PaymentController.ts",
+      "score": 100,
+      "loc": 13,
+      "maxComplexity": 1,
+      "maintainabilityIndex": 59,
+      "findings": []
+    },
+    {
+      "path": "src/presentation/controllers/ProductController.ts",
+      "score": 100,
+      "loc": 13,
+      "maxComplexity": 1,
+      "maintainabilityIndex": 59,
+      "findings": []
+    }
+  ],
+  "totals": {
+    "syntax": 0,
+    "complexity": 0,
+    "maintainability": 0,
+    "security": 0,
+    "layering": 0,
+    "traceability": 0
+  },
+  "predictedQaVerdict": "pass",
+  "reasons": [],
+  "threshold": 70
+}

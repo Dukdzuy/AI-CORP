@@ -1,8 +1,8 @@
 # AI-CORP Documentation Index
 
 **Project:** Design and Development of a Multi-Agent Platform for Object-Oriented Enterprise Workflow Automation  
-**Version:** 1.0 — Phase 1 Complete  
-**Date:** December 2024
+**Version:** 2.0 — thesis, rendered diagrams and demo added  
+**Date:** October 2026
 
 ---
 
@@ -14,6 +14,11 @@ This `docs/` folder contains all OOAD (Object-Oriented Analysis and Design) docu
 docs/
 ├── README.md                          ← This file (documentation index)
 ├── PHASE1_COMPLETION_REPORT.md        ← Phase 1 summary and deliverables table
+│
+├── thesis/                            ← Thesis (Vietnamese, English title): chapters 00–95 as Markdown,
+│   └── AI-CORP-thesis.pdf               built by scripts/docs/build-thesis.mjs
+├── demo/                              ← 15-minute defence script and walkthrough recorder
+├── phase3-e2e/ … phase7-e2e/          ← End-to-end runs: script, results, screenshots, README
 │
 ├── requirements/
 │   ├── use-cases.md                   ← 25 fully specified use cases (UC-001 – UC-025)
@@ -27,9 +32,11 @@ docs/
 │   └── architecture.md                ← Architecture design + 6 ADRs
 │
 └── diagrams/
+    ├── INDEX.md                       ← Catalogue of the 39 diagrams
+    ├── rendered/                      ← SVG of every diagram (scripts/docs/render-diagrams.sh)
     ├── use-cases/                     ← 4 PlantUML use case diagrams
-    ├── classes/                       ← 8 PlantUML class diagrams
-    ├── sequences/                     ← 6 PlantUML sequence diagrams
+    ├── classes/                       ← 13 PlantUML class diagrams
+    ├── sequences/                     ← 11 PlantUML sequence diagrams
     ├── activities/                    ← 4 PlantUML activity diagrams
     ├── state-machines/                ← 4 PlantUML state machine diagrams
     └── architecture/                  ← 3 PlantUML architecture diagrams
@@ -39,7 +46,13 @@ docs/
 
 ## How to Render PlantUML Diagrams
 
-All diagrams are written in [PlantUML](https://plantuml.com/) syntax and saved as `.puml` files. Use any of the methods below to render them.
+All diagrams are written in [PlantUML](https://plantuml.com/) syntax and saved as `.puml` files. The SVGs in `diagrams/rendered/` are up to date; regenerate them with:
+
+```bash
+scripts/docs/render-diagrams.sh     # needs Java and Graphviz; downloads PlantUML 1.2024.7 (SHA-1 checked)
+```
+
+It renders every source and stops with a non-zero exit code on the first syntax error. The thesis PDF is rebuilt with `node scripts/docs/build-thesis.mjs` (needs pandoc and Playwright). The other options below are for previewing a single diagram.
 
 ### Option 1: VS Code Extension (Recommended)
 

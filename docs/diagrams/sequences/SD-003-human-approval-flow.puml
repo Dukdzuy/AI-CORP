@@ -4,7 +4,7 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 title SD-003: Human Approval Flow
-subtitle Human-in-the-Loop with State Pattern and Real-Time Notifications
+caption Human-in-the-Loop with State Pattern and Real-Time Notifications
 
 participant "WorkflowEngine" as Engine #Orange
 participant "ApprovalService" as ApprovalSvc #LightYellow

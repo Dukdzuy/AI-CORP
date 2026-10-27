@@ -8,58 +8,52 @@ title Agent State Machine - State Transitions
 state IDLE {
   [*] --> CheckingQueue
   CheckingQueue --> WaitingForTask
-  --
-  <b>Entry:</b> Release resources, clear context
-  <b>Exit:</b> Log assignment timestamp
-  <b>Internal:</b> Heartbeat every 30s
 }
+IDLE : <b>Entry:</b> Release resources, clear context
+IDLE : <b>Exit:</b> Log assignment timestamp
+IDLE : <b>Internal:</b> Heartbeat every 30s
 
 state THINKING {
   [*] --> AnalyzingProblem
   AnalyzingProblem --> FormulatingPlan
   FormulatingPlan --> ValidatingPlan
-  --
-  <b>Entry:</b> Load task context, initialize session
-  <b>Exit:</b> Persist execution plan
-  <b>Internal:</b> Query LLM for reasoning
 }
+THINKING : <b>Entry:</b> Load task context, initialize session
+THINKING : <b>Exit:</b> Persist execution plan
+THINKING : <b>Internal:</b> Query LLM for reasoning
 
 state ACTING {
   [*] --> ExecutingActions
   ExecutingActions --> CallingTools
   CallingTools --> ProcessingResults
-  --
-  <b>Entry:</b> Start action timer, log plan
-  <b>Exit:</b> Save intermediate results
-  <b>Internal:</b> Update progress metrics
 }
+ACTING : <b>Entry:</b> Start action timer, log plan
+ACTING : <b>Exit:</b> Save intermediate results
+ACTING : <b>Internal:</b> Update progress metrics
 
 state WAITING_APPROVAL {
   [*] --> PendingReview
   PendingReview --> AwaitingResponse
-  --
-  <b>Entry:</b> Send approval request, pause execution
-  <b>Exit:</b> Log approval decision
-  <b>Internal:</b> Check timeout every 5min
 }
+WAITING_APPROVAL : <b>Entry:</b> Send approval request, pause execution
+WAITING_APPROVAL : <b>Exit:</b> Log approval decision
+WAITING_APPROVAL : <b>Internal:</b> Check timeout every 5min
 
 state ERROR {
   [*] --> LoggingError
   LoggingError --> DeterminingRecovery
-  --
-  <b>Entry:</b> Capture error details, rollback partial changes
-  <b>Exit:</b> Clear error state
-  <b>Internal:</b> Notify monitoring system
 }
+ERROR : <b>Entry:</b> Capture error details, rollback partial changes
+ERROR : <b>Exit:</b> Clear error state
+ERROR : <b>Internal:</b> Notify monitoring system
 
 state COMPLETED {
   [*] --> GeneratingReport
   GeneratingReport --> CleaningUp
-  --
-  <b>Entry:</b> Finalize results, calculate cost
-  <b>Exit:</b> Archive session data
-  <b>Internal:</b> Store lessons learned
 }
+COMPLETED : <b>Entry:</b> Finalize results, calculate cost
+COMPLETED : <b>Exit:</b> Archive session data
+COMPLETED : <b>Internal:</b> Store lessons learned
 
 IDLE --> THINKING : <b>taskAssigned()</b>\n[guard: task != null]\naction: loadContext()
 

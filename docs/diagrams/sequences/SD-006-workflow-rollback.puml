@@ -4,7 +4,7 @@ skinparam sequenceMessageAlign center
 skinparam responseMessageBelowArrow true
 
 title SD-006: Workflow Snapshot & Rollback (Memento, Task 17)
-subtitle Engine = originator, WorkflowSnapshotCaretaker = caretaker, WorkflowRunMemento = memento
+caption Engine = originator, WorkflowSnapshotCaretaker = caretaker, WorkflowRunMemento = memento
 
 actor "Board Member" as User #LightBlue
 participant "WorkflowsController" as Ctrl #LightCyan
