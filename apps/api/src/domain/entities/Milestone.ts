@@ -28,6 +28,8 @@
  * @principle Business Rule Encapsulation
  */
 
+import { randomUUID } from 'crypto';
+
 export interface CreateMilestoneProps {
   projectId: string;
   name: string;
@@ -60,7 +62,7 @@ export class Milestone {
     }
 
     const milestone = new Milestone(
-      crypto.randomUUID(),
+      randomUUID(),
       props.projectId,
       props.name.trim(),
       props.description?.trim() || '',

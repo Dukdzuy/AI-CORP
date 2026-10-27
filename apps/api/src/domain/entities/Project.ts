@@ -21,6 +21,7 @@
  * @principle Rich Domain Model, Encapsulation
  */
 
+import { randomUUID } from 'crypto';
 import { Money, ProjectStatus } from '../value-objects';
 
 export interface CreateProjectProps {
@@ -59,7 +60,7 @@ export class Project {
     }
 
     const project = new Project(
-      crypto.randomUUID(), // Generate ID
+      randomUUID(), // Generate ID
       props.name.trim(),
       props.description?.trim() || '',
       props.goal.trim(),
