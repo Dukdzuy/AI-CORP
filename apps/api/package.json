@@ -13,7 +13,7 @@
     "format": "prettier --write src",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "npm run build:seed && prisma db seed",
+    "db:seed": "prisma generate && npm run build:seed && prisma db seed",
     "db:migrate:deploy": "prisma migrate deploy",
     "test:cov": "jest --coverage",
     "build:seed": "tsc -p prisma/tsconfig.seed.json",
