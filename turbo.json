@@ -1,5 +1,5 @@
 {
-  "version": "1",
+  "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
     "DATABASE_URL",
     "REDIS_URL",
@@ -8,16 +8,19 @@
     "OPENAI_API_KEY",
     "NODE_ENV"
   ],
-  "tasks": {
+  "pipeline": {
     "build": {
+      "dependsOn": ["^build"],
       "outputs": ["dist/**"],
       "cache": false
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     },
     "test": {
+      "dependsOn": ["^build"],
       "outputs": ["coverage/**"],
       "cache": false
     },

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "AI Corp - Virtual Company Simulation Platform",
   "private": true,
-  "packageManager": "pnpm@8.0.0",
+  "packageManager": "pnpm@8.15.9",
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",

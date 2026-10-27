@@ -50,29 +50,35 @@ Nền tảng mô phỏng công ty công nghệ ảo với hệ thống AI Agents
 ## Quick Start
 
 ```bash
-# Prerequisites: Node.js 18+, pnpm 8+, Docker, PostgreSQL
+# Prerequisites: Git, Node.js 20+ (22 LTS recommended), pnpm 8 (npm install -g pnpm@8), Docker
+# Windows: clone with `git clone -c core.autocrlf=input ...`
+
+# PostgreSQL (pgvector) + Redis
+docker compose up -d postgres redis
 
 # Install
 pnpm install
 
 # Setup environment
 cp apps/api/.env.example apps/api/.env
-# Edit apps/api/.env with your configuration
+cp apps/web/.env.example apps/web/.env
+# Edit apps/api/.env: NINE_ROUTER_URL / NINE_ROUTER_API_KEY
+# (offline: NINE_ROUTER_URL=http://127.0.0.1:20128/v1 with the scripted LLM below)
 
 # Initialize database
 cd apps/api
-pnpm db:push
+npx prisma migrate deploy
 pnpm db:seed    # Creates admin@aicorp.com / admin123
+cd ../..
 
-# Start Redis (required for BullMQ)
-docker run -d --name ai-corp-redis -p 6379:6379 redis:7-alpine
+# Optional: scripted OpenAI-compatible LLM for offline runs (port 20128)
+node scripts/demo/demo-llm.cjs
 
-# Start dev servers
-pnpm dev                    # Terminal 1: Backend :3000
-cd ../web && pnpm dev       # Terminal 2: Frontend :5173
+# Start dev servers (builds shared-types, then API :3000 + web :5173)
+pnpm dev
 ```
 
-Open: **http://localhost:5173**
+Open: **http://localhost:5173**. Production with Docker: see `docker-compose.prod.yml` and `docs/demo/DEMO_SCRIPT.md`.
 
 ## Key Features
 
