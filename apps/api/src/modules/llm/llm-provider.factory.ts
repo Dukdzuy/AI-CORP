@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   ILLMProvider,
   ModelRouteConfig,
@@ -8,6 +8,7 @@ import {
 import { AnthropicDirectProvider } from './anthropic-direct.provider';
 import { NineRouterProvider } from './nine-router-provider';
 import { NineRouterHealthService } from './nine-router-health.service';
+import { ConfiguredProviderRegistry } from './providers/configured-provider.registry';
 
 /**
  * LLMProviderFactory
@@ -26,7 +27,10 @@ export class LLMProviderFactory {
   private readonly logger = new Logger(LLMProviderFactory.name);
   private providers: Map<string, ILLMProvider> = new Map();
 
-  constructor(private readonly healthService?: NineRouterHealthService) {}
+  constructor(
+    @Optional() private readonly healthService?: NineRouterHealthService,
+    @Optional() private readonly configured?: ConfiguredProviderRegistry,
+  ) {}
 
   /**
    * Get the appropriate LLM provider based on configuration
@@ -37,12 +41,23 @@ export class LLMProviderFactory {
    * @throws Error if provider cannot be instantiated or configuration is invalid
    *
    * Routing logic:
+   * 0. If config.providerId names a provider configured in the app, return its client
    * 1. If provider is "ninerouter", return NineRouterProvider
    * 2. If provider is "anthropic-direct", return AnthropicDirectProvider
    * 3. Fallback provider is stored in config.fallbackProvider for circuit breaker use
    */
   getProvider(config: ModelRouteConfig): ILLMProvider {
+    if (config.providerId) {
+      const client = this.configured?.clientFor(config.providerId);
+      if (client) return client;
+      this.logger.warn(
+        `Configured provider ${config.providerId} is missing or disabled; using the NINE_ROUTER_URL gateway`,
+      );
+    }
+
     let provider = config.provider || 'opencode';
+    // A configured provider's name is not a built-in route
+    if (config.providerId) provider = 'ninerouter';
     
     // Fallback routing if circuit breaker is open
     if ((provider === 'ninerouter' || provider === 'opencode') && this.healthService?.getIsCircuitOpen()) {

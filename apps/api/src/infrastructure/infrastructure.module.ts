@@ -10,9 +10,12 @@ import {
   PrismaAuditLogRepository,
   PrismaApiKeyRepository,
   PrismaWebhookRepository,
+  PrismaLlmProviderRepository,
 } from './persistence';
+import { AesGcmSecretCipher } from './security/AesGcmSecretCipher';
 import { AUDIT_LOG_REPOSITORY } from '../domain/audit';
 import { API_KEY_REPOSITORY, WEBHOOK_REPOSITORY } from '../domain/integration';
+import { LLM_PROVIDER_REPOSITORY, SECRET_CIPHER } from '../domain/llm';
 import {
   PROJECT_REPOSITORY,
   TASK_REPOSITORY,
@@ -69,6 +72,9 @@ export {
     { provide: AUDIT_LOG_REPOSITORY, useClass: PrismaAuditLogRepository },
     { provide: API_KEY_REPOSITORY, useClass: PrismaApiKeyRepository },
     { provide: WEBHOOK_REPOSITORY, useClass: PrismaWebhookRepository },
+    // LLM providers configured from the web app
+    { provide: LLM_PROVIDER_REPOSITORY, useClass: PrismaLlmProviderRepository },
+    { provide: SECRET_CIPHER, useFactory: () => new AesGcmSecretCipher() },
   ],
   exports: [
     PROJECT_REPOSITORY,
@@ -80,6 +86,8 @@ export {
     AUDIT_LOG_REPOSITORY,
     API_KEY_REPOSITORY,
     WEBHOOK_REPOSITORY,
+    LLM_PROVIDER_REPOSITORY,
+    SECRET_CIPHER,
   ],
 })
 export class InfrastructureModule {}
