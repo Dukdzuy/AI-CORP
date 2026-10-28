@@ -12,6 +12,7 @@ import {
   KeyOutlined,
   UsergroupAddOutlined,
   LineChartOutlined,
+  CloudServerOutlined,
 } from '@ant-design/icons';
 import { Permission } from '@ai-corp/shared-types';
 import { hasPermission, ROLE_LABELS } from '../../lib/permissions';
@@ -49,7 +50,7 @@ export const MainLayout: React.FC = () => {
     ? '/admin'
     : location.pathname.startsWith('/agents')
     ? '/agents'
-    : ['/users', '/audit', '/integrations', '/analytics'].find(p => location.pathname.startsWith(p)) ?? '/';
+    : ['/providers', '/users', '/audit', '/integrations', '/analytics'].find(p => location.pathname.startsWith(p)) ?? '/';
 
   const menuItems = [
     {
@@ -75,6 +76,12 @@ export const MainLayout: React.FC = () => {
       icon: <RobotOutlined />,
       label: 'Agent Models',
       onClick: () => navigate('/agents'),
+    },
+    hasPermission(user, Permission.AGENT_CONFIGURE) && {
+      key: '/providers',
+      icon: <CloudServerOutlined />,
+      label: 'LLM Providers',
+      onClick: () => navigate('/providers'),
     },
     // Phase 6: agent performance analytics and the estimation model
     hasPermission(user, Permission.REPORT_VIEW) && {

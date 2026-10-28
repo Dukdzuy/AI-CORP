@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Anthropic } from '@anthropic-ai/sdk';
 import {
   ILLMProvider,
@@ -6,6 +6,12 @@ import {
   ChatResult,
   TokenUsage,
 } from '@ai-corp/shared-types';
+
+export interface AnthropicProviderOptions {
+  apiKey?: string;
+  baseURL?: string;
+  providerName?: string;
+}
 
 /**
  * AnthropicDirectProvider
@@ -39,8 +45,12 @@ export class AnthropicDirectProvider implements ILLMProvider {
   private readonly anthropic: Anthropic;
   private readonly apiKey: string;
 
-  constructor() {
-    this.apiKey = process.env.ANTHROPIC_API_KEY || '';
+  private readonly providerName: string;
+
+  /** Without options it uses ANTHROPIC_API_KEY; providers configured in the app pass their own */
+  constructor(@Optional() options?: AnthropicProviderOptions) {
+    this.apiKey = options?.apiKey ?? process.env.ANTHROPIC_API_KEY ?? '';
+    this.providerName = options?.providerName ?? 'anthropic-direct';
 
     if (!this.apiKey) {
       this.logger.warn(
@@ -52,6 +62,7 @@ export class AnthropicDirectProvider implements ILLMProvider {
     // Initialize Anthropic SDK client
     this.anthropic = new Anthropic({
       apiKey: this.apiKey,
+      ...(options?.baseURL && { baseURL: options.baseURL }),
     });
   }
 
@@ -192,10 +203,10 @@ export class AnthropicDirectProvider implements ILLMProvider {
   /**
    * Get the provider name
    *
-   * @returns Provider name as "anthropic-direct"
+   * @returns "anthropic-direct", or the name given for a provider configured in the app
    */
   getProviderName(): string {
-    return 'anthropic-direct';
+    return this.providerName;
   }
 
   /**

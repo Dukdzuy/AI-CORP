@@ -10,6 +10,7 @@ import { ProjectDetail } from './pages/ProjectDetail';
 import { AgentDetail } from './pages/AgentDetail';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AgentSettings } from './pages/AgentSettings';
+import { LlmProvidersPage } from './pages/LlmProvidersPage';
 import { UsersPage } from './pages/UsersPage';
 import { AuditLogPage } from './pages/AuditLogPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
@@ -78,6 +79,7 @@ export function App() {
             <Route path="/agents/:id" element={<AgentDetail />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/agents" element={<AgentSettings />} />
+            <Route path="/providers" element={<RequirePermission permission={Permission.AGENT_CONFIGURE}><LlmProvidersPage /></RequirePermission>} />
             <Route path="/users" element={<RequirePermission permission={Permission.USER_MANAGE}><UsersPage /></RequirePermission>} />
             <Route path="/audit" element={<RequirePermission permission={Permission.AUDIT_VIEW}><AuditLogPage /></RequirePermission>} />
             <Route path="/analytics" element={<RequirePermission permission={Permission.REPORT_VIEW}><AgentAnalyticsPage /></RequirePermission>} />

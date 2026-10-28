@@ -255,8 +255,19 @@ Truy cập **Dashboard** → Xem tổng quan:
 
 1. Truy cập menu **Agent Models**
 2. Chọn agent cần đổi
-3. Chọn model mới từ dropdown
+3. Chọn model mới từ dropdown (model được nhóm theo provider)
 4. Click **Save**
+
+### LLM Providers
+
+Menu **LLM Providers** (chỉ admin) để thêm provider và model ngay trên giao diện, không cần sửa `.env`:
+
+1. **Add provider** → chọn preset (9Router, OpenAI, OpenRouter, Groq, DeepSeek, Gemini, Ollama, Anthropic) hoặc tự nhập: tên, loại API (OpenAI-compatible / Anthropic), Base URL, API key
+2. **Test** để kiểm tra URL và key
+3. **Fetch models** để lấy danh sách model của provider (`GET /models`) và tick model cần dùng; hoặc mở rộng dòng provider → **Add model by id** để nhập tay
+4. Sang **Agent Models** để chọn model đó cho từng agent
+
+API key được mã hoá AES-256-GCM trong database bằng `LLM_SECRET_KEY` (không đặt thì dùng `JWT_SECRET`) và không bao giờ trả về frontend, chỉ hiện 4 ký tự cuối. Đổi `LLM_SECRET_KEY` thì phải nhập lại key. Lần chạy đầu tiên, 9Router trong `NINE_ROUTER_URL` / `NINE_ROUTER_API_KEY` được tự động nhập thành một provider và các agent đang dùng 9Router được gắn vào nó. Không thể xoá hoặc tắt provider/model đang có agent dùng.
 
 ### Models Hiện Có
 
@@ -274,6 +285,7 @@ Truy cập **Dashboard** → Xem tổng quan:
 |------|-------|----------|
 | `DATABASE_URL` | PostgreSQL URL | `postgresql://postgres:postgres@localhost:5432/neondb` |
 | `JWT_SECRET` | JWT signing key | `ai-corp-jwt-secret-key-2026` |
+| `LLM_SECRET_KEY` | Khoá mã hoá API key của các provider thêm trên trang LLM Providers | `JWT_SECRET` |
 | `PORT` | Port backend | `3000` |
 | `REDIS_HOST` | Redis host | `localhost` |
 | `REDIS_PORT` | Redis port | `6379` |
