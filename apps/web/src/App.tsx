@@ -15,13 +15,14 @@ import { AuditLogPage } from './pages/AuditLogPage';
 import { IntegrationsPage } from './pages/IntegrationsPage';
 import { AgentAnalyticsPage } from './pages/AgentAnalyticsPage';
 import { RequirePermission } from './components/auth/RequirePermission';
+import { NotFound } from './pages/NotFound';
 import { Permission } from '@ai-corp/shared-types';
 import { apiClient } from './lib/api/client';
 import socketClient from './lib/websocket/socket-client';
 import { useAuthStore } from './stores/authStore';
 
 export function App() {
-  const { isAuthenticated, setUser } = useAuthStore();
+  const { isAuthenticated, setUser, returnTo } = useAuthStore();
 
   // Phase 5: pick up role changes made by an admin since the last login
   useEffect(() => {
@@ -70,18 +71,19 @@ export function App() {
     >
       <Router>
         <Routes>
-          <Route path="/auth" element={isAuthenticated ? <Navigate to="/" replace /> : <AuthPage />} />
+          <Route path="/auth" element={isAuthenticated ? <Navigate to={returnTo || '/'} replace /> : <AuthPage />} />
           <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/virtual-office" element={<VirtualOffice />} />
             <Route path="/projects/:id" element={<ProjectDetail />} />
             <Route path="/agents/:id" element={<AgentDetail />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/agents" element={<AgentSettings />} />
+            <Route path="/admin" element={<RequirePermission permission={Permission.REPORT_VIEW}><AdminDashboard /></RequirePermission>} />
+            <Route path="/agents" element={<RequirePermission permission={Permission.PROJECT_READ}><AgentSettings /></RequirePermission>} />
             <Route path="/users" element={<RequirePermission permission={Permission.USER_MANAGE}><UsersPage /></RequirePermission>} />
             <Route path="/audit" element={<RequirePermission permission={Permission.AUDIT_VIEW}><AuditLogPage /></RequirePermission>} />
             <Route path="/analytics" element={<RequirePermission permission={Permission.REPORT_VIEW}><AgentAnalyticsPage /></RequirePermission>} />
             <Route path="/integrations" element={<RequirePermission permission={Permission.INTEGRATION_MANAGE}><IntegrationsPage /></RequirePermission>} />
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>
       </Router>

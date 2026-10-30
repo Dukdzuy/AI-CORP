@@ -1,4 +1,4 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, Inject, NotFoundException, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { WorkflowEngine } from '../workflow/workflow.engine';
 import { AppWebSocketGateway } from '../websocket/websocket.gateway';
@@ -72,11 +72,10 @@ export class ApprovalService {
     return approval;
   }
 
-  async listPendingApprovals(userId: string, projectId?: string) {
-    const where: any = {
-      status: 'pending',
-      userId,
-    };
+  /** The user's pending approvals; an admin (who may answer any approval) sees everyone's */
+  async listPendingApprovals(userId: string, projectId?: string, includeAll = false) {
+    const where: any = { status: 'pending' };
+    if (!includeAll) where.userId = userId;
 
     if (projectId) {
       where.workflowRun = { projectId };
@@ -84,33 +83,37 @@ export class ApprovalService {
 
     return this.prisma.approval.findMany({
       where,
-      include: { workflowRun: { select: { id: true, projectId: true, currentNodeId: true } } },
+      include: {
+        workflowRun: { select: { id: true, projectId: true, currentNodeId: true, project: { select: { name: true } } } },
+        user: { select: { id: true, name: true, email: true } },
+      },
       orderBy: { requestedAt: 'desc' },
     });
   }
 
   /**
    * Handles human response to an approval request.
-   * Requirement 17.7: pending -> approved/rejected only
+   * Requirement 17.7: pending -> approved/rejected only. The status change is conditional on the
+   * approval still being pending, so a double click or two people answering at once lands once.
    */
   async handleApprovalResponse(approvalId: string, status: 'approved' | 'rejected', comment?: string) {
     const approval = await this.prisma.approval.findUnique({ where: { id: approvalId } });
-    if (!approval) throw new Error('Approval request not found');
+    if (!approval) throw new NotFoundException(`Approval request ${approvalId} not found`);
 
-    if (approval.status !== 'pending') {
-      throw new Error(`Cannot transition approval from status '${approval.status}'`);
-    }
-
-    const updatedApproval = await this.prisma.approval.update({
-      where: { id: approvalId },
-      data: {
-        status,
-        comment,
-        respondedAt: new Date(),
-      },
+    const { count } = await this.prisma.approval.updateMany({
+      where: { id: approvalId, status: 'pending' },
+      data: { status, comment, respondedAt: new Date() },
     });
+    if (count === 0) {
+      const current = await this.prisma.approval.findUnique({ where: { id: approvalId } });
+      throw new ConflictException(`This approval was already ${current?.status ?? approval.status}`);
+    }
+    const updatedApproval = { ...approval, status, comment: comment ?? null, respondedAt: new Date() };
 
     this.logger.log(`Approval ${approvalId} was ${status}. Resuming workflow run ${updatedApproval.workflowRunId}.`);
+
+    // The decision and its reason go into the run's variables for the agents that run next
+    await this.workflowEngine.recordApprovalDecision(updatedApproval.workflowRunId, status, comment);
 
     // First resume workflow execution (sets status back to 'running', skip auto-process)
     await this.workflowEngine.resumeWorkflow(updatedApproval.workflowRunId, true);

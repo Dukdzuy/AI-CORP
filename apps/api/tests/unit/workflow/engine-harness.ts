@@ -75,6 +75,11 @@ export class InMemoryWorkflowEngineRepository implements IWorkflowEngineReposito
     Object.assign(step, data);
     return { ...step };
   }
+  async failRunningSteps(runId: string, error: string) {
+    const running = this.steps.filter(s => s.workflowRunId === runId && s.status === 'running');
+    running.forEach(s => Object.assign(s, { status: 'failed', error, completedAt: new Date() }));
+    return running.length;
+  }
   async findStepsByRun(runId: string) {
     return this.steps.filter(s => s.workflowRunId === runId).map(s => ({ ...s }));
   }
@@ -98,13 +103,31 @@ export class InMemoryWorkflowEngineRepository implements IWorkflowEngineReposito
   async findProjectWithOwner(projectId: string) {
     return { id: projectId, createdById: 'owner-1' };
   }
-  async updateProjectStatus() {
+  projectStatus = 'active';
+  budget: number | null = null;
+  costAccrued = 0;
+  async updateProjectStatus(_projectId: string, status: string) {
+    this.projectStatus = status;
     return undefined;
+  }
+  async completeProject() {
+    if (this.projectStatus !== 'cancelled') this.projectStatus = 'completed';
+    return undefined;
+  }
+  async findProjectBudget() {
+    return { status: this.projectStatus, budget: this.budget, costAccrued: this.costAccrued };
+  }
+  async findLatestRun(projectId: string) {
+    const runs = [...this.runs.values()].filter(r => r.projectId === projectId && !r.parentRunId);
+    return InMemoryWorkflowEngineRepository.copy(runs[runs.length - 1] || null);
   }
   async createApproval(data: CreateApprovalInput) {
     const approval = { id: randomUUID(), workflowRunId: data.workflowRunId, status: data.status };
     this.approvals.push(approval);
     return { id: approval.id };
+  }
+  async countPendingApprovals(runId: string) {
+    return this.approvals.filter(a => a.workflowRunId === runId && a.status === 'pending').length;
   }
   async cancelPendingApprovals(runId: string) {
     const pending = this.approvals.filter(a => a.workflowRunId === runId && a.status === 'pending');

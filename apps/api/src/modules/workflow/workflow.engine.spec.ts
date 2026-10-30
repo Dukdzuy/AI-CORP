@@ -80,6 +80,7 @@ describe('WorkflowEngine - Node Execution Logic', () => {
           startedAt: new Date(),
         }),
         update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       project: {
         findUnique: jest.fn().mockResolvedValue(mockProject),
@@ -93,6 +94,7 @@ describe('WorkflowEngine - Node Execution Logic', () => {
           status: 'pending',
           requestData: {},
         }),
+        count: jest.fn().mockResolvedValue(0),
       },
     };
 

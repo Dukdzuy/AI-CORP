@@ -18,7 +18,7 @@
  * @principle Single Responsibility - entities do business logic, service orchestrates
  */
 
-import { Injectable, Inject, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Inject, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { WorkflowContext } from '@ai-corp/shared-types';
 import { IProjectRepository, PROJECT_REPOSITORY, ProjectDTO } from '../../domain/repositories';
 import { Project } from '../../domain/entities/Project';
@@ -26,10 +26,14 @@ import { EventBus } from '../../domain/events/EventBus';
 import { BudgetExceededEvent } from '../../domain/events/BudgetExceededEvent';
 import { ProjectCreatedEvent } from '../../domain/events/ProjectCreatedEvent';
 import { Money, ProjectStatus } from '../../domain/value-objects';
-import { WorkflowEngine } from '../workflow/workflow.engine';
+import { WorkflowBlockedError, WorkflowEngine } from '../workflow/workflow.engine';
+import { ProjectWorkspace } from '../workspace/project-workspace.service';
 import { WorkflowDefinitionService } from '../workflow/workflow-definition.service';
 import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
 import { applyDomainRule } from './domain-rule';
+
+/** A new project and whether its workflow started (it is kept either way) */
+export type CreatedProject = ProjectDTO & { workflowStarted: boolean; workflowError?: string };
 
 @Injectable()
 export class ProjectApplicationService {
@@ -40,16 +44,25 @@ export class ProjectApplicationService {
     private readonly eventBus: EventBus,
     private readonly workflowEngine: WorkflowEngine,
     private readonly workflowDefinitionService: WorkflowDefinitionService,
+    @Optional() private readonly workspace?: ProjectWorkspace,
   ) {}
 
+  /** Projects, newest first, each with its latest run's position in its workflow */
   async listProjects(): Promise<ProjectDTO[]> {
-    return this.projectRepository.findAll({ orderBy: 'createdAt', order: 'desc' });
+    const projects = await this.projectRepository.findAll({ orderBy: 'createdAt', order: 'desc' });
+    return projects.map(project => {
+      const run = project.latestRun;
+      if (!run) return project;
+      const nodes = this.workflowEngine.definitionOf(run)?.nodes ?? [];
+      const index = nodes.findIndex(n => n.id === run.currentNodeId);
+      return { ...project, latestRun: { ...run, nodeIndex: index, nodeCount: nodes.length } };
+    });
   }
 
   /**
    * Create a new project, raise ProjectCreatedEvent and start its workflow
    */
-  async createProject(data: CreateProjectDto & { createdById: string }): Promise<ProjectDTO> {
+  async createProject(data: CreateProjectDto & { createdById: string }): Promise<CreatedProject> {
     // 0. Reject a bad template choice before anything is created (throws 404 / 400)
     if (data.templateId) {
       this.workflowDefinitionService.previewTemplate(data.templateId, data.templateParams || {});
@@ -88,10 +101,29 @@ export class ProjectApplicationService {
       )
     ).catch(err => this.logger.error(`Failed to publish ProjectCreatedEvent: ${err.message}`));
 
-    // 4. Kick off the default agent workflow
-    await this.startWorkflow(dto, data.templateId, data.templateParams);
+    // 4. Kick off the default agent workflow; the project is kept when this fails, and the
+    //    response says so, so the web app can offer to start it again
+    const workflow = await this.startWorkflow(dto, data.templateId, data.templateParams);
 
-    return dto;
+    return { ...dto, workflowStarted: workflow.started, ...(workflow.error ? { workflowError: workflow.error } : {}) };
+  }
+
+  /**
+   * Start the default workflow again for a project whose workflow never started or stopped
+   * (failed, cancelled). Refused while a run is still running or paused.
+   */
+  async startProjectWorkflow(id: string): Promise<{ workflowStarted: boolean; workflowError?: string }> {
+    const project = await this.load(id);
+    if (!project.getStatus().isActive()) {
+      throw new BadRequestException(`Only an active project can start its workflow (this one is ${project.getStatus().toString()})`);
+    }
+    const latest = await this.workflowEngine.latestRun(id);
+    if (latest && (latest.status === 'running' || latest.status === 'paused')) {
+      throw new ConflictException(`The project's workflow is already ${latest.status}`);
+    }
+    const dto = await this.projectRepository.findById(id);
+    const workflow = await this.startWorkflow(dto!);
+    return { workflowStarted: workflow.started, ...(workflow.error ? { workflowError: workflow.error } : {}) };
   }
 
   async getProjectDetails(id: string) {
@@ -119,6 +151,7 @@ export class ProjectApplicationService {
    */
   async updateProject(id: string, data: UpdateProjectDto): Promise<ProjectDTO> {
     const project = await this.load(id);
+    const statusBefore = project.getStatus().toString();
 
     applyDomainRule(() => {
       project.updateDetails(data.name, data.description, data.goal);
@@ -130,14 +163,60 @@ export class ProjectApplicationService {
       }
     });
 
-    const dto = await this.persist(project);
+    // Saved first, so a budget raised in the same request counts when the run resumes
+    let dto = await this.persist(project);
+
+    // The project's status drives its workflow: pausing the project pauses the run, and so on
+    const statusAfter = project.getStatus().toString();
+    if (statusAfter !== statusBefore) {
+      try {
+        await this.applyStatusToWorkflow(id, statusAfter);
+      } catch (error) {
+        // The run could not follow (e.g. budget still used up): the project keeps its old status
+        dto = await this.projectRepository.update(id, { status: statusBefore });
+        throw error;
+      }
+    }
+
     this.logger.log(`Updated project ${id}`);
     return dto;
   }
 
+  /**
+   * Pause / resume / stop the project's latest run to match the project's new status.
+   * Resuming is refused while the budget is used up; a run waiting for an approval stays waiting.
+   */
+  private async applyStatusToWorkflow(projectId: string, status: string): Promise<void> {
+    const run = await this.workflowEngine.latestRun(projectId);
+    if (!run) return;
+
+    if (status === 'paused' && run.status === 'running') {
+      await this.workflowEngine.pauseWorkflow(run.id);
+    } else if (status === 'active' && run.status === 'paused') {
+      try {
+        await this.workflowEngine.resumeWorkflow(run.id);
+      } catch (error) {
+        if (error instanceof WorkflowBlockedError && error.reason === 'awaiting_approval') return;
+        throw new BadRequestException((error as Error).message);
+      }
+    } else if ((status === 'cancelled' || status === 'completed') && (run.status === 'running' || run.status === 'paused')) {
+      await this.workflowEngine.cancelWorkflow(run.id, `Project ${status}`);
+    }
+  }
+
   async deleteProject(id: string) {
     await this.load(id);
+
+    // Stop the run first so no agent keeps writing to a project that is going away
+    const run = await this.workflowEngine.latestRun(id);
+    if (run && (run.status === 'running' || run.status === 'paused')) {
+      await this.workflowEngine.cancelWorkflow(run.id, 'Project deleted');
+    }
+
     await this.projectRepository.delete(id);
+    await this.workspace?.removeProject(id).catch(err =>
+      this.logger.warn(`Could not remove the workspace of project ${id}: ${(err as Error).message}`)
+    );
 
     this.logger.log(`Deleted project ${id}`);
     return { success: true, id };
@@ -226,7 +305,7 @@ export class ProjectApplicationService {
    * Start the project's workflow: the chosen template instantiated with its parameters (Task 19),
    * or the default workflow. The run is pinned to the definition version it starts with (Task 17).
    */
-  private async startWorkflow(project: ProjectDTO, templateId?: string, templateParams?: Record<string, unknown>): Promise<void> {
+  private async startWorkflow(project: ProjectDTO, templateId?: string, templateParams?: Record<string, unknown>): Promise<{ started: boolean; error?: string }> {
     try {
       const variables: Record<string, unknown> = {
         projectName: project.name,
@@ -246,8 +325,10 @@ export class ProjectApplicationService {
       };
       await this.workflowEngine.startWorkflow(project.id, workflowDef.id, context, workflowDef.version);
       this.logger.log(`Started workflow ${workflowDef.id}@${workflowDef.version} for project ${project.id}`);
+      return { started: true };
     } catch (error) {
       this.logger.error(`Failed to start workflow for project ${project.id}: ${(error as Error).message}`);
+      return { started: false, error: (error as Error).message };
     }
   }
 }

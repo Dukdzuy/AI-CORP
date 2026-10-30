@@ -1,16 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Badge, Dropdown, Typography, Space, Button, Tag, Empty, Avatar, message } from 'antd';
 import {
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   ExclamationCircleOutlined,
   BellOutlined,
-  RobotOutlined,
 } from '@ant-design/icons';
 import { WebSocketEventType, ApprovalRequiredEvent } from '@ai-corp/shared-types';
 import socketClient from '../../lib/websocket/socket-client';
-import { respondToApproval, approvalErrorMessage } from '../../lib/api/hooks/approvals';
+import { useQueryClient } from '@tanstack/react-query';
+import { respondToApproval, approvalErrorMessage, approvalKeys, toPendingApproval, usePendingApprovals } from '../../lib/api/hooks/approvals';
 import { ApprovalModal } from './ApprovalModal';
+import { approvalSummary } from '../../lib/approvalSummary';
 
 const { Text } = Typography;
 
@@ -18,6 +17,7 @@ export interface PendingApproval {
   approvalId: string;
   workflowRunId: string;
   projectId: string;
+  projectName?: string;
   approvalType: string;
   requestData: Record<string, unknown>;
   requestedAt: Date;
@@ -27,6 +27,7 @@ const APPROVAL_TYPE_LABELS: Record<string, string> = {
   code_merge: 'Code Merge',
   marketing_post: 'Marketing Post',
   milestone_complete: 'Milestone Complete',
+  project_completion: 'Project Completion',
   general: 'General Approval',
 };
 
@@ -34,45 +35,47 @@ interface ApprovalNotificationProps {
   userId?: string;
 }
 
+/**
+ * The bell: every approval waiting for the user (loaded from the API, so it survives a reload,
+ * and kept fresh by the approval:required socket event). An admin sees everyone's.
+ */
 export const ApprovalNotification: React.FC<ApprovalNotificationProps> = () => {
-  const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+  const queryClient = useQueryClient();
+  const { data: records = [] } = usePendingApprovals();
+  const [answered, setAnswered] = useState<Set<string>>(new Set());
   const [selectedApproval, setSelectedApproval] = useState<PendingApproval | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const pendingApprovals: PendingApproval[] = records.map(toPendingApproval).filter(a => !answered.has(a.approvalId));
 
   useEffect(() => {
     const unsub = socketClient.on<ApprovalRequiredEvent>(
       WebSocketEventType.HUMAN_APPROVAL_REQUIRED,
-      (data) => {
-        setPendingApprovals((prev) => [
-          {
-            approvalId: data.approvalId,
-            workflowRunId: data.workflowRunId,
-            projectId: data.projectId,
-            approvalType: data.approvalType,
-            requestData: data.requestData,
-            requestedAt: new Date(data.requestedAt),
-          },
-          ...prev,
-        ]);
-      }
+      () => queryClient.invalidateQueries({ queryKey: approvalKeys.all })
     );
 
     return () => {
       unsub();
     };
-  }, []);
+  }, [queryClient]);
 
   const respond = useCallback(async (approvalId: string, decision: 'approve' | 'reject', comment?: string) => {
+    setSubmitting(true);
     try {
       await respondToApproval(approvalId, decision, comment);
-      setPendingApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+      setAnswered((prev) => new Set(prev).add(approvalId));
       setModalOpen(false);
       setSelectedApproval(null);
+      message.success(decision === 'approve' ? 'Approved, the workflow continues' : 'Rejected, the agents rework it');
     } catch (error) {
       message.error(approvalErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+      queryClient.invalidateQueries({ queryKey: approvalKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
     }
-  }, []);
-  const handleApprove = useCallback((approvalId: string) => respond(approvalId, 'approve'), [respond]);
+  }, [queryClient]);
+  const handleApprove = useCallback((approvalId: string, comment?: string) => respond(approvalId, 'approve', comment), [respond]);
   const handleReject = useCallback((approvalId: string, comment?: string) => respond(approvalId, 'reject', comment), [respond]);
 
   const handleOpenApproval = (approval: PendingApproval) => {
@@ -138,7 +141,7 @@ export const ApprovalNotification: React.FC<ApprovalNotificationProps> = () => {
                       ellipsis
                       style={{ color: '#c9d1d9', fontSize: 12, display: 'block', marginTop: 2 }}
                     >
-                      {JSON.stringify(approval.requestData).slice(0, 80)}
+                      {approval.projectName ? `${approval.projectName}: ` : ''}{approvalSummary(approval.requestData).message}
                     </Text>
                   </div>
                 </div>
@@ -169,6 +172,7 @@ export const ApprovalNotification: React.FC<ApprovalNotificationProps> = () => {
       <ApprovalModal
         approval={selectedApproval}
         open={modalOpen}
+        submitting={submitting}
         onClose={() => {
           setModalOpen(false);
           setSelectedApproval(null);
