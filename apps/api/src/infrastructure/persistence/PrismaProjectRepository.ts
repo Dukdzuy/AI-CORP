@@ -60,9 +60,18 @@ export class PrismaProjectRepository implements IProjectRepository {
         // Only the columns mapToDTO returns: the latest run's context JSON and the project's
         // ooadMetadata were loaded and dropped for every project (found by the Phase 6 load test)
         orderBy: { [options?.orderBy || 'createdAt']: options?.order || 'desc' },
-        select: DTO_COLUMNS,
+        select: {
+          ...DTO_COLUMNS,
+          // The latest run's state only (no context JSON), for the progress shown on project cards
+          workflowRuns: {
+            where: { parentRunId: null },
+            orderBy: { startedAt: 'desc' },
+            take: 1,
+            select: { id: true, status: true, currentNodeId: true, workflowDefId: true, workflowDefVersion: true },
+          },
+        },
       });
-      return projects.map((p) => this.mapToDTO(p));
+      return projects.map((p) => ({ ...this.mapToDTO(p), latestRun: p.workflowRuns[0] ?? null }));
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2021' || error.code === 'P2024') {
@@ -146,19 +155,17 @@ export class PrismaProjectRepository implements IProjectRepository {
 
   async delete(id: string): Promise<void> {
     try {
-      // Delete related records first (referential integrity)
-      await this.prisma.workflowStep.deleteMany({
-        where: { workflowRun: { projectId: id } },
-      });
-      await this.prisma.approval.deleteMany({
-        where: { workflowRun: { projectId: id } },
-      });
-      await this.prisma.workflowRun.deleteMany({ where: { projectId: id } });
-      await this.prisma.task.deleteMany({ where: { projectId: id } });
-      await this.prisma.milestone.deleteMany({ where: { projectId: id } });
-      await this.prisma.agentMessage.deleteMany({ where: { projectId: id } });
-      await this.prisma.apiUsageLog.deleteMany({ where: { projectId: id } });
-      await this.prisma.project.delete({ where: { id } });
+      // Delete related records first (referential integrity), all or nothing
+      await this.prisma.$transaction([
+        this.prisma.workflowStep.deleteMany({ where: { workflowRun: { projectId: id } } }),
+        this.prisma.approval.deleteMany({ where: { workflowRun: { projectId: id } } }),
+        this.prisma.workflowRun.deleteMany({ where: { projectId: id } }),
+        this.prisma.task.deleteMany({ where: { projectId: id } }),
+        this.prisma.milestone.deleteMany({ where: { projectId: id } }),
+        this.prisma.agentMessage.deleteMany({ where: { projectId: id } }),
+        this.prisma.apiUsageLog.deleteMany({ where: { projectId: id } }),
+        this.prisma.project.delete({ where: { id } }),
+      ]);
       this.logger.log(`Deleted project ${id}`);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {

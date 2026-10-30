@@ -37,6 +37,11 @@ export class ProjectWorkspace {
     return path.join(this.root, 'projects', projectId);
   }
 
+  /** Deletes the project's folder with everything the agents wrote (project deletion) */
+  async removeProject(projectId: string): Promise<void> {
+    await fs.rm(this.projectDir(projectId), { recursive: true, force: true });
+  }
+
   /**
    * Normalise a path given relative to the project root. Accepts paths that already start with
    * projects/<projectId>/ (as the LLM often echoes them). Returns null for unsafe paths.

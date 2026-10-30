@@ -76,12 +76,15 @@ Mở trình duyệt tại: **http://localhost:5173**
 2. Chọn tab **Đăng Ký**
 3. Nhập thông tin và click **Đăng Ký**
 
+Tài khoản tự đăng ký có vai trò `viewer` (chỉ xem). Admin nâng lên `board_member` ở trang **Users** để tạo dự án và duyệt. Khi chạy demo trên máy cá nhân có thể đặt `SIGNUP_ROLE=board_member` trong `apps/api/.env`; đặt `ALLOW_REGISTRATION=false` để tắt hẳn đăng ký.
+
 ### Phân Quyền
 
 | Vai Trò | Mô Tả |
 |---------|-------|
 | `admin` | Quản trị viên, đầy đủ quyền |
-| `board_member` | Xem dự án, duyệt approval, theo dõi chi phí |
+| `board_member` | Tạo và điều khiển dự án của mình, duyệt approval, theo dõi chi phí |
+| `viewer` | Chỉ xem dự án và báo cáo (mặc định khi tự đăng ký) |
 
 ---
 

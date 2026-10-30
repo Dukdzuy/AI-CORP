@@ -53,6 +53,8 @@ function useRunMutation<TBody>(path: (runId: string) => string) {
       queryClient.invalidateQueries({ queryKey: workflowKeys.run(runId) });
       queryClient.invalidateQueries({ queryKey: workflowKeys.snapshots(runId) });
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: ['approvals'] });
     },
   });
 }
@@ -61,3 +63,5 @@ export const useRollbackRun = () =>
   useRunMutation<{ snapshotId?: string; steps?: number }>(runId => `/workflows/runs/${runId}/rollback`);
 
 export const useResumeRun = () => useRunMutation<never>(runId => `/workflows/runs/${runId}/resume`);
+
+export const usePauseRun = () => useRunMutation<never>(runId => `/workflows/runs/${runId}/pause`);

@@ -30,10 +30,13 @@ export const useMeetingStore = create<MeetingState>()(
   persist(
     (set) => ({
       messages: [],
+      // A message already shown (e.g. an approval from both the API and the socket) is not added again
       addMessage: (msg) =>
-        set((state) => ({
-          messages: [...state.messages.slice(-(MAX_MESSAGES - 1)), msg],
-        })),
+        set((state) =>
+          state.messages.some((m) => m.id === msg.id)
+            ? state
+            : { messages: [...state.messages.slice(-(MAX_MESSAGES - 1)), msg] }
+        ),
       clearMessages: () => set({ messages: [] }),
     }),
     {

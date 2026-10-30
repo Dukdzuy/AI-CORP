@@ -61,6 +61,14 @@ export class PrismaWorkflowEngineRepository implements IWorkflowEngineRepository
     });
   }
 
+  async failRunningSteps(runId: string, error: string) {
+    const result = await this.prisma.workflowStep.updateMany({
+      where: { workflowRunId: runId, status: 'running' },
+      data: { status: 'failed', error, completedAt: new Date() }
+    });
+    return result.count;
+  }
+
   findStepsByRun(runId: string) {
     return this.prisma.workflowStep.findMany({
       where: { workflowRunId: runId },
@@ -99,15 +107,46 @@ export class PrismaWorkflowEngineRepository implements IWorkflowEngineRepository
     });
   }
 
+  completeProject(projectId: string) {
+    return this.prisma.project.updateMany({
+      where: { id: projectId, status: { not: 'cancelled' } },
+      data: { status: 'completed' }
+    });
+  }
+
+  async findProjectBudget(projectId: string) {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { status: true, budget: true, costAccrued: true }
+    });
+    if (!project) return null;
+    return {
+      status: project.status,
+      budget: project.budget === null ? null : Number(project.budget),
+      costAccrued: Number(project.costAccrued),
+    };
+  }
+
+  findLatestRun(projectId: string) {
+    return this.prisma.workflowRun.findFirst({
+      where: { projectId, parentRunId: null },
+      orderBy: { startedAt: 'desc' }
+    });
+  }
+
   createApproval(data: CreateApprovalInput) {
     return this.prisma.approval.create({ data });
   }
 
-  async cancelPendingApprovals(runId: string) {
+  async cancelPendingApprovals(runId: string, reason = 'Cancelled by workflow rollback') {
     const result = await this.prisma.approval.updateMany({
       where: { workflowRunId: runId, status: 'pending' },
-      data: { status: 'cancelled', respondedAt: new Date(), comment: 'Cancelled by workflow rollback' }
+      data: { status: 'cancelled', respondedAt: new Date(), comment: reason }
     });
     return result.count;
+  }
+
+  countPendingApprovals(runId: string) {
+    return this.prisma.approval.count({ where: { workflowRunId: runId, status: 'pending' } });
   }
 }

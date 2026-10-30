@@ -33,6 +33,14 @@ import {
   ParallelStrategy,
 } from './strategies';
 
+/** A run that may not be resumed yet: it waits for an approval, or its project's budget is used up */
+export class WorkflowBlockedError extends Error {
+  constructor(readonly reason: 'awaiting_approval' | 'budget_exceeded', message: string) {
+    super(message);
+    this.name = 'WorkflowBlockedError';
+  }
+}
+
 interface WorkflowJobData {
   runId: string;
   nodeId: string;
@@ -288,8 +296,8 @@ export class WorkflowEngine {
       // Reached the end
       await this.repository.updateRun(runId, { status: 'completed', completedAt: new Date() });
 
-      // Update the project status to completed
-      await this.repository.updateProjectStatus(run.projectId, 'completed');
+      // Update the project status to completed (a project cancelled meanwhile stays cancelled)
+      await this.repository.completeProject(run.projectId);
 
       this.logger.log(`Workflow run ${runId} completed. Project ${run.projectId} marked as completed.`);
       
@@ -409,7 +417,31 @@ export class WorkflowEngine {
       throw new Error(`Cannot resume workflow ${runId} with status ${run.status}`);
     }
 
-    await this.repository.updateRun(runId, { status: 'running' });
+    // A person resuming (not the approval path): the run must not be waiting for an answer,
+    // since resuming would run its approval node again and ask a second time
+    if (!skipProcessNode) {
+      const pending = await this.repository.countPendingApprovals(runId);
+      if (pending > 0) {
+        throw new WorkflowBlockedError('awaiting_approval', `Workflow run ${runId} is waiting for an approval: approve or reject it instead of resuming`);
+      }
+      const overBudget = await this.budgetExceeded(run.projectId);
+      if (overBudget) {
+        throw new WorkflowBlockedError('budget_exceeded', `Project budget exceeded ($${overBudget.costAccrued.toFixed(2)} of $${overBudget.budget.toFixed(2)}): raise the budget before resuming`);
+      }
+    }
+
+    // A node that finished while the run was paused is not run again: the run moves past it
+    const context = (run.context as any) || {};
+    const finished = context._finishedWhilePaused as { nodeId: string; edgeCondition?: string } | undefined;
+    if (finished) delete context._finishedWhilePaused;
+
+    await this.repository.updateRun(runId, finished ? { status: 'running', context } : { status: 'running' });
+
+    // The project was paused with its run (budget, or the project's own Pause): it is active again
+    const project = await this.repository.findProjectBudget(run.projectId);
+    if (project?.status === 'paused') {
+      await this.repository.updateProjectStatus(run.projectId, 'active');
+    }
 
     this.logger.log(`Workflow run ${runId} resumed`);
     
@@ -425,8 +457,67 @@ export class WorkflowEngine {
 
     // Continue processing from current node (unless caller will handle it)
     if (!skipProcessNode) {
+      if (finished && finished.nodeId === run.currentNodeId) {
+        await this.transitionToNextNode(runId, finished.edgeCondition);
+      }
       await this.processCurrentNode(runId);
     }
+  }
+
+  /**
+   * Stop a run for good (the project was cancelled or deleted). Pending approvals are cancelled
+   * and sub-workflow runs stop with it; a node still executing finishes but its result is dropped.
+   */
+  async cancelWorkflow(runId: string, reason = 'Cancelled'): Promise<void> {
+    const run = await this.repository.findRunById(runId);
+    if (!run) throw new Error(`Workflow run ${runId} not found`);
+    if (['completed', 'failed', 'cancelled'].includes(run.status)) return;
+
+    await this.repository.updateRun(runId, { status: 'cancelled', completedAt: new Date() });
+    await this.repository.cancelPendingApprovals(runId, reason);
+    for (const child of await this.repository.findChildRuns(runId)) {
+      await this.cancelWorkflow(child.id, reason);
+    }
+    this.invalidateRunCache(runId);
+    this.logger.log(`Workflow run ${runId} cancelled: ${reason}`);
+
+    const event: WorkflowStateChangedEvent = {
+      workflowRunId: run.id,
+      projectId: run.projectId,
+      previousState: run.status,
+      currentState: 'cancelled',
+      currentNodeId: run.currentNodeId || undefined,
+      timestamp: new Date()
+    };
+    this.websocketGateway.sendToProject(run.projectId, { type: 'workflow:state_changed', data: event });
+  }
+
+  /**
+   * The person's answer to an approval, kept in the run's variables so the agents that run next
+   * (a rework branch on rejection, the CEO close-out on approval) see the decision and the reason.
+   */
+  async recordApprovalDecision(runId: string, decision: 'approved' | 'rejected', comment?: string): Promise<void> {
+    const run = await this.repository.findRunById(runId);
+    if (!run) throw new Error(`Workflow run ${runId} not found`);
+    const context = (run.context as any) || {};
+    context.variables = {
+      ...(context.variables || {}),
+      approvalDecision: decision,
+      approvalFeedback: comment?.trim() || undefined,
+    };
+    await this.repository.updateRun(runId, { context });
+  }
+
+  /** The project's latest top-level run (what the project's Pause / Resume / Cancel act on) */
+  latestRun(projectId: string): Promise<WorkflowRunRecord | null> {
+    return this.repository.findLatestRun(projectId);
+  }
+
+  /** Budget and spend when the project has a budget and has used it up; null otherwise */
+  private async budgetExceeded(projectId: string): Promise<{ budget: number; costAccrued: number } | null> {
+    const project = await this.repository.findProjectBudget(projectId);
+    if (!project || project.budget === null || project.budget === undefined) return null;
+    return project.costAccrued >= project.budget ? { budget: project.budget, costAccrued: project.costAccrued } : null;
   }
 
   /**
@@ -515,6 +606,10 @@ export class WorkflowEngine {
       for (const run of runningWorkflows) {
         try {
           this.logger.log(`Recovering workflow ${run.id} from database state`);
+          // The node that was executing died with the process; record that before it runs again
+          await this.repository
+            .failRunningSteps(run.id, 'Interrupted by an API restart; the node runs again')
+            .catch(err => this.logger.warn(`Could not close interrupted steps of run ${run.id}: ${(err as Error).message}`));
           
           // Resume processing
           this.processCurrentNode(run.id).catch(err => {
@@ -565,7 +660,7 @@ export class WorkflowEngine {
       let timer: NodeJS.Timeout | undefined;
       try {
         return await Promise.race([
-          this.executeNode(node, run),
+          this.executeNode(node, run, retryCount),
           this.createTimeoutPromise(timeout, `Node ${nodeId} execution timeout after ${timeout}ms`, t => (timer = t))
         ]);
       } finally {
@@ -616,7 +711,7 @@ export class WorkflowEngine {
    * - Req 9: WebSocket events for state changes
    * - Req 19: Error handling and retry logic
    */
-  private async executeNode(node: WorkflowNode, run: WorkflowRunRecord): Promise<NodeResult> {
+  private async executeNode(node: WorkflowNode, run: WorkflowRunRecord, retryCount = 0): Promise<NodeResult> {
     this.logger.log(`Executing node ${node.id} of type ${node.type}`);
 
     const step = await this.repository.createStep({
@@ -625,7 +720,7 @@ export class WorkflowEngine {
       agentRole: node.agentRole,
       status: 'running',
       startedAt: new Date(),
-      retryCount: 0,
+      retryCount,
     });
 
     // Emit WebSocket event for node execution start (Req 9)
@@ -765,6 +860,22 @@ export class WorkflowEngine {
     const node = await this.getCurrentNode(runId);
     if (!node) return;
 
+    // No node starts once the budget is used up (resuming is refused until the budget is raised)
+    const overBudget = await this.budgetExceeded(run.projectId);
+    if (overBudget) {
+      this.logger.warn(`Budget exceeded for project ${run.projectId}; pausing run ${runId} before node ${node.id}`);
+      await this.pauseWorkflow(runId);
+      this.websocketGateway.sendToProject(run.projectId, {
+        type: 'system_notification',
+        data: {
+          severity: 'warning',
+          message: `Project budget exceeded: $${overBudget.costAccrued.toFixed(2)} of $${overBudget.budget.toFixed(2)}. Workflow paused before ${node.id}.`,
+          timestamp: new Date(),
+        },
+      });
+      return;
+    }
+
     // Add job to BullMQ queue for processing (Req 2, Req 26)
     const jobData: WorkflowJobData = {
       runId: run.id,
@@ -807,7 +918,18 @@ export class WorkflowEngine {
    */
   private async handleJobCompletion(runId: string, nodeId: string, result: NodeResult): Promise<void> {
     const run = await this.repository.findRunById(runId);
-    if (!run || run.status !== 'running') return;
+    if (!run) return;
+
+    // Paused while the node ran: keep its outcome so Resume moves on instead of running it again
+    if (run.status === 'paused' && result.status === 'success' && run.currentNodeId === nodeId) {
+      const context = (run.context as any) || {};
+      const edgeCondition = (result.output as any)?.edgeCondition || 'onSuccess';
+      context._finishedWhilePaused = { nodeId, edgeCondition };
+      await this.repository.updateRun(runId, { context });
+      this.logger.log(`Node ${nodeId} finished while run ${runId} was paused; it continues from there on resume`);
+      return;
+    }
+    if (run.status !== 'running') return;
 
     try {
       if (result.status === 'pending_approval') {
@@ -836,6 +958,7 @@ export class WorkflowEngine {
     } catch (error) {
       this.logger.error(`Error handling job completion for node ${nodeId}: ${(error as Error).message}`);
       await this.repository.updateRun(runId, { status: 'failed', completedAt: new Date() });
+      await this.publishFailure(run.projectId, run.id, nodeId, (error as Error).message);
       
       const event: WorkflowStateChangedEvent = {
         workflowRunId: run.id,

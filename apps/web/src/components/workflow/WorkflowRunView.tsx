@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Breadcrumb, Button, Empty, List, Popconfirm, Skeleton, Space, Tag, Tooltip, Typography, message } from 'antd';
-import { ApartmentOutlined, CaretDownOutlined, CaretRightOutlined, HistoryOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
-import { useResumeRun, useRollbackRun, useRunSnapshots, useWorkflowRun } from '../../lib/api/hooks/workflows';
+import { ApartmentOutlined, CaretDownOutlined, CaretRightOutlined, HistoryOutlined, PauseCircleOutlined, PlayCircleOutlined, RollbackOutlined } from '@ant-design/icons';
+import { usePauseRun, useResumeRun, useRollbackRun, useRunSnapshots, useWorkflowRun } from '../../lib/api/hooks/workflows';
+import { usePendingApprovals } from '../../lib/api/hooks/approvals';
+import { apiErrorMessage } from '../../lib/api/errors';
 import { Permission } from '@ai-corp/shared-types';
 import { usePermission } from '../../lib/permissions';
 import { ganttLayout, overlappingKeys, pathTo, timelineRows, WorkflowRunTree } from './runTree';
@@ -98,14 +100,18 @@ const SnapshotPanel: React.FC<{ runId: string; projectId: string; status: string
   const { data: snapshots = [], isLoading } = useRunSnapshots(runId);
   const rollback = useRollbackRun();
   const resume = useResumeRun();
+  const pause = usePauseRun();
   const canRollback = canControl && (status === 'paused' || status === 'failed');
+  // A run paused at an approval continues when the approval is answered; Resume would ask again
+  const { data: approvals = [] } = usePendingApprovals(projectId);
+  const awaitingApproval = approvals.some(a => a.workflowRunId === runId);
 
   const doRollback = async (snapshotId: string) => {
     try {
       const result = await rollback.mutateAsync({ runId, projectId, body: { snapshotId } });
       message.success(result.message);
     } catch (error: any) {
-      message.error(error?.response?.data?.message || 'Rollback failed');
+      message.error(apiErrorMessage(error, 'Rollback failed'));
     }
   };
   const doResume = async () => {
@@ -113,7 +119,15 @@ const SnapshotPanel: React.FC<{ runId: string; projectId: string; status: string
       await resume.mutateAsync({ runId, projectId });
       message.success('Workflow resumed');
     } catch (error: any) {
-      message.error(error?.response?.data?.message || 'Resume failed');
+      message.error(apiErrorMessage(error, 'Resume failed'));
+    }
+  };
+  const doPause = async () => {
+    try {
+      await pause.mutateAsync({ runId, projectId });
+      message.success('Workflow paused');
+    } catch (error) {
+      message.error(apiErrorMessage(error, 'Pause failed'));
     }
   };
 
@@ -127,11 +141,20 @@ const SnapshotPanel: React.FC<{ runId: string; projectId: string; status: string
             {canRollback ? 'roll back to the state before a node ran' : 'rollback is available when the run is paused or failed'}
           </Text>
         </Space>
-        {canControl && status === 'paused' && (
+        {canControl && status === 'running' && (
+          <Button size="small" icon={<PauseCircleOutlined />} loading={pause.isPending} onClick={doPause}>
+            Pause
+          </Button>
+        )}
+        {canControl && status === 'paused' && (awaitingApproval ? (
+          <Tooltip title="This run waits for an approval: approve or reject it to continue">
+            <Button size="small" icon={<PlayCircleOutlined />} disabled>Resume</Button>
+          </Tooltip>
+        ) : (
           <Button size="small" icon={<PlayCircleOutlined />} loading={resume.isPending} onClick={doResume}>
             Resume
           </Button>
-        )}
+        ))}
       </Space>
       {isLoading ? (
         <Skeleton active paragraph={{ rows: 2 }} />

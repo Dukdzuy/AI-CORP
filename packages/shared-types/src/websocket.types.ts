@@ -24,6 +24,8 @@ export interface WebSocketEvent {
 }
 
 export interface AgentThinkingEvent {
+  /** Project the agent works for (lets the Virtual Office filter by project) */
+  projectId?: string;
   agentId: string;
   agentRole: AgentRole;
   taskId: string;
@@ -31,6 +33,7 @@ export interface AgentThinkingEvent {
 }
 
 export interface AgentActionEvent {
+  projectId?: string;
   agentId: string;
   agentRole: AgentRole;
   taskId: string;

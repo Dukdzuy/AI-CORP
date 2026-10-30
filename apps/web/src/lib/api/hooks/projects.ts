@@ -39,7 +39,7 @@ export const useCreateProject = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (projectData: Partial<Project> & { templateId?: string; templateParams?: Record<string, unknown> }) => {
-      const { data } = await apiClient.post<Project>('/projects', projectData);
+      const { data } = await apiClient.post<Project & { workflowStarted?: boolean; workflowError?: string }>('/projects', projectData);
       return data;
     },
     onSuccess: () => {
@@ -71,6 +71,19 @@ export const useDeleteProject = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+    },
+  });
+};
+
+/** Start the workflow of a project whose workflow never started or stopped (failed / cancelled) */
+export const useStartProjectWorkflow = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) =>
+      (await apiClient.post<{ workflowStarted: boolean; workflowError?: string }>(`/projects/${id}/workflow/start`)).data,
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
     },
   });
 };

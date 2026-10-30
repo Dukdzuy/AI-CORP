@@ -57,6 +57,13 @@ export interface ProjectWithOwnerRecord {
   createdById: string;
 }
 
+/** What the engine needs to keep a run inside its project's budget */
+export interface ProjectBudgetRecord {
+  status: string;
+  budget: number | null;
+  costAccrued: number;
+}
+
 export interface ApprovalRecord {
   id: string;
 }
@@ -116,6 +123,8 @@ export interface IWorkflowEngineRepository {
   // Workflow steps
   createStep(data: CreateStepInput): Promise<WorkflowStepRecord>;
   updateStep(stepId: string, data: UpdateStepInput): Promise<unknown>;
+  /** Steps still 'running' of a run, e.g. cut short by a restart, are marked failed with `error` */
+  failRunningSteps(runId: string, error: string): Promise<number>;
   findStepsByRun(runId: string): Promise<WorkflowStepRecord[]>;
 
   // Snapshots (Memento caretaker storage, Task 17)
@@ -127,9 +136,15 @@ export interface IWorkflowEngineRepository {
   // Projects
   findProjectWithOwner(projectId: string): Promise<ProjectWithOwnerRecord | null>;
   updateProjectStatus(projectId: string, status: string): Promise<unknown>;
+  /** Marks the project completed unless it was cancelled meanwhile */
+  completeProject(projectId: string): Promise<unknown>;
+  findProjectBudget(projectId: string): Promise<ProjectBudgetRecord | null>;
+  /** Latest top-level run of a project, or null */
+  findLatestRun(projectId: string): Promise<WorkflowRunRecord | null>;
 
   // Approvals
   createApproval(data: CreateApprovalInput): Promise<ApprovalRecord>;
   /** Pending approvals of a run a rollback moved away from; returns how many were cancelled */
-  cancelPendingApprovals(runId: string): Promise<number>;
+  cancelPendingApprovals(runId: string, reason?: string): Promise<number>;
+  countPendingApprovals(runId: string): Promise<number>;
 }
