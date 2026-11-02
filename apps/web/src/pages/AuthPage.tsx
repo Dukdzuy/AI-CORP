@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Typography, Space, message, Tabs } from 'antd';
+import { Alert, Form, Input, Button, Card, Typography, Space, message, Tabs } from 'antd';
 import { UserOutlined, LockOutlined, MailOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -10,15 +10,17 @@ const { Title, Text } = Typography;
 export const AuthPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
+  const { setAuth, sessionExpired, returnTo, clearReturnTo } = useAuthStore();
 
   const handleLogin = async (values: { email: string; password: string }) => {
     setLoading(true);
     try {
       const res = await apiClient.post('/auth/login', values);
+      const target = returnTo && returnTo !== '/auth' ? returnTo : '/';
       setAuth(res.data.accessToken, res.data.user);
+      clearReturnTo();
       message.success('Login successful!');
-      navigate('/');
+      navigate(target, { replace: true });
     } catch (err: any) {
       message.error(err?.response?.data?.message || 'Login failed');
     } finally {
@@ -29,8 +31,13 @@ export const AuthPage: React.FC = () => {
   const handleRegister = async (values: { email: string; name: string; password: string }) => {
     setLoading(true);
     try {
-      await apiClient.post('/auth/register', values);
-      message.success('Registration successful! Please login.');
+      const res = await apiClient.post('/auth/register', values);
+      message.success(
+        res.data?.role === 'viewer'
+          ? 'Account created. You can view projects now; an admin can let you create them. Please log in.'
+          : 'Registration successful! Please login.',
+        6
+      );
     } catch (err: any) {
       message.error(err?.response?.data?.message || 'Registration failed');
     } finally {
@@ -58,6 +65,9 @@ export const AuthPage: React.FC = () => {
         styles={{ body: { padding: '40px 32px' } }}
       >
         <Space direction="vertical" size={24} style={{ width: '100%' }}>
+          {sessionExpired && (
+            <Alert type="info" showIcon message="Your session expired. Sign in again to continue where you left off." />
+          )}
           <div style={{ textAlign: 'center' }}>
             <Title level={3} style={{ color: '#e6edf3', margin: 0 }}>
               AI Corp Platform

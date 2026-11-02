@@ -1,10 +1,11 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { Typography, Space, Card, Badge, Row, Col, Tag, Flex } from 'antd';
-import { RobotOutlined, TeamOutlined, MessageOutlined, ClearOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Typography, Space, Card, Badge, Row, Col, Tag, Flex, Select } from 'antd';
+import { TeamOutlined, MessageOutlined, ClearOutlined } from '@ant-design/icons';
 import { WebSocketEventType, AgentThinkingEvent, AgentActionEvent, AgentMessageEvent, ApprovalRequiredEvent, AgentRole } from '@ai-corp/shared-types';
 import { useWebsocketStore } from '../stores/websocketStore';
 import { useMeetingStore, MeetingMessage } from '../stores/meetingStore';
 import { usePendingApprovals } from '../lib/api/hooks/approvals';
+import { useProjects } from '../lib/api/hooks/projects';
 import socketClient from '../lib/websocket/socket-client';
 import { AgentStatusCard, AgentStatus } from '../components/virtual-office/AgentStatusCard';
 import { MeetingRoom } from '../components/virtual-office/MeetingRoom';
@@ -30,13 +31,27 @@ export const VirtualOffice: React.FC = () => {
   const addMessage = useMeetingStore((s) => s.addMessage);
   const clearMessages = useMeetingStore((s) => s.clearMessages);
   const { data: apiApprovals = [] } = usePendingApprovals();
+  const { data: projects = [] } = useProjects();
+  // Which project the office shows; 'all' follows every active project
+  const [projectFilter, setProjectFilter] = useState<string>('all');
+  const activeProjectIds = projects.filter(p => p.status === 'active').map(p => p.id);
+  const watchedIds = projectFilter === 'all' ? activeProjectIds : [projectFilter];
+  const watchedKey = watchedIds.join(',');
+  const visibleMessages = projectFilter === 'all' ? messages : messages.filter(m => m.projectId === projectFilter);
+
+  // Agent actions and messages are sent to project rooms: join the rooms of the watched projects
+  useEffect(() => {
+    const ids = watchedKey ? watchedKey.split(',') : [];
+    ids.forEach(id => socketClient.subscribeProject(id));
+    return () => ids.forEach(id => socketClient.unsubscribeProject(id));
+  }, [watchedKey]);
 
   // Add pending approvals from REST API as meeting room messages on mount
   useEffect(() => {
     if (apiApprovals.length > 0) {
       for (const a of apiApprovals) {
         addMessage({
-          id: `api-approval-${a.id}`,
+          id: `approval-${a.id}`,
           fromRole: 'QA' as AgentRole,
           toRole: 'all',
           message: `⚠️ APPROVAL REQUIRED: ${a.approvalType} — QA passed, needs human sign-off.`,
@@ -64,6 +79,7 @@ export const VirtualOffice: React.FC = () => {
           message: data.message,
           type: 'thinking',
           timestamp: new Date(),
+          projectId: data.projectId,
         });
       }
     );
@@ -83,6 +99,7 @@ export const VirtualOffice: React.FC = () => {
           message: `${data.actionType}: ${data.toolName}`,
           type: 'action',
           timestamp: new Date(),
+          projectId: data.projectId,
         });
       }
     );
@@ -109,7 +126,7 @@ export const VirtualOffice: React.FC = () => {
       WebSocketEventType.HUMAN_APPROVAL_REQUIRED,
       (data) => {
         addMessage({
-          id: `approval-${Date.now()}-${data.approvalId}`,
+          id: `approval-${data.approvalId}`,
           fromRole: 'QA' as AgentRole,
           toRole: 'all',
           message: `⚠️ APPROVAL REQUIRED: ${data.approvalType} — QA passed, needs human sign-off.`,
@@ -143,6 +160,18 @@ export const VirtualOffice: React.FC = () => {
             Watch your AI agents collaborate in real-time.
           </Text>
         </div>
+        <Space size={16}>
+        <Select
+          value={projectFilter}
+          onChange={setProjectFilter}
+          style={{ width: 260 }}
+          showSearch
+          optionFilterProp="label"
+          options={[
+            { value: 'all', label: 'All active projects' },
+            ...projects.map(p => ({ value: p.id, label: p.name })),
+          ]}
+        />
         <Badge
           color={status === 'connected' ? '#52c41a' : '#ff4d4f'}
           text={
@@ -151,6 +180,7 @@ export const VirtualOffice: React.FC = () => {
             </Text>
           }
         />
+        </Space>
       </Flex>
 
       {/* Two-column layout */}
@@ -198,7 +228,7 @@ export const VirtualOffice: React.FC = () => {
                 <MessageOutlined style={{ color: '#52c41a' }} />
                 <Text style={{ color: '#e6edf3' }}>Meeting Room</Text>
                 <Tag style={{ background: '#21262d', border: 'none', color: '#8b949e', fontSize: 11 }}>
-                  {messages.length} messages
+                  {visibleMessages.length} messages
                 </Tag>
               </Space>
             }
@@ -223,7 +253,7 @@ export const VirtualOffice: React.FC = () => {
               body: { padding: 16, overflow: 'hidden', height: 'calc(100% - 56px)', display: 'flex', flexDirection: 'column' },
             }}
           >
-            <MeetingRoom messages={messages} connected={status === 'connected'} />
+            <MeetingRoom messages={visibleMessages} connected={status === 'connected'} />
           </Card>
         </Col>
       </Row>

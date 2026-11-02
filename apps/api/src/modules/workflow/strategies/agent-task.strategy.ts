@@ -36,6 +36,7 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
     this.websocketGateway.sendToProject(run.projectId, {
       type: 'agent:thinking',
       data: {
+        projectId: run.projectId,
         agentId: node.agentRole,
         agentRole: node.agentRole,
         taskId: node.id,
@@ -106,6 +107,7 @@ export class AgentTaskStrategy implements NodeExecutionStrategy {
       this.websocketGateway.sendToProject(run.projectId, {
         type: 'agent:action',
         data: {
+          projectId: run.projectId,
           agentId: node.agentRole,
           agentRole: node.agentRole,
           taskId: node.id,

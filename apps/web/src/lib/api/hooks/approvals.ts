@@ -15,8 +15,22 @@ export interface PendingApprovalRecord {
     id: string;
     projectId: string;
     currentNodeId: string;
+    project?: { name: string };
   };
+  /** Who the approval is assigned to (an admin sees everyone's) */
+  user?: { id: string; name: string; email: string };
 }
+
+/** The shape the approval cards and modal use, from a REST record */
+export const toPendingApproval = (a: PendingApprovalRecord) => ({
+  approvalId: a.id,
+  workflowRunId: a.workflowRunId,
+  projectId: a.workflowRun?.projectId || '',
+  projectName: a.workflowRun?.project?.name,
+  approvalType: a.approvalType,
+  requestData: a.requestData,
+  requestedAt: new Date(a.requestedAt),
+});
 
 export const approvalKeys = {
   all: ['approvals'] as const,
@@ -53,5 +67,6 @@ export const approvalErrorMessage = (error: unknown): string => {
   const status = (error as { response?: { status?: number } })?.response?.status;
   if (status === 403) return 'You are not allowed to answer this approval';
   if (status === 404) return 'This approval no longer exists';
+  if (status === 409) return 'This approval was already answered';
   return 'Could not send your answer, please try again';
 };

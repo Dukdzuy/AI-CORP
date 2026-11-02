@@ -58,17 +58,29 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
     // Socket.io automatically removes the client from rooms upon disconnect.
   }
 
+  /** The web app sends `{ projectId }`; a bare id string is accepted too */
   @SubscribeMessage('subscribe_project')
-  handleSubscribeProject(@ConnectedSocket() client: Socket, @MessageBody() data: { projectId: string }) {
-    if (!data || !data.projectId) {
+  handleSubscribeProject(@ConnectedSocket() client: Socket, @MessageBody() data: { projectId: string } | string) {
+    const projectId = typeof data === 'string' ? data : data?.projectId;
+    if (!projectId) {
       return { status: 'error', message: 'projectId is required' };
     }
-    
+
     // Add client to the project's room
-    client.join(data.projectId);
-    this.logger.log(`Client ${client.id} subscribed to project ${data.projectId}`);
-    
-    return { status: 'success', event: 'subscribed', projectId: data.projectId };
+    client.join(projectId);
+    this.logger.log(`Client ${client.id} subscribed to project ${projectId}`);
+
+    return { status: 'success', event: 'subscribed', projectId };
+  }
+
+  @SubscribeMessage('unsubscribe_project')
+  handleUnsubscribeProject(@ConnectedSocket() client: Socket, @MessageBody() data: { projectId: string } | string) {
+    const projectId = typeof data === 'string' ? data : data?.projectId;
+    if (!projectId) {
+      return { status: 'error', message: 'projectId is required' };
+    }
+    client.leave(projectId);
+    return { status: 'success', event: 'unsubscribed', projectId };
   }
 
   /**
@@ -96,8 +108,9 @@ export class AppWebSocketGateway implements OnGatewayInit, OnGatewayConnection, 
    */
   sendToProject(projectId: string, event: any) {
     // Emit the specific event type directly (e.g., 'agent:thinking', 'human:approval_required')
+    // Events carry their body in `data` (most) or `payload` (agent thinking / state changes)
     if (event.type) {
-      this.server.to(projectId).emit(event.type, event.data ?? event);
+      this.server.to(projectId).emit(event.type, event.data ?? event.payload ?? event);
     }
     // Also emit as project_event for general listeners
     this.server.to(projectId).emit('project_event', event);

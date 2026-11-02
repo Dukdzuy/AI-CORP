@@ -1,8 +1,9 @@
 import React, { useState, useCallback } from 'react';
-import { Typography, Tag, Space } from 'antd';
+import { Typography, Tag, Space, Alert, message } from 'antd';
 import { Task, TaskStatus } from '@ai-corp/shared-types';
 import { useUpdateTask } from '../../lib/api/hooks/tasks';
 import { TaskCard } from './TaskCard';
+import { apiErrorMessage } from '../../lib/api/errors';
 
 const { Text } = Typography;
 
@@ -23,9 +24,11 @@ const VALID_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
 interface KanbanBoardProps {
   tasks: Task[];
   onTaskClick?: (task: Task) => void;
+  /** Why tasks can't be moved by hand right now (e.g. the agents are working on them) */
+  lockedReason?: string;
 }
 
-export const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onTaskClick }) => {
+export const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onTaskClick, lockedReason }) => {
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
   const updateTask = useUpdateTask();
@@ -62,8 +65,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onTaskClick }) 
         return;
       }
 
+      if (lockedReason) {
+        message.warning(lockedReason);
+        setDraggedTaskId(null);
+        setDropTarget(null);
+        return;
+      }
+
       const allowed = VALID_TRANSITIONS[task.status];
       if (!allowed.includes(targetStatus)) {
+        message.info(`A task can't move from ${task.status} to ${targetStatus}`);
         setDraggedTaskId(null);
         setDropTarget(null);
         return;
@@ -71,17 +82,19 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onTaskClick }) 
 
       try {
         await updateTask.mutateAsync({ id: taskId, status: targetStatus });
-      } catch {
-        // Error handled by mutation
+      } catch (error) {
+        message.error(apiErrorMessage(error, 'Could not move the task'));
       }
 
       setDraggedTaskId(null);
       setDropTarget(null);
     },
-    [tasks, updateTask]
+    [tasks, updateTask, lockedReason]
   );
 
   return (
+    <>
+    {lockedReason && <Alert type="info" showIcon message={lockedReason} style={{ marginBottom: 12, background: '#161b22', border: '1px solid #30363d' }} />}
     <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 16 }}>
       {COLUMNS.map((col) => {
         const columnTasks = tasks.filter((t) => t.status === col.key);
@@ -165,5 +178,6 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({ tasks, onTaskClick }) 
         );
       })}
     </div>
+    </>
   );
 };

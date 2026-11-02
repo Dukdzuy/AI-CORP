@@ -20,6 +20,17 @@ const eventHandlers: Map<string, Set<EventHandler<any>>> = new Map();
 
 let socket: Socket | null = null;
 
+// Project rooms this tab wants; joined again after every (re)connect
+const projectRooms = new Set<string>();
+
+// Event types with their own listener below; the generic project_event / user_event copies of
+// them are skipped so a handler runs once per event
+const directEvents = new Set<string>();
+
+const debug = (...args: unknown[]) => {
+  if (import.meta.env.DEV) console.log(...args);
+};
+
 export const socketClient = {
   connect: () => {
     if (socket?.connected) return;
@@ -38,34 +49,36 @@ export const socketClient = {
 
     socket.on('connect', () => {
       wsStore.setStatus('connected');
-      console.log('[WS] Connected to server');
+      debug('[WS] Connected to server');
+      projectRooms.forEach((projectId) => socket?.emit('subscribe_project', { projectId }));
     });
 
     socket.on('disconnect', () => {
       wsStore.setStatus('disconnected');
-      console.log('[WS] Disconnected from server');
+      debug('[WS] Disconnected from server');
     });
 
     socket.on('connect_error', (err) => {
       console.warn('[WS] Connection error:', err.message);
       if (err.message.includes('jwt') || err.message.includes('expired') || err.message.includes('unauthorized')) {
-        console.warn('[WS] Auth error, logging out');
-        useAuthStore.getState().logout();
+        console.warn('[WS] Auth error, signing out');
+        useAuthStore.getState().expireSession(window.location.pathname + window.location.search);
       }
     });
 
     socket.on('reconnecting', () => {
       wsStore.setStatus('reconnecting');
-      console.log('[WS] Reconnecting...');
+      debug('[WS] Reconnecting...');
     });
 
     socket.on('reconnect', () => {
       wsStore.setStatus('connected');
-      console.log('[WS] Reconnected to server');
+      debug('[WS] Reconnected to server');
     });
 
     // Register all AI Corp event listeners
     const registerEvent = <T>(eventType: WebSocketEventType) => {
+      directEvents.add(eventType);
       socket!.on(eventType, (data: T) => {
         wsStore.recordMessage();
         const handlers = eventHandlers.get(eventType);
@@ -84,11 +97,13 @@ export const socketClient = {
     // Listen for system health events (circuit breaker, degraded, etc.)
     socket.on('system_event', (data: any) => {
       wsStore.recordMessage();
-      console.log('[WS] system_event received:', data?.type, data?.payload ? 'has payload' : 'no payload');
-      // Dispatch broadcast agent events to their specific handlers
-      if (data?.type && data?.payload) {
+      debug('[WS] system_event received:', data?.type, data?.payload ? 'has payload' : 'no payload');
+      // Dispatch broadcast agent events to their specific handlers; for a project this tab has
+      // joined, the room delivers its own copy, so the broadcast one is skipped
+      const roomCopy = data?.payload?.projectId && projectRooms.has(data.payload.projectId);
+      if (data?.type && data?.payload && !roomCopy) {
         const handlers = eventHandlers.get(data.type);
-        console.log('[WS] dispatching to', data?.type, 'handlers:', handlers?.size ?? 0);
+        debug('[WS] dispatching to', data?.type, 'handlers:', handlers?.size ?? 0);
         handlers?.forEach((handler) => handler(data.payload));
       }
       // Also fire general system_event handlers
@@ -99,16 +114,16 @@ export const socketClient = {
     // Listen for project-level events (agent:thinking, agent:action, workflow:state_changed, etc.)
     socket.on('project_event', (data: any) => {
       wsStore.recordMessage();
-      if (data?.type) {
+      if (data?.type && !directEvents.has(data.type)) {
         const handlers = eventHandlers.get(data.type);
-        handlers?.forEach((handler) => handler(data.data ?? data));
+        handlers?.forEach((handler) => handler(data.data ?? data.payload ?? data));
       }
     });
 
     // Listen for user-specific events (human:approval_required, etc.)
     socket.on('user_event', (data: any) => {
       wsStore.recordMessage();
-      if (data?.type) {
+      if (data?.type && !directEvents.has(data.type)) {
         const handlers = eventHandlers.get(data.type);
         handlers?.forEach((handler) => handler(data.data ?? data));
       }
@@ -131,6 +146,17 @@ export const socketClient = {
     return () => {
       eventHandlers.get(event)?.delete(handler);
     };
+  },
+
+  /** Receive a project's events; kept across reconnects until unsubscribeProject */
+  subscribeProject: (projectId: string) => {
+    projectRooms.add(projectId);
+    if (socket?.connected) socket.emit('subscribe_project', { projectId });
+  },
+
+  unsubscribeProject: (projectId: string) => {
+    projectRooms.delete(projectId);
+    if (socket?.connected) socket.emit('unsubscribe_project', { projectId });
   },
 
   emit: (event: string, data?: unknown) => {

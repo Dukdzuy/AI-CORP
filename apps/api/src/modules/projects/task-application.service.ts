@@ -44,6 +44,13 @@ export class TaskApplicationService {
     return projectId ? this.taskRepository.findByProjectId(projectId) : this.taskRepository.findAll();
   }
 
+  /** The project a task belongs to (for the owner check on task changes) */
+  async projectIdOf(taskId: string): Promise<string> {
+    const dto = await this.taskRepository.findById(taskId);
+    if (!dto) throw new NotFoundException(`Task with ID ${taskId} not found.`);
+    return dto.projectId;
+  }
+
   /**
    * Create a task through the Task entity factory (starts in TODO)
    */

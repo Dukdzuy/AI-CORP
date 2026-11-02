@@ -9,9 +9,10 @@ import { WebSocketModule } from '../websocket/websocket.module';
 import { WorkflowModule } from '../workflow/workflow.module';
 import { ProjectAuditSnapshots } from './project-audit-snapshots';
 import { InfrastructureModule } from '../../infrastructure/infrastructure.module';
+import { WorkspaceModule } from '../workspace/workspace.module';
 
 @Module({
-  imports: [WebSocketModule, WorkflowModule, InfrastructureModule],
+  imports: [WebSocketModule, WorkflowModule, InfrastructureModule, WorkspaceModule],
   controllers: [ProjectsController, TasksController, MilestonesController],
   providers: [ProjectApplicationService, TaskApplicationService, MilestoneApplicationService, ProjectAuditSnapshots],
   exports: [ProjectApplicationService, TaskApplicationService, MilestoneApplicationService],

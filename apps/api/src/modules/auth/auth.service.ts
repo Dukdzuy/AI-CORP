@@ -1,4 +1,5 @@
-import { Injectable, UnauthorizedException, BadRequestException, ConflictException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, ForbiddenException, ServiceUnavailableException } from '@nestjs/common';
+import { registrationAllowed, signupRole } from '../security/runtime-config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
@@ -19,6 +20,9 @@ export class AuthService {
   }
 
   async register(data: RegisterDto) {
+    if (!registrationAllowed()) {
+      throw new ForbiddenException('Registration is turned off: ask an administrator for an account.');
+    }
     this.checkDb();
 
     const existing = await this.prisma.user.findUnique({ where: { email: data.email } });
@@ -32,7 +36,7 @@ export class AuthService {
       data: {
         email: data.email,
         name: data.name,
-        role: 'board_member',
+        role: signupRole(),
         passwordHash,
       },
     });

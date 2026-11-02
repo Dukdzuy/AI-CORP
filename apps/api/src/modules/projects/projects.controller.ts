@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Req, HttpCode } from '@nestjs/common';
 import { Permission } from '@ai-corp/shared-types';
 import { Principal } from '../../domain/security';
 import { CurrentPrincipal, RequirePermission } from '../access/access.decorators';
@@ -39,6 +39,16 @@ export class ProjectsController {
   async updateProject(@Param('id') id: string, @Body() data: UpdateProjectDto, @CurrentPrincipal() principal: Principal, @Req() req: any) {
     await this.authorization.assertProjectOwner(principal, id, 'update', req);
     return this.projectService.updateProject(id, data);
+  }
+
+  /** Start the workflow again when it never started or stopped (failed / cancelled) */
+  @Post(':id/workflow/start')
+  @HttpCode(200)
+  @RequirePermission(Permission.WORKFLOW_CONTROL)
+  @Audited({ action: 'workflow.start', resourceType: 'Project', idParam: 'id' })
+  async startWorkflow(@Param('id') id: string, @CurrentPrincipal() principal: Principal, @Req() req: any) {
+    await this.authorization.assertProjectOwner(principal, id, 'start the workflow of', req);
+    return this.projectService.startProjectWorkflow(id);
   }
 
   @Delete(':id')

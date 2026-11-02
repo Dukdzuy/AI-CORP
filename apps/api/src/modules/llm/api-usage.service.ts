@@ -41,6 +41,51 @@ export class ApiUsageService {
     private readonly eventBus: EventBus,
   ) {}
 
+  /**
+   * Adds the cost to the project in one atomic increment (parallel nodes call this at the same
+   * time; a read-then-write lost updates) and reports each budget threshold once, when crossed:
+   * 90% warns, 100% pauses the project and raises BudgetExceededEvent (its handler pauses the run;
+   * the engine also refuses to start another node while the budget stays used up).
+   */
+  private async accrueProjectCost(projectId: string, cost: number): Promise<void> {
+    const project = await this.prisma.project.update({
+      where: { id: projectId },
+      data: { costAccrued: { increment: cost } },
+      select: { budget: true, costAccrued: true, status: true },
+    }).catch(() => null);
+    if (!project || project.budget === null) return;
+
+    const budget = Number(project.budget);
+    const after = Number(project.costAccrued);
+    const before = after - cost;
+
+    if (before < budget && after >= budget) {
+      await this.eventBus
+        .publish(new BudgetExceededEvent(projectId, after, budget))
+        .catch(err => this.logger.error(`Failed to publish BudgetExceededEvent: ${err.message}`));
+      if (project.status === 'active') {
+        await this.prisma.project.update({ where: { id: projectId }, data: { status: 'paused' } });
+      }
+      this.websocketGateway.sendToProject(projectId, {
+        type: WebSocketEventType.SYSTEM_NOTIFICATION,
+        data: {
+          message: `Project paused: Cost ($${after.toFixed(2)}) has exceeded the budget ($${budget.toFixed(2)}).`,
+          level: 'critical',
+        },
+        timestamp: new Date()
+      } as any);
+    } else if (before < budget * 0.9 && after >= budget * 0.9 && after < budget) {
+      this.websocketGateway.sendToProject(projectId, {
+        type: WebSocketEventType.SYSTEM_NOTIFICATION,
+        data: {
+          message: `Warning: Cost ($${after.toFixed(2)}) has reached 90% of the budget ($${budget.toFixed(2)}).`,
+          level: 'warning',
+        },
+        timestamp: new Date()
+      } as any);
+    }
+  }
+
   async logUsage(params: LogUsageParams): Promise<void> {
     try {
       const totalTokens = params.promptTokens + params.completionTokens;
@@ -71,50 +116,7 @@ export class ApiUsageService {
       );
 
       if (params.projectId && actualCost > 0) {
-        const project = await this.prisma.project.findUnique({ where: { id: params.projectId } });
-        if (project) {
-          const newCost = Number(project.costAccrued) + actualCost;
-          
-          await this.prisma.project.update({
-            where: { id: params.projectId },
-            data: { costAccrued: newCost },
-          });
-
-          if (project.budget) {
-            const budget = Number(project.budget);
-            if (newCost >= budget) {
-              // Raise the domain event once, when the budget is first crossed;
-              // BudgetExceededHandler pauses the project's running workflow
-              if (Number(project.costAccrued) < budget) {
-                await this.eventBus
-                  .publish(new BudgetExceededEvent(params.projectId, newCost, budget))
-                  .catch(err => this.logger.error(`Failed to publish BudgetExceededEvent: ${err.message}`));
-              }
-              await this.prisma.project.update({
-                where: { id: params.projectId },
-                data: { status: 'paused' },
-              });
-              
-              this.websocketGateway.sendToProject(params.projectId, {
-                type: WebSocketEventType.SYSTEM_NOTIFICATION,
-                data: {
-                  message: `Project paused: Cost ($${newCost.toFixed(2)}) has exceeded the budget ($${budget.toFixed(2)}).`,
-                  level: 'critical',
-                },
-                timestamp: new Date()
-              } as any);
-            } else if (newCost >= budget * 0.9) {
-              this.websocketGateway.sendToProject(params.projectId, {
-                type: WebSocketEventType.SYSTEM_NOTIFICATION,
-                data: {
-                  message: `Warning: Cost ($${newCost.toFixed(2)}) has reached 90% of the budget ($${budget.toFixed(2)}).`,
-                  level: 'warning',
-                },
-                timestamp: new Date()
-              } as any);
-            }
-          }
-        }
+        await this.accrueProjectCost(params.projectId, actualCost);
       }
     } catch (error) {
       this.logger.error(`Failed to log API usage: ${error instanceof Error ? error.message : String(error)}`);

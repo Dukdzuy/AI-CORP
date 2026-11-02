@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Typography, Row, Col, Card, Statistic, Button, Empty, Skeleton, Tag, Progress, Space, Flex, Modal, Form, Input, InputNumber, message, Tabs, Dropdown } from 'antd';
+import { Typography, Row, Col, Card, Statistic, Button, Empty, Skeleton, Tag, Progress, Space, Flex, Modal, Form, Input, InputNumber, message, Tabs, Dropdown, Segmented, Select } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   PlusOutlined,
@@ -11,14 +11,14 @@ import {
   BarChartOutlined,
   DeleteOutlined,
   PauseCircleOutlined,
-  StopOutlined,
   MoreOutlined,
   PlayCircleOutlined,
 } from '@ant-design/icons';
 import { useProjects, useCreateProject, useDeleteProject, useUpdateProject } from '../lib/api/hooks/projects';
 import { Permission } from '@ai-corp/shared-types';
 import { hasPermission, usePermission } from '../lib/permissions';
-import { projectProgress } from '../lib/projectProgress';
+import { projectProgress, ProgressTone } from '../lib/projectProgress';
+import { apiErrorMessage } from '../lib/api/errors';
 import { useAuthStore } from '../stores/authStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useNavigate } from 'react-router-dom';
@@ -36,6 +36,24 @@ const STATUS_CONFIG: Record<ProjectStatus, { color: string; icon: React.ReactNod
   [ProjectStatus.CANCELLED]: { color: 'red', icon: <ClockCircleOutlined />, label: 'Cancelled' },
 };
 
+const TONE_COLORS: Record<ProgressTone, string> = {
+  success: '#52c41a',
+  active: '#1677ff',
+  warning: '#faad14',
+  error: '#ff4d4f',
+  muted: '#8b949e',
+};
+
+type StatusFilter = 'all' | 'running' | 'attention' | 'completed';
+type SortKey = 'newest' | 'oldest' | 'name' | 'cost';
+
+/** Needs the user: a failed or paused run, a workflow that never started, or a used-up budget */
+function needsAttention(project: Project): boolean {
+  const { tone } = projectProgress(project as any);
+  const budget = project.budget != null ? Number(project.budget) : null;
+  return tone === 'error' || tone === 'warning' || (budget !== null && Number(project.costAccrued ?? 0) >= budget);
+}
+
 const ProjectCard: React.FC<{
   project: Project;
   onClick: () => void;
@@ -43,7 +61,12 @@ const ProjectCard: React.FC<{
   onPause?: (id: string) => void;
   onResume?: (id: string) => void;
 }> = ({ project, onClick, onDelete, onPause, onResume }) => {
-  const statusCfg = STATUS_CONFIG[project.status] ?? { color: 'default', icon: null, label: project.status };
+  const baseStatus = STATUS_CONFIG[project.status] ?? { color: 'default', icon: null, label: project.status };
+  const { percent: workflowProgress, label: progressLabel, tone } = projectProgress(project as any);
+  // An "active" project whose run failed or never started must not spin as if it were working
+  const statusCfg = project.status === ProjectStatus.ACTIVE && tone !== 'active'
+    ? { ...baseStatus, icon: <ClockCircleOutlined /> }
+    : baseStatus;
   // Phase 5: only the owner (or an admin) may change a project; the API enforces the same rule
   const user = useAuthStore(s => s.user);
   const canModify = hasPermission(user, Permission.PROJECT_UPDATE) && (user?.role === 'admin' || (project as any).createdById === user?.id);
@@ -70,7 +93,6 @@ const ProjectCard: React.FC<{
     },
   ].filter(Boolean) as MenuProps['items'];
 
-  const { percent: workflowProgress, label: progressLabel } = projectProgress(project);
 
   return (
     <Card
@@ -110,10 +132,11 @@ const ProjectCard: React.FC<{
         </Paragraph>
 
         <div>
-          <Text style={{ color: '#8b949e', fontSize: 12 }}>Progress: {progressLabel}</Text>
+          <Text style={{ color: tone === 'error' ? '#ff4d4f' : '#8b949e', fontSize: 12 }}>Progress: {progressLabel}</Text>
           <Progress
             percent={workflowProgress}
-            strokeColor={workflowProgress >= 100 ? '#52c41a' : workflowProgress >= 50 ? { from: '#1677ff', to: '#722ed1' } : '#ff4d4f'}
+            strokeColor={TONE_COLORS[tone]}
+            status={tone === 'error' ? 'exception' : tone === 'active' ? 'active' : 'normal'}
             trailColor="#21262d"
             size="small"
             style={{ marginTop: 4 }}
@@ -157,10 +180,16 @@ export const Dashboard: React.FC = () => {
     navigate(`/projects/${project.id}`);
   };
 
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
+
   const handleDeleteProject = async (projectId: string, projectName: string) => {
+    const project = projects?.find(p => p.id === projectId);
+    const running = project && projectProgress(project as any).tone === 'active';
     Modal.confirm({
       title: 'Delete Project',
-      content: `Are you sure you want to delete "${projectName}"? This action cannot be undone.`,
+      content: `Are you sure you want to delete "${projectName}"? ${running ? 'Its workflow is still running and will be stopped. ' : ''}The project's tasks, runs and generated files are deleted. This action cannot be undone.`,
       okText: 'Delete',
       okType: 'danger',
       cancelText: 'Cancel',
@@ -169,7 +198,7 @@ export const Dashboard: React.FC = () => {
           await deleteProject.mutateAsync(projectId);
           message.success('Project deleted successfully!');
         } catch (error) {
-          message.error('Failed to delete project.');
+          message.error(apiErrorMessage(error, 'Failed to delete project.'));
         }
       },
     });
@@ -178,18 +207,18 @@ export const Dashboard: React.FC = () => {
   const handlePauseProject = async (projectId: string) => {
     try {
       await updateProject.mutateAsync({ id: projectId, status: ProjectStatus.PAUSED });
-      message.success('Project paused!');
+      message.success('Project and its workflow paused');
     } catch (error) {
-      message.error('Failed to pause project.');
+      message.error(apiErrorMessage(error, 'Failed to pause project.'));
     }
   };
 
   const handleResumeProject = async (projectId: string) => {
     try {
       await updateProject.mutateAsync({ id: projectId, status: ProjectStatus.ACTIVE });
-      message.success('Project resumed!');
+      message.success('Project and its workflow resumed');
     } catch (error) {
-      message.error('Failed to resume project.');
+      message.error(apiErrorMessage(error, 'Failed to resume project.'));
     }
   };
 
@@ -203,19 +232,40 @@ export const Dashboard: React.FC = () => {
   }) => {
     try {
       const { templateId, templateParams, ...project } = values;
-      await createProject.mutateAsync(
+      const created = await createProject.mutateAsync(
         templateId && templateId !== DEFAULT_WORKFLOW ? { ...project, templateId, templateParams } : project
       );
-      message.success('Project created successfully!');
+      if (created.workflowStarted === false) {
+        message.warning(`Project created, but its workflow did not start: ${created.workflowError || 'unknown error'}. Open the project to start it again.`, 8);
+      } else {
+        message.success('Project created, the agents are starting');
+      }
       setIsModalOpen(false);
       form.resetFields();
     } catch (error) {
       console.error('Create project error:', error);
-      message.error('Failed to create project. Please try again.');
+      message.error(apiErrorMessage(error, 'Failed to create project. Please try again.'));
     }
   };
 
   const activeCount = projects?.filter((p) => p.status === ProjectStatus.ACTIVE).length ?? 0;
+
+  const query = search.trim().toLowerCase();
+  const visibleProjects = (projects ?? [])
+    .filter(p => !query || p.name.toLowerCase().includes(query) || (p.description || '').toLowerCase().includes(query))
+    .filter(p => {
+      if (statusFilter === 'running') return projectProgress(p as any).tone === 'active';
+      if (statusFilter === 'attention') return needsAttention(p);
+      if (statusFilter === 'completed') return p.status === ProjectStatus.COMPLETED;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortKey === 'name') return a.name.localeCompare(b.name);
+      if (sortKey === 'cost') return Number(b.costAccrued ?? 0) - Number(a.costAccrued ?? 0);
+      const diff = new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime();
+      return sortKey === 'oldest' ? -diff : diff;
+    });
+  const attentionCount = projects?.filter(needsAttention).length ?? 0;
   const completedCount = projects?.filter((p) => p.status === ProjectStatus.COMPLETED).length ?? 0;
 
   // Calculate total cost across all projects (handle Prisma Decimal as string)
@@ -311,14 +361,15 @@ export const Dashboard: React.FC = () => {
             name="budget"
             label={<Text style={{ color: '#8b949e' }}>Budget (optional)</Text>}
             rules={[
-              { type: 'number', min: 1, message: 'Budget must be a positive number' },
+              { type: 'number', min: 1, message: 'Budget must be at least $1' },
             ]}
+            extra={<Text style={{ color: '#8b949e', fontSize: 12 }}>The workflow pauses when the agents' LLM cost reaches it.</Text>}
           >
             <InputNumber
               prefix="$"
-              placeholder="0.00"
+              placeholder="e.g. 5.00"
               style={{ width: '100%', background: '#0d1117', borderColor: '#30363d' }}
-              min={0}
+              min={1}
               precision={2}
             />
           </Form.Item>
@@ -504,8 +555,42 @@ export const Dashboard: React.FC = () => {
                 />
               </Card>
             ) : (
+              <>
+              <Flex wrap="wrap" gap={12} style={{ marginBottom: 16 }}>
+                <Input.Search
+                  allowClear
+                  placeholder="Search projects"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  style={{ width: 260 }}
+                />
+                <Segmented<StatusFilter>
+                  value={statusFilter}
+                  onChange={setStatusFilter}
+                  options={[
+                    { label: 'All', value: 'all' },
+                    { label: 'Running', value: 'running' },
+                    { label: `Needs attention${attentionCount ? ` (${attentionCount})` : ''}`, value: 'attention' },
+                    { label: 'Completed', value: 'completed' },
+                  ]}
+                />
+                <Select<SortKey>
+                  value={sortKey}
+                  onChange={setSortKey}
+                  style={{ width: 160 }}
+                  options={[
+                    { label: 'Newest first', value: 'newest' },
+                    { label: 'Oldest first', value: 'oldest' },
+                    { label: 'Name', value: 'name' },
+                    { label: 'Highest cost', value: 'cost' },
+                  ]}
+                />
+              </Flex>
+              {visibleProjects.length === 0 ? (
+                <Empty description={<Text style={{ color: '#8b949e' }}>No project matches.</Text>} />
+              ) : (
               <Row gutter={[16, 16]}>
-                {projects.map((project) => (
+                {visibleProjects.map((project) => (
                   <Col xs={24} md={12} xl={8} key={project.id}>
                     <ProjectCard
                       project={project}
@@ -517,6 +602,8 @@ export const Dashboard: React.FC = () => {
                   </Col>
                 ))}
               </Row>
+              )}
+              </>
             ),
           },
           {

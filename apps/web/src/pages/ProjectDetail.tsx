@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Typography, Space, Card, Button, Spin, Skeleton, Tabs, Empty, Tag, Collapse, Badge, Alert, message } from 'antd';
-import { ArrowLeftOutlined, RocketOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, ThunderboltOutlined, FileTextOutlined, ExclamationCircleOutlined, FolderOpenOutlined, CodeOutlined } from '@ant-design/icons';
-import { Task, WebSocketEventType, TaskUpdatedEvent, ApprovalRequiredEvent } from '@ai-corp/shared-types';
-import { useProject } from '../lib/api/hooks/projects';
+import { Typography, Space, Card, Button, Spin, Skeleton, Tabs, Empty, Tag, Collapse, Alert, InputNumber, Modal, Popconfirm, message } from 'antd';
+import { ArrowLeftOutlined, RocketOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, ThunderboltOutlined, FileTextOutlined, ExclamationCircleOutlined, FolderOpenOutlined, CodeOutlined, PauseCircleOutlined, PlayCircleOutlined, StopOutlined, DollarOutlined } from '@ant-design/icons';
+import { Permission, Task, WebSocketEventType, TaskUpdatedEvent, ApprovalRequiredEvent, ProjectStatus } from '@ai-corp/shared-types';
+import { projectKeys, useProject, useStartProjectWorkflow, useUpdateProject } from '../lib/api/hooks/projects';
+import { apiErrorMessage } from '../lib/api/errors';
+import { approvalSummary } from '../lib/approvalSummary';
+import { hasPermission } from '../lib/permissions';
+import { useAuthStore } from '../stores/authStore';
+import { ApprovalModal } from '../components/approvals/ApprovalModal';
+import type { PendingApproval } from '../components/approvals/ApprovalNotification';
 import { useTasks, taskKeys } from '../lib/api/hooks/tasks';
 import { useMilestones } from '../lib/api/hooks/milestones';
-import { usePendingApprovals, approvalKeys, respondToApproval, approvalErrorMessage } from '../lib/api/hooks/approvals';
+import { usePendingApprovals, approvalKeys, respondToApproval, approvalErrorMessage, toPendingApproval } from '../lib/api/hooks/approvals';
 import { KanbanBoard } from '../components/kanban/KanbanBoard';
 import { TaskDetailModal } from '../components/kanban/TaskDetailModal';
 import socketClient from '../lib/websocket/socket-client';
@@ -47,21 +53,24 @@ export const ProjectDetail: React.FC = () => {
   const { gates: liveGates, warnings: liveWarnings } = useQualityEvents(id);
 
   // Merge REST API approvals + WebSocket approvals, dedupe by approvalId
-  const pendingApprovals = [...apiApprovals.map((a: any) => ({
-    approvalId: a.id,
-    workflowRunId: a.workflowRunId,
-    projectId: a.workflowRun?.projectId || id || '',
-    approvalType: a.approvalType,
-    requestData: a.requestData as Record<string, unknown>,
-    requestedAt: new Date(a.requestedAt),
-  })), ...wsApprovals].filter((a, i, arr) =>
-    arr.findIndex((b) => b.approvalId === a.approvalId) === i
+  const [answered, setAnswered] = useState<Set<string>>(new Set());
+  const pendingApprovals: PendingApproval[] = [...apiApprovals.map(toPendingApproval), ...wsApprovals].filter((a, i, arr) =>
+    arr.findIndex((b) => b.approvalId === a.approvalId) === i && !answered.has(a.approvalId)
   );
+  const [reviewing, setReviewing] = useState<PendingApproval | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [activeTab, setActiveTab] = useState<string | undefined>(undefined);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const [newBudget, setNewBudget] = useState<number | null>(null);
+  const updateProject = useUpdateProject();
+  const startWorkflow = useStartProjectWorkflow();
+  const user = useAuthStore(s => s.user);
 
   useEffect(() => {
     if (!id) return;
 
-    socketClient.emit('subscribe_project', id);
+    // Joins the project's room (again after a reconnect) so its live events reach this page
+    socketClient.subscribeProject(id);
 
     const unsubTaskUpdated = socketClient.on<TaskUpdatedEvent>(
       WebSocketEventType.TASK_UPDATED,
@@ -84,23 +93,56 @@ export const ProjectDetail: React.FC = () => {
       }
     );
 
+    // A run moved (node done, paused, finished): refresh the project, its runs and approvals
+    const unsubWorkflow = socketClient.on<{ projectId?: string }>(
+      WebSocketEventType.WORKFLOW_STATE_CHANGED,
+      (data) => {
+        if (data?.projectId === id) {
+          queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
+          queryClient.invalidateQueries({ queryKey: approvalKeys.pending(id) });
+        }
+      }
+    );
+
+    // Budget warnings and other project notices
+    const unsubNotice = socketClient.on<{ message?: string; level?: string; severity?: string }>(
+      WebSocketEventType.SYSTEM_NOTIFICATION,
+      (data) => {
+        if (!data?.message) return;
+        const level = data.level || data.severity;
+        if (level === 'critical' || level === 'error') message.error(data.message, 8);
+        else message.warning(data.message, 6);
+        queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
+      }
+    );
+
     return () => {
       unsubTaskUpdated();
       unsubApproval();
+      unsubWorkflow();
+      unsubNotice();
+      socketClient.unsubscribeProject(id);
     };
   }, [id, queryClient]);
 
-  const respond = useCallback(async (approvalId: string, decision: 'approve' | 'reject') => {
+  const respond = useCallback(async (approvalId: string, decision: 'approve' | 'reject', comment?: string) => {
+    setSubmitting(true);
     try {
-      await respondToApproval(approvalId, decision);
+      await respondToApproval(approvalId, decision, comment);
       setWsApprovals((prev) => prev.filter((a) => a.approvalId !== approvalId));
+      setAnswered((prev) => new Set(prev).add(approvalId));
+      setReviewing(null);
+      message.success(decision === 'approve' ? 'Approved, the workflow continues' : 'Rejected, the agents rework it with your feedback');
     } catch (error) {
       message.error(approvalErrorMessage(error));
+    } finally {
+      setSubmitting(false);
     }
-    queryClient.invalidateQueries({ queryKey: approvalKeys.pending(id) });
+    queryClient.invalidateQueries({ queryKey: approvalKeys.all });
+    if (id) queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
   }, [id, queryClient]);
-  const handleApprove = useCallback((approvalId: string) => respond(approvalId, 'approve'), [respond]);
-  const handleReject = useCallback((approvalId: string) => respond(approvalId, 'reject'), [respond]);
+  const handleApprove = useCallback((approvalId: string, comment?: string) => respond(approvalId, 'approve', comment), [respond]);
+  const handleReject = useCallback((approvalId: string, comment?: string) => respond(approvalId, 'reject', comment), [respond]);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -127,6 +169,49 @@ export const ProjectDetail: React.FC = () => {
   }
 
   const workflowRuns = (project as any).workflowRuns || [];
+  const latestRun = workflowRuns[0];
+  // Same rule as the API: the owner of the project or an admin may control it
+  const canControl = hasPermission(user, Permission.WORKFLOW_CONTROL)
+    && (user?.role === 'admin' || (project as any).createdById === user?.id);
+  const canEdit = hasPermission(user, Permission.PROJECT_UPDATE)
+    && (user?.role === 'admin' || (project as any).createdById === user?.id);
+  const budget = project.budget != null ? Number(project.budget) : null;
+  const cost = Number(project.costAccrued ?? 0);
+  const overBudget = budget !== null && cost >= budget;
+  const workflowStopped = !latestRun || latestRun.status === 'failed' || latestRun.status === 'cancelled';
+
+  const changeStatus = async (status: ProjectStatus, done: string) => {
+    try {
+      await updateProject.mutateAsync({ id: project.id, status });
+      message.success(done);
+    } catch (error) {
+      message.error(apiErrorMessage(error, 'Could not change the project status'));
+    }
+  };
+  const doStartWorkflow = async () => {
+    try {
+      const result = await startWorkflow.mutateAsync(project.id);
+      if (result.workflowStarted) message.success('Workflow started');
+      else message.error(`The workflow did not start: ${result.workflowError || 'unknown error'}`);
+    } catch (error) {
+      message.error(apiErrorMessage(error, 'Could not start the workflow'));
+    }
+  };
+  const raiseBudget = async () => {
+    if (newBudget === null) return;
+    try {
+      // Raising the budget of a project the budget paused also resumes it
+      await updateProject.mutateAsync({
+        id: project.id,
+        budget: newBudget,
+        ...(project.status === ProjectStatus.PAUSED && newBudget > cost ? { status: ProjectStatus.ACTIVE } : {}),
+      } as any);
+      message.success('Budget updated');
+      setBudgetOpen(false);
+    } catch (error) {
+      message.error(apiErrorMessage(error, 'Could not update the budget'));
+    }
+  };
   const completedRun = workflowRuns.find((r: any) => r.status === 'completed');
   const latestContext = completedRun?.context?.variables || {};
 
@@ -209,14 +294,10 @@ export const ProjectDetail: React.FC = () => {
                           size="small"
                           type="text"
                           icon={<CodeOutlined />}
-                          onClick={() => {
-                            const outputTab = document.querySelector('[data-node-key="output"]') as HTMLElement;
-                            const codeSection = outputTab?.closest('.ant-tabs-tabpane-active')?.querySelector('pre');
-                            if (codeSection) codeSection.scrollIntoView({ behavior: 'smooth' });
-                          }}
+                          onClick={() => setActiveTab('artifacts')}
                           style={{ color: '#1677ff', fontSize: 11 }}
                         >
-                          View Code
+                          Open in Artifacts
                         </Button>
                       </div>
                     ))}
@@ -243,7 +324,8 @@ export const ProjectDetail: React.FC = () => {
                           const url = URL.createObjectURL(blob);
                           const a = document.createElement('a');
                           a.href = url;
-                          a.download = latestContext.filesWritten?.[0] || 'code.txt';
+                          // The block holds the code of every file together, so it is not named after one of them
+                          a.download = `${project.name.replace(/[^\w-]+/g, '-')}-code.txt`;
                           a.click();
                           URL.revokeObjectURL(url);
                         }}
@@ -307,7 +389,11 @@ export const ProjectDetail: React.FC = () => {
       children: tasksLoading ? (
         <Spin />
       ) : (
-        <KanbanBoard tasks={tasks} onTaskClick={handleTaskClick} />
+        <KanbanBoard
+          tasks={tasks}
+          onTaskClick={handleTaskClick}
+          lockedReason={latestRun?.status === 'running' ? 'The agents are working on these tasks: pause the workflow to move tasks by hand.' : undefined}
+        />
       ),
     },
     {
@@ -404,6 +490,9 @@ export const ProjectDetail: React.FC = () => {
             <Tag color={STATUS_COLORS[project.status] || '#8b949e'} style={{ fontSize: 13, marginLeft: 8 }}>
               {project.status}
             </Tag>
+            {latestRun && latestRun.status !== project.status && (
+              <Tag color={STATUS_COLORS[latestRun.status] || '#8b949e'}>workflow {latestRun.status}</Tag>
+            )}
           </Space>
           <Text style={{ color: '#8b949e', display: 'block' }}>{project.description}</Text>
           {project.goal && (
@@ -414,6 +503,87 @@ export const ProjectDetail: React.FC = () => {
           )}
         </div>
       </Space>
+
+      {(canControl || canEdit) && (
+        <Space wrap style={{ marginBottom: 16 }}>
+          {canEdit && project.status === ProjectStatus.ACTIVE && (
+            <Button icon={<PauseCircleOutlined />} loading={updateProject.isPending} onClick={() => changeStatus(ProjectStatus.PAUSED, 'Project and workflow paused')}>
+              Pause
+            </Button>
+          )}
+          {canEdit && project.status === ProjectStatus.PAUSED && (
+            <Button icon={<PlayCircleOutlined />} loading={updateProject.isPending} disabled={overBudget} onClick={() => changeStatus(ProjectStatus.ACTIVE, 'Project and workflow resumed')}>
+              Resume
+            </Button>
+          )}
+          {canControl && project.status === ProjectStatus.ACTIVE && workflowStopped && (
+            <Button type="primary" icon={<RocketOutlined />} loading={startWorkflow.isPending} onClick={doStartWorkflow}>
+              {latestRun ? 'Run workflow again' : 'Start workflow'}
+            </Button>
+          )}
+          {canEdit && (project.status === ProjectStatus.ACTIVE || project.status === ProjectStatus.PAUSED) && (
+            <Button icon={<DollarOutlined />} onClick={() => { setNewBudget(budget); setBudgetOpen(true); }}>
+              {budget === null ? 'Set budget' : 'Change budget'}
+            </Button>
+          )}
+          {canEdit && (project.status === ProjectStatus.ACTIVE || project.status === ProjectStatus.PAUSED) && (
+            <Popconfirm
+              title="Cancel this project?"
+              description="The workflow stops and pending approvals are cancelled. This cannot be undone."
+              okText="Cancel project"
+              okButtonProps={{ danger: true }}
+              cancelText="Keep it"
+              onConfirm={() => changeStatus(ProjectStatus.CANCELLED, 'Project cancelled')}
+            >
+              <Button danger icon={<StopOutlined />}>Cancel project</Button>
+            </Popconfirm>
+          )}
+        </Space>
+      )}
+
+      {overBudget && project.status !== ProjectStatus.COMPLETED && project.status !== ProjectStatus.CANCELLED && (
+        <Alert
+          type="error"
+          showIcon
+          message={`Budget used up: $${cost.toFixed(2)} of $${budget!.toFixed(2)}`}
+          description="The workflow is paused and will not start another step until the budget is raised."
+          action={canEdit ? <Button size="small" onClick={() => { setNewBudget(Math.ceil(cost * 1.5)); setBudgetOpen(true); }}>Raise budget</Button> : undefined}
+          style={{ background: '#161b22', border: '1px solid #ff4d4f55', marginBottom: 16 }}
+        />
+      )}
+
+      {project.status === ProjectStatus.ACTIVE && !latestRun && (
+        <Alert
+          type="warning"
+          showIcon
+          message="The workflow of this project has not started"
+          description={canControl ? 'Start it with the button above.' : 'Ask the project owner to start it.'}
+          style={{ background: '#161b22', border: '1px solid #faad1430', marginBottom: 16 }}
+        />
+      )}
+
+      <Modal
+        title="Project budget"
+        open={budgetOpen}
+        onCancel={() => setBudgetOpen(false)}
+        onOk={raiseBudget}
+        okText="Save"
+        confirmLoading={updateProject.isPending}
+      >
+        <Text style={{ color: '#8b949e', display: 'block', marginBottom: 8 }}>
+          Spent so far: ${cost.toFixed(2)}{project.status === ProjectStatus.PAUSED ? '. A budget above that resumes the workflow.' : ''}
+        </Text>
+        <InputNumber prefix="$" min={1} precision={2} value={newBudget ?? undefined} onChange={v => setNewBudget(typeof v === 'number' ? v : null)} style={{ width: '100%' }} />
+      </Modal>
+
+      <ApprovalModal
+        approval={reviewing}
+        open={!!reviewing}
+        submitting={submitting}
+        onClose={() => setReviewing(null)}
+        onApprove={handleApprove}
+        onReject={handleReject}
+      />
 
       {pendingApprovals.length > 0 && (
         <Alert
@@ -433,28 +603,12 @@ export const ProjectDetail: React.FC = () => {
                     <Text style={{ color: '#faad14', fontSize: 12 }}>
                       {a.approvalType} — needs human sign-off
                     </Text>
-                    <Text style={{ color: '#8b949e', fontSize: 11, fontFamily: 'monospace' }}>
-                      {JSON.stringify(a.requestData).slice(0, 120)}
+                    <Text style={{ color: '#c9d1d9', fontSize: 13 }}>
+                      {approvalSummary(a.requestData).message}
                     </Text>
-                    <Space>
-                      <Button
-                        size="small"
-                        type="primary"
-                        icon={<CheckCircleOutlined />}
-                        onClick={() => handleApprove(a.approvalId)}
-                        style={{ background: '#52c41a', borderColor: '#52c41a' }}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="small"
-                        danger
-                        icon={<CloseCircleOutlined />}
-                        onClick={() => handleReject(a.approvalId)}
-                      >
-                        Reject
-                      </Button>
-                    </Space>
+                    <Button size="small" type="primary" icon={<FileTextOutlined />} onClick={() => setReviewing(a)}>
+                      Review and decide
+                    </Button>
                   </Space>
                 </Card>
               ))}
@@ -466,7 +620,8 @@ export const ProjectDetail: React.FC = () => {
 
       <Tabs
         items={tabItems}
-        defaultActiveKey={project.status === 'completed' ? 'output' : 'kanban'}
+        activeKey={activeTab ?? (project.status === 'completed' ? 'output' : latestRun ? 'workflow' : 'kanban')}
+        onChange={setActiveTab}
         style={{ color: '#e6edf3' }}
       />
 

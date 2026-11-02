@@ -1,7 +1,15 @@
-jest.mock('../workflow/workflow.engine', () => ({ WorkflowEngine: class {} }));
+jest.mock('../workflow/workflow.engine', () => ({
+  WorkflowEngine: class {},
+  WorkflowBlockedError: class extends Error {
+    constructor(readonly reason: string, message: string) {
+      super(message);
+    }
+  },
+}));
 jest.mock('../workflow/workflow-definition.service', () => ({ WorkflowDefinitionService: class {} }));
 
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { WorkflowBlockedError } from '../workflow/workflow.engine';
 import { ProjectApplicationService } from './project-application.service';
 import { ProjectDTO } from '../../domain/repositories';
 import { ProjectCreatedEvent } from '../../domain/events/ProjectCreatedEvent';
@@ -41,7 +49,13 @@ describe('ProjectApplicationService', () => {
       delete: jest.fn(),
     };
     eventBus = { publish: jest.fn().mockResolvedValue(undefined) };
-    workflowEngine = { startWorkflow: jest.fn().mockResolvedValue('run-1') };
+    workflowEngine = {
+      startWorkflow: jest.fn().mockResolvedValue('run-1'),
+      latestRun: jest.fn().mockResolvedValue(null),
+      pauseWorkflow: jest.fn().mockResolvedValue(undefined),
+      resumeWorkflow: jest.fn().mockResolvedValue(undefined),
+      cancelWorkflow: jest.fn().mockResolvedValue(undefined),
+    };
     workflowDefinitionService = { getDefaultWorkflowDefinition: jest.fn(() => ({ id: 'default' })) };
     service = new ProjectApplicationService(repository, eventBus, workflowEngine, workflowDefinitionService);
   });
@@ -115,7 +129,7 @@ describe('ProjectApplicationService', () => {
       expect(repository.create).not.toHaveBeenCalled();
     });
 
-    it('still returns the project when the workflow fails to start', async () => {
+    it('still returns the project when the workflow fails to start, and says so', async () => {
       workflowEngine.startWorkflow.mockRejectedValue(new Error('redis down'));
       const result = await service.createProject({
         name: 'Todo App',
@@ -124,6 +138,22 @@ describe('ProjectApplicationService', () => {
         createdById: 'user-1',
       });
       expect(result.id).toBeDefined();
+      expect(result).toEqual(expect.objectContaining({ workflowStarted: false, workflowError: 'redis down' }));
+    });
+  });
+
+  describe('startProjectWorkflow', () => {
+    it('starts the workflow again when the last run failed', async () => {
+      repository.findById.mockResolvedValue(projectDto());
+      workflowEngine.latestRun.mockResolvedValue({ id: 'run-0', status: 'failed' });
+      await expect(service.startProjectWorkflow('project-1')).resolves.toEqual({ workflowStarted: true });
+      expect(workflowEngine.startWorkflow).toHaveBeenCalled();
+    });
+
+    it('refuses while a run is still going', async () => {
+      repository.findById.mockResolvedValue(projectDto());
+      workflowEngine.latestRun.mockResolvedValue({ id: 'run-0', status: 'running' });
+      await expect(service.startProjectWorkflow('project-1')).rejects.toThrow(ConflictException);
     });
   });
 
@@ -132,6 +162,35 @@ describe('ProjectApplicationService', () => {
       repository.findById.mockResolvedValue(projectDto());
       await service.updateProject('project-1', { status: 'paused' });
       expect(repository.update).toHaveBeenCalledWith('project-1', expect.objectContaining({ status: 'paused' }));
+    });
+
+    it('pauses the running workflow with the project', async () => {
+      repository.findById.mockResolvedValue(projectDto());
+      workflowEngine.latestRun.mockResolvedValue({ id: 'run-1', status: 'running' });
+      await service.updateProject('project-1', { status: 'paused' });
+      expect(workflowEngine.pauseWorkflow).toHaveBeenCalledWith('run-1');
+    });
+
+    it('resumes the paused workflow with the project', async () => {
+      repository.findById.mockResolvedValue(projectDto({ status: 'paused' }));
+      workflowEngine.latestRun.mockResolvedValue({ id: 'run-1', status: 'paused' });
+      await service.updateProject('project-1', { status: 'active' });
+      expect(workflowEngine.resumeWorkflow).toHaveBeenCalledWith('run-1');
+    });
+
+    it('keeps the project paused when the run may not resume (budget used up)', async () => {
+      repository.findById.mockResolvedValue(projectDto({ status: 'paused' }));
+      workflowEngine.latestRun.mockResolvedValue({ id: 'run-1', status: 'paused' });
+      workflowEngine.resumeWorkflow.mockRejectedValue(new (WorkflowBlockedError as any)('budget_exceeded', 'Project budget exceeded'));
+      await expect(service.updateProject('project-1', { status: 'active' })).rejects.toThrow(BadRequestException);
+      expect(repository.update).toHaveBeenLastCalledWith('project-1', { status: 'paused' });
+    });
+
+    it('stops the workflow when the project is cancelled', async () => {
+      repository.findById.mockResolvedValue(projectDto());
+      workflowEngine.latestRun.mockResolvedValue({ id: 'run-1', status: 'paused' });
+      await service.updateProject('project-1', { status: 'cancelled' });
+      expect(workflowEngine.cancelWorkflow).toHaveBeenCalledWith('run-1', 'Project cancelled');
     });
 
     it('refuses an invalid transition', async () => {
@@ -148,6 +207,16 @@ describe('ProjectApplicationService', () => {
     it('returns 404 for an unknown project', async () => {
       repository.findById.mockResolvedValue(null);
       await expect(service.updateProject('missing', { name: 'New name' })).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('deleteProject', () => {
+    it('stops the running workflow before deleting', async () => {
+      repository.findById.mockResolvedValue(projectDto());
+      workflowEngine.latestRun.mockResolvedValue({ id: 'run-1', status: 'running' });
+      await service.deleteProject('project-1');
+      expect(workflowEngine.cancelWorkflow).toHaveBeenCalledWith('run-1', 'Project deleted');
+      expect(repository.delete).toHaveBeenCalledWith('project-1');
     });
   });
 

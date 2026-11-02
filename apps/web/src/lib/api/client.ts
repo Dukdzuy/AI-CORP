@@ -27,9 +27,10 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Auto logout if 401 Unauthorized
-      useAuthStore.getState().logout();
+    // An expired or revoked sign-in: back to the sign-in page, which says why and returns here.
+    // A 401 from /auth/login itself is a wrong password, not an expired session.
+    if (error.response?.status === 401 && !String(error.config?.url || '').includes('/auth/login')) {
+      useAuthStore.getState().expireSession(window.location.pathname + window.location.search);
     }
     return Promise.reject(error);
   }

@@ -15,8 +15,8 @@ export class ApprovalsController {
 
   @Get()
   @RequirePermission(Permission.PROJECT_READ)
-  async listPendingApprovals(@Req() req: any, @Query('projectId') projectId?: string) {
-    return this.approvalService.listPendingApprovals(req.user.id, projectId);
+  async listPendingApprovals(@CurrentPrincipal() principal: Principal, @Query('projectId') projectId?: string) {
+    return this.approvalService.listPendingApprovals(principal.user.id, projectId, principal.isAdmin());
   }
 
   @Post(':id/approve')

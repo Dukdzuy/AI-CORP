@@ -36,3 +36,23 @@ export function corsOrigins(env: Env = process.env): string[] | true {
 export function swaggerEnabled(env: Env = process.env): boolean {
   return (env.ENABLE_SWAGGER ?? 'true').toLowerCase() !== 'false';
 }
+
+/**
+ * Role a self-registered account gets. Defaults to viewer: anyone who can reach the API can
+ * register, and board_member may start workflows that spend LLM budget. An admin promotes users
+ * on the Users page. SIGNUP_ROLE=board_member restores the old behaviour (local demos).
+ */
+export function signupRole(env: Record<string, string | undefined> = process.env): 'viewer' | 'board_member' {
+  return env.SIGNUP_ROLE === 'board_member' ? 'board_member' : 'viewer';
+}
+
+/** ALLOW_REGISTRATION=false turns POST /auth/register off (accounts are made by an admin) */
+export function registrationAllowed(env: Record<string, string | undefined> = process.env): boolean {
+  return env.ALLOW_REGISTRATION !== 'false';
+}
+
+/** Lifetime of a sign-in token in seconds: JWT_EXPIRATION, default 8 hours (a working day) */
+export function jwtExpirationSeconds(env: Record<string, string | undefined> = process.env): number {
+  const seconds = parseInt(env.JWT_EXPIRATION || '', 10);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 8 * 60 * 60;
+}

@@ -19,6 +19,19 @@ export interface ProjectDTO {
   createdById: string;
   createdAt: Date;
   updatedAt: Date;
+  /** Latest top-level workflow run; set by findAll for the project list's progress */
+  latestRun?: ProjectRunSummary | null;
+}
+
+export interface ProjectRunSummary {
+  id: string;
+  status: string;
+  currentNodeId: string | null;
+  workflowDefId: string;
+  workflowDefVersion: string | null;
+  /** Position of currentNodeId in the run's definition (filled in by the application service) */
+  nodeIndex?: number;
+  nodeCount?: number;
 }
 
 export interface CreateProjectData {

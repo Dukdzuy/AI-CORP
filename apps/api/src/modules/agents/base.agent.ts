@@ -221,6 +221,7 @@ export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDe
   /** Emit an agent thinking event to the project room and to the Virtual Office */
   protected emitThinking(projectId: string, taskId: string, thought: string) {
     const event: AgentThinkingEvent = {
+      projectId,
       agentId: this.getId(),
       agentRole: this.getRole(),
       taskId,
@@ -232,7 +233,8 @@ export abstract class BaseAgent<TOutput = unknown> implements IAgent, OnModuleDe
 
   /** Emit a state change via AgentEventEmitter (observers) and WebSocket (UI) */
   protected emitStateChanged(previousState: AgentState, currentState: AgentState, projectId: string, reason?: string) {
-    const event: StateChangedEvent = {
+    const event: StateChangedEvent & { projectId: string } = {
+      projectId,
       agentId: this.getId(),
       agentRole: this.getRole(),
       previousState,
