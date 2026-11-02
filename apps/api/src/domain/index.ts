@@ -45,3 +45,6 @@ export * from './security';
 export * from './audit';
 export * from './integration';
 export * from './reporting';
+
+// LLM providers configured from the web app
+export * from './llm';

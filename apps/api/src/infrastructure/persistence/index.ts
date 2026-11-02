@@ -13,3 +13,4 @@ export * from './PrismaApprovalRepository';
 export * from './PrismaAuditLogRepository';
 export * from './PrismaApiKeyRepository';
 export * from './PrismaWebhookRepository';
+export * from './PrismaLlmProviderRepository';

@@ -434,3 +434,37 @@ model ProjectEstimate {
 
   @@index([projectId, createdAt])
 }
+
+// ============================================================================
+// LLM providers & models configured from the web app
+// ============================================================================
+
+// apiKeyEncrypted is AES-256-GCM (LLM_SECRET_KEY); the API never returns it
+model LlmProvider {
+  id              String     @id @default(uuid())
+  name            String     @unique
+  kind            String     // openai-compatible | anthropic
+  baseUrl         String?
+  apiKeyEncrypted String?
+  apiKeyLast4     String?
+  isEnabled       Boolean    @default(true)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  models          LlmModel[]
+}
+
+model LlmModel {
+  id          String      @id @default(uuid())
+  providerId  String
+  modelId     String      // id sent to the provider, e.g. "gpt-4o"
+  displayName String
+  category    String      @default("general")
+  isEnabled   Boolean     @default(true)
+  source      String      @default("manual") // manual | synced
+  createdAt   DateTime    @default(now())
+
+  provider    LlmProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, modelId])
+}
