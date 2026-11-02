@@ -55,6 +55,8 @@ export interface MemoryMetadata {
 export interface ModelRouteConfig {
   provider: string;
   model: string;
+  /** a provider configured in the app (LlmProvider row); when set it takes precedence over `provider` */
+  providerId?: string;
   fallbackProvider?: string;
   tags?: string[];
 }
