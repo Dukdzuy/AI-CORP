@@ -15,7 +15,7 @@ Nền tảng gồm một máy chủ API (NestJS, TypeScript) và một ứng d�
 | Miền (`src/domain`) | Thực thể, value object, aggregate, sự kiện miền, máy trạng thái, giao diện Repository và các cổng (port), chính sách thuần (không I/O) | Không gì cả |
 | Hạ tầng | Repository Prisma, nhà cung cấp LLM, sandbox Docker, kho tệp của dự án, phân tích mã TypeScript, xuất PDF | Miền (hiện thực các cổng) |
 
-Tầng miền có 101 tệp và không nhập NestJS, Prisma hay bất kỳ thư viện I/O nào. Nhờ đó mọi quy tắc nghiệp vụ (chuyển trạng thái công việc, phép tính tiền, phát hiện bất thường, hồi quy dự báo, chính sách chất lượng mã) được kiểm thử như hàm thuần, và đây cũng là nơi đặt ngưỡng độ bao phủ cao nhất (mục 6.2).
+Tầng miền có 106 tệp và không nhập NestJS, Prisma hay bất kỳ thư viện I/O nào. Nhờ đó mọi quy tắc nghiệp vụ (chuyển trạng thái công việc, phép tính tiền, phát hiện bất thường, hồi quy dự báo, chính sách chất lượng mã) được kiểm thử như hàm thuần, và đây cũng là nơi đặt ngưỡng độ bao phủ cao nhất (mục 6.2).
 
 ![Sơ đồ thành phần](../diagrams/rendered/architecture/component-diagram.svg){.wide}
 
