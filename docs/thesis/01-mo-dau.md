@@ -35,7 +35,7 @@ Phạm vi được giới hạn có chủ đích:
 
 ## Đóng góp
 
-1. **Một kiến trúc tham chiếu cho hệ đa tác tử dùng LLM theo OOAD**: tầng miền độc lập framework (101 tệp), tác tử là Template Method cộng hai Strategy, máy trạng thái cho tác tử, công việc và quy trình, sự kiện miền cho giao tiếp giữa các mô-đun, Repository và cổng (port) cho mọi phụ thuộc hạ tầng.
+1. **Một kiến trúc tham chiếu cho hệ đa tác tử dùng LLM theo OOAD**: tầng miền độc lập framework (106 tệp), tác tử là Template Method cộng hai Strategy, máy trạng thái cho tác tử, công việc và quy trình, sự kiện miền cho giao tiếp giữa các mô-đun, Repository và cổng (port) cho mọi phụ thuộc hạ tầng.
 2. **OOAD áp dụng cho sản phẩm của tác tử**: chuỗi use case → mô hình miền → UML → mã phân lớp → kiểm thử chấp nhận → ma trận truy vết, với cổng chất lượng OOAD, phân tích tĩnh có kiểm tra vi phạm phân lớp và một vòng tự sửa có giới hạn chi phí.
 3. **Bộ máy quy trình có quy trình con (Composite), phiên bản bất biến, ảnh chụp và khôi phục (Memento), nhánh song song có phụ thuộc** và các mẫu quy trình có kiểu.
 4. **Đánh giá trung thực**: phân tích hiệu năng tác tử theo tiêu chí riêng của từng vai trò, mô hình dự báo đánh giá bằng sai số leave-one-out, dự đoán phán quyết QA được so với phán quyết thật, cùng các lần chạy đầu-cuối có lưu vết.
