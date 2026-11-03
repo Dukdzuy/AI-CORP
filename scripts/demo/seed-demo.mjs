@@ -35,11 +35,10 @@ const login = async ({ email, password }) => ok(await call('POST', '/auth/login'
 async function account(admin, name, email, role) {
   const r = await call('POST', '/auth/register', { body: { name, email, password: DEMO_PASSWORD } });
   if (r.status !== 201 && r.status !== 409) throw new Error(`register ${email}: ${r.status} ${JSON.stringify(r.data)}`);
-  if (role !== 'board_member') {
-    const users = ok(await call('GET', '/users', { token: admin }), 'users');
-    const user = users.find((u) => u.email === email);
-    if (user.role !== role) ok(await call('PATCH', `/users/${user.id}/role`, { token: admin, body: { role } }), `role ${email}`);
-  }
+  // Self-registration grants SIGNUP_ROLE (viewer by default), so the admin sets the role
+  const users = ok(await call('GET', '/users', { token: admin }), 'users');
+  const user = users.find((u) => u.email === email);
+  if (user.role !== role) ok(await call('PATCH', `/users/${user.id}/role`, { token: admin, body: { role } }), `role ${email}`);
   return { email, password: DEMO_PASSWORD, role };
 }
 

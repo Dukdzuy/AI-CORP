@@ -17,16 +17,16 @@ LLM kịch bản là lựa chọn có chủ đích: nó trả lời theo nội d
 
 | Bộ kiểm thử | Kết quả |
 |-------------|---------|
-| API (Jest) | 47 bộ, **674 đạt**, 15 bỏ qua (cần Docker daemon cho sandbox), 0 thất bại |
-| Web (Vitest) | 41 đạt |
+| API (Jest) | 50 bộ, **707 đạt**, 15 bỏ qua (cần Docker daemon cho sandbox), 0 thất bại |
+| Web (Vitest) | 44 đạt |
 | Biên dịch | `nest build` 0 lỗi; `tsc --noEmit` của web 0 lỗi; `vite build` thành công |
 
 Ngưỡng độ bao phủ được đặt trong cấu hình Jest, nên lệnh `npm run test:cov` thất bại nếu không đạt:
 
 | Phạm vi | Dòng | Lệnh | Hàm | Nhánh | Ngưỡng (dòng/lệnh/hàm/nhánh) |
 |---------|-----:|-----:|----:|------:|------------------------------|
-| Tầng miền (`src/domain`) | **97,1%** | **96,6%** | **97,2%** | **89,6%** | 90 / 90 / 90 / 85 |
-| Toàn API | 77,0% | 77,2% | 75,2% | 63,7% | sàn 70 / 70 / 64 / 55 |
+| Tầng miền (`src/domain`) | **97,1%** | **96,2%** | **97,0%** | **88,1%** | 90 / 90 / 90 / 85 |
+| Toàn API | 77,8% | 77,7% | 74,4% | 63,5% | sàn 70 / 70 / 64 / 55 |
 
 Lý do đặt 90% trên tầng miền thay vì toàn bộ: tầng miền chứa các quy tắc nghiệp vụ, còn controller và phần nối NestJS chủ yếu là mã khung; ép 90% trên chúng sẽ dẫn tới kiểm thử chính framework. Toàn API vẫn có ngưỡng sàn để độ bao phủ không giảm.
 
@@ -36,7 +36,7 @@ Ba lần chạy đầu-cuối chính, mỗi lần trên một cơ sở dữ li�
 
 | Lần chạy | Nội dung | Kết quả |
 |----------|----------|---------|
-| Triển khai và trình diễn | Cấu hình production qua nginx, dữ liệu trình diễn, phân quyền, phê duyệt, xuất PDF, phân tích, kiểm toán | **21/21** |
+| Triển khai và trình diễn | Cấu hình production qua nginx, dữ liệu trình diễn, phân quyền, phê duyệt, xuất PDF, phân tích, kiểm toán, nhà cung cấp LLM | **24/24** |
 | Phân tích, dự báo, chất lượng mã | 8 dự án qua toàn bộ quy trình OOAD rồi 3 lượt chạy khi mô hình của Marketing ngừng hoạt động; bộ nhận webhook thật | **21/21** |
 | Bảo mật, kiểm toán, tích hợp | Vai trò và quyền, nhật ký kiểm toán, khoá API, giới hạn tần suất, webhook ký HMAC, xuất dữ liệu, báo cáo | **44/44** |
 
@@ -44,12 +44,13 @@ Ngoài ra có các lần chạy cho bộ máy quy trình (quy trình con, ghim p
 
 Lần chạy triển khai kiểm tra những điều mà kiểm thử đơn vị không thấy được:
 
-- `prisma migrate deploy` dựng đúng lược đồ trên cơ sở dữ liệu trống, và lược đồ sau đó **không lệch** so với mô hình (`prisma migrate diff --exit-code` trả 0).
+- `prisma migrate deploy` dựng đúng lược đồ trên cơ sở dữ liệu trống (ba migration, gồm migration của bảng nhà cung cấp LLM), và lược đồ sau đó **không lệch** so với mô hình (`prisma migrate diff --exit-code` trả 0).
 - API ở chế độ production từ chối khởi động với cấu hình sai: thiếu `JWT_SECRET` và `CORS_ORIGIN`, khoá LLM là `CHANGE_ME` → thoát với mã 1 và thông báo nêu đủ ba lỗi.
 - Qua nginx: kiểm tra sức khoẻ báo cơ sở dữ liệu, Redis và cổng LLM đều *healthy*; khi dừng PostgreSQL, `/api/health` trả **503** còn `/api/health/live` vẫn 200; khởi động lại thì trở về 200.
 - Swagger tắt khi `ENABLE_SWAGGER=false`; CORS chỉ trả header cho nguồn gốc được cấu hình.
 - WebSocket qua nginx chấp nhận token đăng nhập và ngắt kết nối token giả.
 - Người xem không tạo được dự án, không duyệt được qua REST **và không duyệt được qua WebSocket** (lỗ hổng được phát hiện và sửa trong lần chạy này, mục 6.9).
+- Một phê duyệt chỉ được trả lời một lần: câu trả lời thứ hai nhận 409. Tài khoản tự đăng ký nhận vai trò người xem. Cổng LLM trong cấu hình được nhập thành nhà cung cấp đầu tiên (19 mô hình) và API không trả khoá của nó.
 - Sau khi thành viên hội đồng duyệt, CEO đóng dự án; nhật ký kiểm toán có `auth.login`, `project.create`, `approval.requested`, `approval.approve`, `access.denied`, `quality.gate.evaluated`, `workflow.completed`.
 
 ![Phê duyệt đang chờ trên dự án Clinic Booking](../phase7-e2e/demo-approval.png){.wide}
@@ -60,32 +61,32 @@ Yêu cầu phi chức năng đặt ra là mỗi nút quy trình xử lý trong 2
 
 | Vai trò | Số bước | p50 (ms) | p95 (ms) | Lớn nhất (ms) |
 |---------|--------:|---------:|---------:|--------------:|
-| CEO | 10 | 77 | 90 | 92 |
-| BA | 5 | 100 | 109 | 109 |
-| Architect | 5 | 562 | 580 | 582 |
-| PM | 4 | 96 | 105 | 106 |
-| DEV | 5 | 603 | 630 | 631 |
-| QC | 5 | 1 688 | 1 744 | 1 756 |
-| QA | 5 | 253 | 269 | 272 |
-| Marketing | 4 | 71 | 79 | 80 |
-| **Tất cả** | **43** | **108** | **1 687** | p99: **1 731** |
+| CEO | 10 | 75 | 100 | 100 |
+| BA | 5 | 107 | 121 | 121 |
+| Architect | 5 | 582 | 607 | 607 |
+| PM | 4 | 105 | 110 | 110 |
+| DEV | 5 | 614 | 632 | 632 |
+| QC | 5 | 1 642 | 1 726 | 1 726 |
+| QA | 5 | 259 | 279 | 279 |
+| Marketing | 4 | 75 | 81 | 81 |
+| **Tất cả** | **43** | **110** | **1 642** | p99: **1 726** |
 
-Mọi nút đều dưới 2 giây. Nút chậm nhất là QC vì nó thực sự chạy bộ kiểm thử Jest của dự án sinh ra; Architect và DEV chậm hơn các vai trò khác vì ghi nhiều tệp và chạy phân tích tĩnh.
+Mọi nút đều dưới 2 giây; kết quả gần như trùng với lần đo trước khi bộ máy được thêm bước kiểm tra ngân sách trước mỗi nút (p50 108 ms, p95 1 687 ms), nên bước kiểm tra này không làm chậm đáng kể. Nút chậm nhất là QC vì nó thực sự chạy bộ kiểm thử Jest của dự án sinh ra; Architect và DEV chậm hơn các vai trò khác vì ghi nhiều tệp và chạy phân tích tĩnh.
 
 ## Hiệu năng dưới tải
 
-Kiểm thử tải dùng một script không phụ thuộc thư viện, mô phỏng người dùng bảng điều khiển (xem danh sách và chi tiết dự án, công việc, báo cáo chi phí, phân tích tác tử, dự báo, chất lượng mã), có ngân sách p50/p95/p99 cho từng endpoint (100/500/1000 ms mặc định, 300/1500/3000 ms cho phân tích, dự báo và chất lượng mã) và tỉ lệ lỗi tối đa 1%. Môi trường: một tiến trình API, PostgreSQL và Redis trên một máy 4 lõi dùng chung với bộ sinh tải và LLM kịch bản.
+Kiểm thử tải dùng một script không phụ thuộc thư viện, mô phỏng người dùng bảng điều khiển (xem danh sách và chi tiết dự án, công việc, báo cáo chi phí, phân tích tác tử, dự báo, chất lượng mã), có ngân sách p50/p95/p99 cho từng endpoint (100/500/1000 ms mặc định, 300/1500/3000 ms cho phân tích, dự báo và chất lượng mã, 500/2000/3000 ms cho tạo dự án) và tỉ lệ lỗi tối đa 1%. Môi trường: một tiến trình API ở chế độ production, PostgreSQL và Redis trên một máy 4 lõi dùng chung với bộ sinh tải và LLM kịch bản; cơ sở dữ liệu bắt đầu từ dữ liệu trình diễn (5 dự án) và lớn dần khi các kịch bản tạo dự án.
 
 | Kịch bản | Yêu cầu/giây | Lỗi | Kết quả theo ngân sách |
 |----------|-------------:|----:|------------------------|
-| 1 người dùng | 80,6 | 0% | Mọi endpoint trong ngân sách; p50 từ 5 đến 39 ms |
-| 20 người dùng, chỉ đọc | **201,8** | 0% | Mọi endpoint trong ngân sách trừ báo cáo chi phí (p50 102 ms, vượt 2 ms); p95 cao nhất 404 ms |
-| 20 người dùng, đồng thời tạo 40 dự án | 153,2 | 0% | p95, p99 đều trong ngân sách; tạo dự án p50 330 ms, p99 622 ms |
-| 50 người dùng, tạo dự án | 178,3 | 0% | Bão hoà: p50 ~ 230–360 ms, mọi p99 dưới 1,6 s |
+| 1 người dùng | 184,7 | 0% | Mọi endpoint trong ngân sách; p50 từ 3 đến 7 ms |
+| 20 người dùng, chỉ đọc | **604,8** | 0% | Mọi endpoint trong ngân sách; p95 cao nhất 84 ms |
+| 20 người dùng, đồng thời tạo 111 dự án | 430,7 | 0% | Mọi endpoint trong ngân sách; tạo dự án p50 107 ms, p99 177 ms |
+| 50 người dùng, tạo 48 dự án | 407,2 | 0% | Bão hoà: p50 77–312 ms, năm endpoint vượt ngân sách p50 100 ms; mọi p99 dưới 0,7 s |
 
-Ở 50 người dùng, một tiến trình đã bão hoà ở khoảng 178 yêu cầu/giây, nên theo định luật Little [41] mỗi yêu cầu chờ khoảng 50 / 178 ≈ 280 ms; đây là giới hạn của một tiến trình chứ không phải của truy vấn. API không giữ trạng thái (lượt chạy được điều phối qua BullMQ và PostgreSQL), nên mở rộng là chạy thêm tiến trình.
+Ở 50 người dùng, một tiến trình đã bão hoà ở khoảng 407 yêu cầu/giây, nên theo định luật Little [41] mỗi yêu cầu chờ khoảng 50 / 407 ≈ 123 ms; đây là giới hạn của một tiến trình chứ không phải của truy vấn. API không giữ trạng thái (lượt chạy được điều phối qua BullMQ và PostgreSQL), nên mở rộng là chạy thêm tiến trình.
 
-Kiểm thử tải đã tìm ra ba lỗi hiệu năng (mục 6.9); sau khi sửa, thông lượng ở kịch bản bão hoà tăng từ 98,8 lên 178 yêu cầu/giây, và endpoint chất lượng mã giảm p50 từ 3,1 s xuống 196 ms.
+Lần đo trước, trên một cơ sở dữ liệu khoảng 120 dự án, cho 201,8 yêu cầu/giây với 20 người dùng và bão hoà ở 178 yêu cầu/giây. Hai lần đo không so sánh trực tiếp được vì cỡ dữ liệu khác nhau, nên luận văn không coi chênh lệch là mức cải thiện. Điều so sánh được là kết quả theo ngân sách: ở cả hai lần, mọi endpoint với 20 người dùng nằm trong hoặc sát ngân sách và không có lỗi. Lần đo trước tìm ra ba lỗi hiệu năng (mục 6.9); sau khi sửa, endpoint chất lượng mã giảm p50 từ 3,1 s xuống 196 ms trong cùng kịch bản.
 
 ## Độ chính xác của dự báo
 
@@ -124,18 +125,21 @@ Năm dự án trình diễn được dựng qua API công khai như người dù
 
 Cả năm dự án được tạo và chạy xong trong khoảng 25 giây với LLM kịch bản.
 
-## Lỗi phát hiện nhờ kiểm thử
+## Lỗi phát hiện nhờ kiểm thử và rà soát
 
-Một kết quả quan trọng của việc kiểm thử trên hạ tầng thật là các lỗi được tìm ra và sửa. Bảng sau tóm tắt theo nhóm (danh sách đầy đủ kèm cách sửa nằm trong kế hoạch dự án của kho mã).
+Một kết quả quan trọng của việc kiểm thử trên hạ tầng thật là các lỗi được tìm ra và sửa. Ngoài kiểm thử tự động, hai nguồn khác đã tìm ra lỗi: một đợt **rà soát mã có hệ thống phần giao diện và logic**, đọc từng màn hình và đối chiếu với API mà nó gọi, và việc **cài đặt mới từ mã nguồn** trên một máy khác. Bảng sau tóm tắt theo nhóm (danh sách đầy đủ kèm cách sửa nằm trong kế hoạch dự án và lịch sử thay đổi của kho mã).
 
-| Nhóm | Ví dụ tiêu biểu | Số lỗi |
-|------|-----------------|-------:|
-| Không khởi động / không chạy được | API không khởi động vì hai chiến lược có tham số hàm tạo mà DI không giải được; migration thiếu 8 bảng; nginx bỏ tiền tố `/api` và không chuyển tiếp WebSocket; Dockerfile chạy tệp không tồn tại | 5 |
-| Bảo mật | Duyệt qua WebSocket bỏ qua quyền, người được giao và kiểm toán; ba giá trị dự phòng khác nhau cho khoá JWT; cấu hình production thiếu bí mật vẫn khởi động | 3 |
-| Thiết kế OOAD không được dùng | 4/8 tác tử vẫn chạy luồng cũ nên chiến lược là mã chết; cổng chất lượng không được đăng ký; sản phẩm của tác tử mất sau mỗi lệnh sandbox; quy trình lập kế hoạch trước khi có yêu cầu | 6 |
-| Tính đúng của quy trình và trạng thái | Một máy trạng thái cho mỗi vai trò; nút thất bại để lượt chạy `running` mãi; chuyển trạng thái Kanban không hợp lệ; đóng dự án tạo mốc trùng; `getCostVariance` ném ngoại lệ | 8 |
-| Chi phí và sự kiện | Chi phí LLM của 4 vai trò không được ghi; vượt ngân sách không tạm dừng quy trình; không có sự kiện `approval.requested` và `workflow.failed` | 4 |
-| Hiệu năng | Phân tích lại mọi tệp ở mỗi yêu cầu (3,1 s); danh sách dự án tải JSON không dùng; bốn truy vấn tuần tự | 3 |
-| Tài liệu và giao diện | 12/39 sơ đồ UML không render được do lỗi cú pháp; thẻ dự án luôn "0%"; số chi phí chưa làm tròn | 3 |
+| Nhóm | Ví dụ tiêu biểu | Kiểm thử | Rà soát | Cài đặt mới | Tổng |
+|---------------|-------------------------------------------------------------|--------:|--------:|--------:|------:|
+| Không khởi động / không chạy được | API không khởi động vì hai chiến lược có tham số hàm tạo mà DI không giải được; migration thiếu 8 bảng; nginx bỏ tiền tố `/api`; pnpm 8.0 lỗi trên Node 20; một bản clone mới không build ra `shared-types`; script dữ liệu trình diễn hỏng khi đăng ký mặc định thành người xem | 6 | 0 | 4 | 10 |
+| Bảo mật | Duyệt qua WebSocket bỏ qua quyền và kiểm toán; ba giá trị dự phòng khác nhau cho khoá JWT; tự đăng ký nhận quyền thành viên hội đồng; một phê duyệt trả lời được hai lần; sửa công việc không kiểm tra chủ dự án | 3 | 3 | 0 | 6 |
+| Thiết kế OOAD không được dùng | 4/8 tác tử vẫn chạy luồng cũ nên chiến lược là mã chết; cổng chất lượng không được đăng ký; sản phẩm của tác tử mất sau mỗi lệnh sandbox; quy trình lập kế hoạch trước khi có yêu cầu | 6 | 0 | 0 | 6 |
+| Tính đúng của quy trình và trạng thái | Một máy trạng thái cho mỗi vai trò; nút thất bại để lượt chạy `running` mãi; *Pause* chỉ đổi trạng thái dự án; *Resume* ở bước phê duyệt tạo phê duyệt trùng; dự án đã huỷ bị đánh dấu hoàn tất; lý do từ chối không đến được tác tử | 8 | 6 | 0 | 14 |
+| Chi phí và sự kiện | Chi phí LLM của 4 vai trò không được ghi; nút vẫn bắt đầu khi ngân sách đã hết; cộng chi phí kiểu đọc rồi ghi bị mất cập nhật khi đồng thời; không có sự kiện `approval.requested` và `workflow.failed` | 4 | 3 | 0 | 7 |
+| Hiệu năng | Phân tích lại mọi tệp ở mỗi yêu cầu (3,1 s); danh sách dự án tải JSON không dùng; bốn truy vấn tuần tự | 3 | 0 | 0 | 3 |
+| Tài liệu và giao diện | 12/39 sơ đồ UML không render được; thẻ dự án luôn "0%"; trang dự án tham gia phòng WebSocket sai payload nên không nhận sự kiện thời gian thực | 3 | 1 | 0 | 4 |
+| **Tổng** | | **33** | **13** | **4** | **50** |
+
+Mười ba lỗi do rà soát tìm ra đều nằm ở những đường mà kiểm thử tự động không đi qua: các kiểm thử đầu-cuối chạy quy trình từ đầu đến cuối, nhưng không tạm dừng rồi tiếp tục, không trả lời một phê duyệt hai lần, không chạy hai lần cộng chi phí cùng lúc. Sau khi sửa, mỗi lỗi có một kiểm thử đơn vị riêng (`run-control.spec.ts`, `approval-and-signup.spec.ts`), và ba hành vi được thêm vào lần chạy đầu-cuối triển khai (phê duyệt trả lời một lần, đăng ký nhận quyền xem, khoá nhà cung cấp không bị trả về). Chính lần chạy lại đó phát hiện script dữ liệu trình diễn còn giả định tài khoản tự đăng ký là thành viên hội đồng.
 
 Lỗ hổng phê duyệt qua WebSocket đáng chú ý vì mọi kiểm thử trước đó đều đi qua REST. Nó chỉ lộ ra khi kiểm thử đi theo đúng đường mà giao diện dùng: người xem nhận 403 từ `POST /api/approvals/:id/approve`, nhưng gửi thông điệp `human:approval_response` qua WebSocket thì phê duyệt được chấp nhận, dự án được đóng, và không có mục kiểm toán nào. Bài học thiết kế là mọi đường ghi phải đi qua cùng một điểm kiểm soát; đường WebSocket nay từ chối thông điệp này, giao diện dùng REST, và lần chạy đầu-cuối có kiểm tra riêng cho trường hợp này.

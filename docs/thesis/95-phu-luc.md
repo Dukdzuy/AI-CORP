@@ -23,12 +23,13 @@ Mọi đường dẫn có tiền tố `/api`. Trừ `auth/register`, `auth/login
 | Nhóm | Route |
 |------|-------|
 | Xác thực | `POST auth/register`, `POST auth/login`, `GET auth/me` |
-| Dự án | `GET/POST projects`, `GET/PATCH/DELETE projects/:id` |
+| Dự án | `GET/POST projects`, `GET/PATCH/DELETE projects/:id` (`PATCH` với trạng thái tạm dừng, tiếp tục hoặc huỷ tác động lên lượt chạy mới nhất), `POST projects/:id/workflow/start` |
 | Công việc, mốc | `GET tasks`, `POST projects/:projectId/tasks`, `PATCH tasks/:id`; `GET/POST projects/:projectId/milestones`, `PATCH milestones/:id` |
 | Sản phẩm của dự án | `GET projects/:id/files`, `GET projects/:id/files/*`, `GET projects/:id/archive` (zip), `GET projects/:id/quality-gates` |
-| Phê duyệt | `GET approvals`, `POST approvals/:id/approve`, `POST approvals/:id/reject` |
+| Phê duyệt | `GET approvals`, `POST approvals/:id/approve`, `POST approvals/:id/reject` (lý do bắt buộc; 409 nếu đã được trả lời) |
 | Quy trình | `GET workflows/templates`, `POST workflows/templates/:templateId/preview`, `GET workflows/definitions[/:definitionId]`, `GET workflows/runs/:runId`, `GET workflows/runs/:runId/snapshots`, `POST workflows/runs/:runId/rollback`, `POST workflows/runs/:runId/pause`, `POST workflows/runs/:runId/resume` |
-| Mô hình LLM | `GET models`, `GET models/available`, `PATCH models/:role` |
+| Mô hình LLM | `GET models`, `GET models/available`, `PATCH models/:role` (kèm `providerId`) |
+| Nhà cung cấp LLM (quản trị) | `GET/POST llm-providers`, `GET llm-providers/kinds`, `PATCH/DELETE llm-providers/:id`, `POST llm-providers/:id/test`, `GET llm-providers/:id/remote-models`, `POST llm-providers/:id/models`, `PATCH/DELETE llm-providers/:id/models/:modelId` |
 | Chi phí, báo cáo, xuất | `GET cost/summary`, `GET reports/projects/:id/cost`, `GET reports/performance`, `POST reports/weekly/run`, `GET projects/:id/export?format=json|csv|pdf` |
 | Phân tích, dự báo, chất lượng | `GET analytics/agents`, `GET agents/:role/learning`, `GET projects/:id/estimate`, `GET analytics/estimation`, `GET projects/:id/code-quality`, `GET ooad-metrics/dashboard`, `GET ooad-metrics/project/:id`, `GET ooad-metrics/leaderboard` |
 | Người dùng, kiểm toán | `GET users`, `GET users/roles`, `PATCH users/:id/role`, `PATCH users/:id/active`; `GET audit`, `GET audit/export`, `GET audit/anomalies` |
@@ -44,7 +45,7 @@ Mọi đường dẫn có tiền tố `/api`. Trừ `auth/register`, `auth/login
 
 ```bash
 pnpm install
-cd apps/api && npx jest                    # 47 bộ, 674 đạt, 15 bỏ qua
+cd apps/api && npx jest                    # 50 bộ, 707 đạt, 15 bỏ qua
 cd apps/api && npm run test:cov            # độ bao phủ, thất bại nếu dưới ngưỡng
 cd apps/web && npx vitest run && npx tsc --noEmit
 ```
@@ -55,7 +56,7 @@ Mỗi lần chạy có script, kết quả và ảnh chụp trong một thư m�
 
 | Lần chạy | Script | Kiểm tra |
 |----------|--------|---------:|
-| Triển khai và trình diễn | `docs/phase7-e2e/e2e.mjs` sau `scripts/demo/seed-demo.mjs` | 21 |
+| Triển khai và trình diễn | `docs/phase7-e2e/e2e.mjs` sau `scripts/demo/seed-demo.mjs` | 24 |
 | Phân tích, dự báo, chất lượng mã | `docs/phase6-e2e/e2e.mjs` | 21 |
 | Bảo mật, kiểm toán, tích hợp | `docs/phase5-e2e/e2e.mjs` | 44 |
 | Bộ máy quy trình (quy trình con, ghim phiên bản, ảnh chụp, khôi phục) | `docs/phase4-e2e/e2e.mjs` | theo kịch bản |
@@ -89,20 +90,20 @@ node scripts/perf/load-test.mjs --users 20 --duration 30 --create-every 10   # c
 node scripts/perf/load-test.mjs --users 50 --duration 30 --create-every 25   # bão hoà
 ```
 
-Kết quả chi tiết với 20 người dùng chỉ đọc (30 s, 6 078 yêu cầu, 201,8 yêu cầu/giây, 0% lỗi):
+Kết quả chi tiết với 20 người dùng chỉ đọc (30 s, 18 154 yêu cầu, 604,8 yêu cầu/giây, 0% lỗi; cơ sở dữ liệu bắt đầu từ 5 dự án trình diễn):
 
 | Endpoint | Số yêu cầu | p50 (ms) | p95 (ms) | p99 (ms) | Ngân sách p50/p95/p99 |
 |----------|-----------:|---------:|---------:|---------:|-----------------------|
-| `GET /analytics/agents` | 578 | 128 | 199 | 229 | 300/1500/3000 |
-| `GET /health` | 300 | 81 | 154 | 187 | 100/500/1000 |
-| `GET /projects` | 1 505 | 79 | 148 | 182 | 100/500/1000 |
-| `GET /projects/:id` | 1 242 | 86 | 150 | 187 | 100/500/1000 |
-| `GET /projects/:id/code-quality` | 615 | 58 | 404 | 556 | 300/1500/3000 |
-| `GET /projects/:id/estimate` | 623 | 130 | 219 | 257 | 300/1500/3000 |
-| `GET /reports/projects/:id/cost` | 628 | 102 | 177 | 222 | 100/500/1000 |
-| `GET /tasks?projectId` | 587 | 76 | 136 | 178 | 100/500/1000 |
+| `GET /analytics/agents` | 1 832 | 30 | 44 | 52 | 300/1500/3000 |
+| `GET /health` | 911 | 54 | 84 | 97 | 100/500/1000 |
+| `GET /projects` | 4 472 | 28 | 42 | 51 | 100/500/1000 |
+| `GET /projects/:id` | 3 674 | 31 | 46 | 54 | 100/500/1000 |
+| `GET /projects/:id/code-quality` | 1 794 | 20 | 33 | 44 | 300/1500/3000 |
+| `GET /projects/:id/estimate` | 1 838 | 47 | 66 | 78 | 300/1500/3000 |
+| `GET /reports/projects/:id/cost` | 1 751 | 36 | 51 | 59 | 100/500/1000 |
+| `GET /tasks?projectId` | 1 882 | 27 | 41 | 51 | 100/500/1000 |
 
-Ba lỗi hiệu năng tìm được nhờ kiểm thử tải và hiệu quả của bản sửa (cùng kịch bản 50 người dùng có tạo dự án):
+Ba lỗi hiệu năng tìm được ở lần đo trước (cơ sở dữ liệu khoảng 120 dự án) và hiệu quả của bản sửa (cùng kịch bản 50 người dùng có tạo dự án):
 
 | Lỗi | Cách sửa | Kết quả |
 |-----|----------|---------|
@@ -110,7 +111,7 @@ Ba lỗi hiệu năng tìm được nhờ kiểm thử tải và hiệu quả c�
 | Danh sách dự án tải JSON ngữ cảnh của lượt chạy rồi bỏ đi | Repository chỉ chọn các cột DTO cần | 46 → 9 ms (1 người dùng) |
 | Chi tiết dự án chạy bốn truy vấn độc lập tuần tự | Chạy song song | 16 → 9 ms (1 người dùng) |
 
-Thông lượng ở kịch bản bão hoà tăng từ 98,8 lên 178,3 yêu cầu/giây.
+Ở lần đo đó, thông lượng ở kịch bản bão hoà tăng từ 98,8 lên 178,3 yêu cầu/giây sau khi sửa.
 
 ## Thời gian theo bước tác tử
 
@@ -124,19 +125,20 @@ Bảng theo vai trò nằm ở mục 6.4. Dữ liệu gốc là trường `durat
 cp .env.production.example .env.production
 # Điền POSTGRES_PASSWORD, JWT_SECRET (openssl rand -hex 32, tối thiểu 32 ký tự),
 # CORS_ORIGIN (địa chỉ web), NINE_ROUTER_URL và NINE_ROUTER_API_KEY (cổng LLM),
-# SEED_ADMIN_EMAIL và SEED_ADMIN_PASSWORD (tối thiểu 12 ký tự)
+# SEED_ADMIN_EMAIL và SEED_ADMIN_PASSWORD (tối thiểu 12 ký tự), LLM_SECRET_KEY (mã hoá khoá nhà cung cấp)
+# Tuỳ chọn: SIGNUP_ROLE (mặc định viewer), ALLOW_REGISTRATION, JWT_EXPIRATION (giây, mặc định 8 giờ)
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
-Giao diện web ở `http://localhost:8080` (đổi bằng `WEB_PORT`). Lần khởi động đầu chạy migration và tạo tài khoản quản trị; sau đó đặt `SEED_ON_START=false`. API từ chối khởi động nếu còn giá trị mẫu (`CHANGE_ME`), thiếu `JWT_SECRET` hoặc `CORS_ORIGIN`, hoặc khoá JWT ngắn hơn 32 ký tự, và in đủ danh sách lỗi. Thêm `--profile demo` để chạy kèm LLM kịch bản phục vụ trình diễn.
+Giao diện web ở `http://localhost:8080` (đổi bằng `WEB_PORT`). Lần khởi động đầu chạy migration và tạo tài khoản quản trị; sau đó đặt `SEED_ON_START=false`. API từ chối khởi động nếu còn giá trị mẫu (`CHANGE_ME`), thiếu `JWT_SECRET` hoặc `CORS_ORIGIN`, hoặc khoá JWT ngắn hơn 32 ký tự, và in đủ danh sách lỗi. Thêm `--profile demo` để chạy kèm LLM kịch bản phục vụ trình diễn. Lần khởi động đầu cũng nhập cổng LLM trong `NINE_ROUTER_URL` thành nhà cung cấp đầu tiên; các nhà cung cấp khác được thêm trên trang *LLM Providers*.
 
 ## Vai trò người dùng
 
 | Vai trò | Có thể |
 |---------|--------|
-| Quản trị viên (`admin`) | Mọi thao tác, gồm quản lý người dùng và vai trò, khoá API, webhook, cấu hình mô hình LLM |
+| Quản trị viên (`admin`) | Mọi thao tác, gồm quản lý người dùng và vai trò, khoá API, webhook, nhà cung cấp và mô hình LLM, xem mọi phê duyệt đang chờ |
 | Thành viên hội đồng (`board_member`) | Tạo và quản lý dự án của mình, duyệt hoặc từ chối phê duyệt, xem báo cáo và phân tích |
-| Người xem (`viewer`) | Chỉ xem; giao diện ẩn các nút tạo, sửa, duyệt và API trả 403 nếu gọi trực tiếp |
+| Người xem (`viewer`) | Chỉ xem; giao diện ẩn các nút tạo, sửa, duyệt và API trả 403 nếu gọi trực tiếp. Tài khoản tự đăng ký có vai trò này cho đến khi quản trị viên nâng quyền |
 
 ## Các thao tác chính
 
@@ -144,8 +146,8 @@ Giao diện dùng nhãn tiếng Anh; tên màn hình được ghi nguyên văn t
 
 1. **Tạo dự án:** *Dashboard* → *New Project*, nhập tên, mô tả yêu cầu, ngân sách, chọn mẫu quy trình (ví dụ dự án phần mềm OOAD hoặc chỉ phân tích và thiết kế) và tham số của mẫu. Quy trình bắt đầu ngay.
 2. **Theo dõi:** *Virtual Office* cho thấy trạng thái tám tác tử theo thời gian thực, và *Meeting Room* hiển thị trao đổi giữa các tác tử. Trang chi tiết dự án có tab *Workflow Runs* với dòng thời gian, ảnh chụp và nút khôi phục.
-3. **Phê duyệt:** khi quy trình đến nút phê duyệt, thông báo xuất hiện cho thành viên hội đồng; duyệt hoặc từ chối kèm ghi chú trên trang chi tiết dự án.
+3. **Điều khiển và phê duyệt:** đầu trang chi tiết dự án có các nút tạm dừng, tiếp tục, huỷ và chỉnh ngân sách (không tiếp tục được khi đang chờ phê duyệt hoặc đã hết ngân sách). Khi quy trình đến nút phê duyệt, chuông thông báo hiện cho thành viên hội đồng; hộp thoại phê duyệt có tóm tắt sản phẩm, và từ chối thì phải nêu lý do.
 4. **Xem sản phẩm:** tab *Artifacts* có tóm tắt OOAD, kết quả cổng chất lượng, cây tệp, trình xem Markdown, mã và sơ đồ, và nút tải zip.
 5. **Báo cáo và dự báo:** tab *Reports* có chi phí theo vai trò, dự báo thời gian và chi phí, điểm chất lượng mã; xuất JSON, CSV hoặc PDF.
-6. **Phân tích tác tử:** *Agent Analytics* so sánh hiệu năng các vai trò và cảnh báo bất thường; *Agent Models* chọn mô hình LLM cho từng vai trò.
+6. **Phân tích tác tử và mô hình:** *Agent Analytics* so sánh hiệu năng các vai trò và cảnh báo bất thường; *LLM Providers* thêm nhà cung cấp (mẫu có sẵn cho 9Router, OpenAI, OpenRouter, Groq, DeepSeek, Gemini, Ollama, Anthropic), kiểm tra kết nối và lấy mô hình; *Agent Models* chọn nhà cung cấp và mô hình cho từng vai trò.
 7. **Quản trị:** *Users & Roles* (vai trò, kích hoạt), *Audit Log* (lọc, xuất CSV, bất thường), *Integrations* (khoá API, webhook, lịch sử gửi).

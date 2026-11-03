@@ -68,6 +68,10 @@
     "ok": true
   },
   {
+    "name": "an approval is answered once: a second answer is refused",
+    "ok": true
+  },
+  {
     "name": "after the approval the CEO closes Clinic Booking",
     "ok": true
   },
@@ -77,6 +81,14 @@
   },
   {
     "name": "agent analytics cover the 8 roles",
+    "ok": true
+  },
+  {
+    "name": "self-registration gives the viewer role (SIGNUP_ROLE default)",
+    "ok": true
+  },
+  {
+    "name": "LLM providers: the 9Router gateway is imported, keys are never returned",
     "ok": true
   },
   {

@@ -41,11 +41,11 @@ Các yêu cầu chức năng được nhóm thành bốn nhóm lớn (mã trong 
 
 **Bộ máy quy trình (FR2).** Quy trình con và lồng ghép quy trình; phiên bản bất biến và khôi phục về ảnh chụp; thực thi song song có giải quyết phụ thuộc; mẫu quy trình có tham số kiểu.
 
-**Tính năng doanh nghiệp (FR3).** RBAC với quyền chi tiết và quyền sở hữu dự án; nhật ký kiểm toán đầy đủ; API tích hợp cho công cụ bên ngoài (khoá API, webhook); xuất dữ liệu và báo cáo.
+**Tính năng doanh nghiệp (FR3).** RBAC với quyền chi tiết và quyền sở hữu dự án; nhật ký kiểm toán đầy đủ; API tích hợp cho công cụ bên ngoài (khoá API, webhook); xuất dữ liệu và báo cáo; quản lý nhà cung cấp và mô hình LLM ngay trong ứng dụng (khoá API được mã hoá); điều khiển lượt chạy (tạm dừng, tiếp tục, huỷ) có ràng buộc ngân sách và phê duyệt.
 
 **Tính năng AI/ML (FR4).** Phân tích hiệu năng và quá trình học của tác tử; mô hình ước lượng dựa trên dữ liệu lịch sử; dự đoán chất lượng mã bằng phân tích tĩnh; gợi ý tối ưu dựa trên bất thường.
 
-Ma trận truy vết có 120 yêu cầu chức năng và phi chức năng: 111 ở trạng thái *Implemented*, 1 ở *Partial* và 8 ở *Planned* (các mục chưa làm được ghi rõ là chưa làm thay vì bị xoá); mỗi yêu cầu đã hiện thực trỏ đến tệp mã và tệp kiểm thử.
+Ma trận truy vết có 124 yêu cầu chức năng và phi chức năng: 115 ở trạng thái *Implemented*, 1 ở *Partial* và 8 ở *Planned* (các mục chưa làm được ghi rõ là chưa làm thay vì bị xoá); mỗi yêu cầu đã hiện thực trỏ đến tệp mã và tệp kiểm thử.
 
 ## Yêu cầu phi chức năng
 
@@ -54,7 +54,7 @@ Ma trận truy vết có 120 yêu cầu chức năng và phi chức năng: 111 �
 | Kiến trúc | Tuân thủ SOLID; mẫu thiết kế được áp dụng có lý do; tách tầng miền, ứng dụng, hạ tầng; tiêm phụ thuộc xuyên suốt | Rà soát thiết kế (chương 4), luật phân lớp được kiểm tra tự động trên mã sinh ra |
 | Kiểm thử | Tầng miền ≥ 90% hàm, dòng, lệnh và ≥ 85% nhánh; toàn API có ngưỡng sàn; kiểm thử đầu-cuối cho các hành trình chính | Ngưỡng `coverageThreshold` của Jest làm hỏng lệnh `test:cov` nếu không đạt; các lần chạy đầu-cuối có lưu vết |
 | Hiệu năng | Mỗi nút quy trình ≤ 2 s (không tính độ trễ LLM); các đọc trên bảng điều khiển trong ngân sách p50/p95/p99 với 20 người dùng đồng thời, lỗi ≤ 1% | Đo bước quy trình (mục 6.4), kiểm thử tải có ngân sách (mục 6.5) |
-| Bảo mật | Băm mật khẩu bcrypt; JWT có hạn; khoá API chỉ mang phạm vi mà vai trò chủ sở hữu cho phép; nhật ký kiểm toán không lưu bí mật; webhook ký HMAC và chặn địa chỉ mạng nội bộ; sandbox cách ly; cấu hình production sai thì không khởi động | Kiểm thử đơn vị và đầu-cuối (mục 6.3) |
+| Bảo mật | Băm mật khẩu bcrypt; JWT có hạn (mặc định 8 giờ); tự đăng ký chỉ nhận quyền xem; khoá của nhà cung cấp LLM được mã hoá và không bao giờ trả về; khoá API chỉ mang phạm vi mà vai trò chủ sở hữu cho phép; nhật ký kiểm toán không lưu bí mật; webhook ký HMAC và chặn địa chỉ mạng nội bộ; sandbox cách ly; cấu hình production sai thì không khởi động | Kiểm thử đơn vị và đầu-cuối (mục 6.3) |
 | Tin cậy | Thử lại có giãn cách mũ; khôi phục quy trình khi khởi động lại; kiểm tra sức khoẻ cho cân bằng tải | Kiểm thử bộ máy quy trình, kiểm thử sức khoẻ |
 | Tài liệu | Đủ sơ đồ use case, lớp, tuần tự, hoạt động, máy trạng thái, thành phần và triển khai | 39 sơ đồ PlantUML được render tự động, lệnh render thất bại nếu có lỗi cú pháp |
 

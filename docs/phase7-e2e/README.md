@@ -1,4 +1,6 @@
-# Phase 7 end-to-end run (2026-10-27)
+# Phase 7 end-to-end run (2026-10-27, rerun 2026-11-03)
+
+> **Rerun on 2026-11-03** on master after PR #15 (LLM providers, review fixes): **24/24**, with three migrations on the empty database and no drift. Three checks were added for the new behaviour (second approval answer → 409, self-registration → viewer, LLM provider keys never returned). The rerun found that `scripts/demo/seed-demo.mjs` still assumed self-registered accounts are board members (now viewers by default); the seed now sets every demo account's role. Agent step durations (scripted LLM with no extra delay, 43 steps): p50 110 ms, p95 1 642 ms, p99 1 726 ms. Load test on the same stack: [`load-test.md`](load-test.md).
 
 The production build behind nginx, started the way `docker-compose.prod.yml` starts it, with the demo data from `scripts/demo/seed-demo.mjs`. This run checks what unit tests cannot see: migrations on an empty database, the production config check, health under a database outage, the same-origin proxy for the API and Socket.IO, and the demo's role and approval story through the paths the web app really uses.
 
@@ -22,15 +24,16 @@ Docker is not available in the build container, so the images themselves were no
 - Production start with `JWT_SECRET` and `CORS_ORIGIN` missing and `NINE_ROUTER_API_KEY=CHANGE_ME`: the API exits with code 1 and lists all three errors.
 - `GET /api/health` reports database, Redis and LLM gateway *healthy*. With PostgreSQL stopped it answers **503** (status *unhealthy*) while `GET /api/health/live` stays 200; after PostgreSQL restarts it is 200 again.
 
-## Result: 21/21 checks
+## Result: 24/24 checks (21 on 2026-10-27)
 
 | Area | Checks |
 |------|--------|
 | Production stack | readiness through nginx; liveness; Swagger off; CORS only for `CORS_ORIGIN`; SPA routes served by nginx |
 | Realtime | Socket.IO through nginx accepts the login token; a forged token is disconnected |
 | Demo projects | 5 present, 4 completed; *Online Bookstore* has its OOAD artifacts, code and tests, passed the OOAD gate and ran its acceptance tests; *Legacy Billing*: DEV refined the code before QA; *Unsafe Portal*: QA sent the code back to DEV once |
-| Roles and approval | the viewer cannot create a project; *Clinic Booking* waits for the board member; the viewer cannot answer the approval over REST **or over the WebSocket**; after the board member approves, the CEO closes the project |
+| Roles and approval | the viewer cannot create a project; *Clinic Booking* waits for the board member; the viewer cannot answer the approval over REST **or over the WebSocket**; a second answer to the approval is refused (409); after the board member approves, the CEO closes the project |
 | Reports and audit | PDF export; agent analytics cover the 8 roles; the audit log records logins, project creation and the approval |
+| Accounts and providers (added 2026-11-03) | self-registration gives the viewer role; the `NINE_ROUTER_URL` gateway is imported as the first LLM provider and no API key appears in the response, which only admins can read |
 
 The WebSocket check was added in this run: before the fix, a viewer's `human:approval_response` message was accepted, closed *Clinic Booking* and left no audit entry (defect E2 in `Implementation_plan.md`).
 

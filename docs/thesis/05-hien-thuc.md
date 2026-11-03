@@ -11,7 +11,7 @@ Chương này mô tả cách thiết kế ở chương 4 được hiện thực:
 | Cơ sở dữ liệu, hàng đợi | PostgreSQL 16 (pgvector), Redis 7 |
 | Web | React 18, Vite, Ant Design, TanStack Query, Zustand, Recharts |
 | Kiểm thử | Jest + ts-jest (API), Vitest (web), Playwright (giao diện đầu-cuối) |
-| LLM | Cổng bất kỳ tương thích OpenAI (`NINE_ROUTER_URL`), nhà cung cấp Anthropic trực tiếp tuỳ chọn |
+| LLM | Nhà cung cấp tương thích OpenAI (9Router, OpenAI, OpenRouter, Groq, DeepSeek, Gemini, Ollama) hoặc Anthropic, cấu hình trong ứng dụng; `NINE_ROUTER_URL` là cổng mặc định |
 | Triển khai | Docker (Node 20, nginx 1.27), Docker Compose |
 | Tổ chức mã | Monorepo pnpm + Turborepo: `apps/api`, `apps/web`, `packages/shared-types` |
 
@@ -19,12 +19,12 @@ Quy mô tại thời điểm viết (đếm tự động, không tính tệp ki�
 
 | Phần | Tệp | Dòng |
 |------|----:|-----:|
-| API (`apps/api/src`) | 326 | 27 336 |
-| trong đó tầng miền (`src/domain`) | 101 | 6 893 |
-| Web (`apps/web/src`) | 70 | 7 671 |
-| Tệp kiểm thử API | 47 | — |
+| API (`apps/api/src`) | 342 | 28 753 |
+| trong đó tầng miền (`src/domain`) | 106 | 7 226 |
+| Web (`apps/web/src`) | 76 | 8 715 |
+| Bộ kiểm thử API (Jest) | 50 | — |
 
-API có 26 mô-đun NestJS và 277 lớp được xuất (`export class`).
+API có 26 mô-đun NestJS và 295 lớp được xuất (`export class`).
 
 ## Tầng miền
 
@@ -84,19 +84,22 @@ Các mẫu quy trình là lớp con của `WorkflowTemplate` với danh sách th
 - **Phân quyền:** `@RequirePermission(Permission.PROJECT_CREATE)` trên controller; quyền của vai trò lấy từ `shared-types` để web và API dùng chung một định nghĩa. Giao diện ẩn hành động người dùng không có quyền (ví dụ nút *New Project* với người xem) nhưng API vẫn kiểm tra độc lập.
 - **Kiểm toán:** `@Audited({ action: 'approval.approve', resourceType: 'Approval', idParam: 'id' })` trên route; interceptor ghi kết quả *ok* hoặc *denied* kèm IP; nhật ký có bộ lọc, phân trang và xuất CSV (ô bắt đầu bằng `=`, `+`, `-`, `@` được thoát để chống chèn công thức).
 - **Xuất báo cáo:** JSON, CSV và PDF (pdfkit, phông có dấu tiếng Việt); báo cáo tuần được ghi vào thư mục `reports/` của dự án thay vì gửi email.
+- **Nhà cung cấp LLM:** trang *LLM Providers* (chỉ quản trị viên) thêm nhà cung cấp từ mẫu có sẵn, kiểm tra kết nối, lấy danh sách mô hình từ nhà cung cấp hoặc thêm mô hình theo mã; trang *Agent Models* chọn mô hình cho từng vai trò, nhóm theo nhà cung cấp. Mọi thay đổi được kiểm toán với khoá đã che.
+- **Điều khiển lượt chạy:** đầu trang chi tiết dự án có các nút tạm dừng, tiếp tục, huỷ, bắt đầu quy trình và chỉnh ngân sách; biểu ngữ báo khi ngân sách hết hoặc quy trình chưa bắt đầu. Phê duyệt được trả lời trong một hộp thoại có tóm tắt dễ đọc và bắt buộc nêu lý do khi từ chối.
 
 ## Giao diện người dùng
 
-Ứng dụng web (nhãn giao diện bằng tiếng Anh) có các màn hình: Bảng điều khiển (danh sách dự án, chi phí), Văn phòng ảo (trạng thái tám tác tử theo thời gian thực và Phòng họp), Chi tiết dự án (kết quả, Sản phẩm, Báo cáo, Kanban, Mốc, Lượt chạy), Phân tích tác tử, Người dùng và vai trò, Nhật ký kiểm toán, Tích hợp. Tab *Artifacts* (Sản phẩm) hiển thị tóm tắt OOAD, kết quả cổng chất lượng, cây tệp của dự án, trình xem Markdown, mã và sơ đồ PlantUML (render bởi máy chủ PlantUML nội bộ), và nút tải toàn bộ dự án dạng zip.
+Ứng dụng web (nhãn giao diện bằng tiếng Anh) có các màn hình: Bảng điều khiển (danh sách dự án có tìm kiếm, lọc, sắp xếp, tiến độ thật của lượt chạy, chi phí), Văn phòng ảo (trạng thái tám tác tử theo thời gian thực và Phòng họp), Chi tiết dự án (kết quả, Sản phẩm, Báo cáo, Kanban, Mốc, Lượt chạy), Phân tích tác tử, Mô hình tác tử, Nhà cung cấp LLM, Người dùng và vai trò, Nhật ký kiểm toán, Tích hợp. Tab *Artifacts* (Sản phẩm) hiển thị tóm tắt OOAD, kết quả cổng chất lượng, cây tệp của dự án, trình xem Markdown, mã và sơ đồ PlantUML (render bởi máy chủ PlantUML nội bộ), và nút tải toàn bộ dự án dạng zip.
 
 ![Tab Sản phẩm của dự án Online Bookstore](../phase7-e2e/demo-artifacts.png){.wide}
 
-Trong lúc chuẩn bị trình diễn, hai lỗi hiển thị được phát hiện và sửa: thẻ dự án luôn ghi "Starting… 0%" vì danh sách dự án không kèm lượt chạy (nay dùng trạng thái dự án khi không có lượt chạy, có kiểm thử đơn vị), và tổng chi phí hiển thị số thực chưa làm tròn.
+Trong lúc chuẩn bị trình diễn, hai lỗi hiển thị được phát hiện và sửa: thẻ dự án luôn ghi "Starting… 0%" vì danh sách dự án không kèm lượt chạy, và tổng chi phí hiển thị số thực chưa làm tròn. Đợt rà soát giao diện sau đó tìm thêm một lỗi nghiêm trọng hơn: trang dự án gửi yêu cầu tham gia phòng WebSocket với payload khác với payload API chờ, nên sự kiện thời gian thực của công việc, quy trình và ngân sách không bao giờ đến giao diện; nay trang tham gia đúng phòng, tham gia lại sau khi kết nối lại, và bỏ các bản sao sự kiện trùng.
 
 ## Cấu hình triển khai
 
 - `apps/api/Dockerfile`: hai giai đoạn; giai đoạn build cài phụ thuộc, sinh Prisma client, build API và script seed; giai đoạn chạy dùng `tini`, chạy bằng người dùng `node`, có phông DejaVu cho PDF và HEALTHCHECK gọi `/api/health/live`. `docker-entrypoint.sh` chạy `prisma migrate deploy` rồi khởi động.
 - `apps/web/Dockerfile`: build với `VITE_API_URL=/api`, `VITE_WS_URL=/`, `VITE_PLANTUML_SERVER=/plantuml` để mọi lời gọi cùng nguồn gốc qua nginx.
-- `docker-compose.prod.yml` và `.env.production.example`: sáu dịch vụ (một chỉ chạy ở hồ sơ demo), ba volume, chỉ công bố cổng web.
+- `docker-compose.prod.yml` và `.env.production.example`: sáu dịch vụ (một chỉ chạy ở hồ sơ demo), ba volume, chỉ công bố cổng web. Các biến mới: `LLM_SECRET_KEY` (khoá mã hoá khoá nhà cung cấp; đổi khoá này thì phải nhập lại khoá nhà cung cấp), `SIGNUP_ROLE`, `ALLOW_REGISTRATION`, `JWT_EXPIRATION`.
+- Cài đặt mới từ mã nguồn: `packageManager` cố định pnpm 8.15.9 (pnpm 8.0 lỗi trên Node 20 trở lên), cấu hình Turborepo theo cú pháp của phiên bản đã cài với `shared-types` được build trước, và tệp build-info của `shared-types` nằm trong `dist` để một bản clone mới luôn build ra mã.
 
 Việc chuẩn bị triển khai phát hiện bốn lỗi khiến cấu hình cũ không thể chạy: thư mục migration chỉ có lược đồ ban đầu (thiếu 8 bảng và nhiều cột, vì quá trình phát triển dùng `prisma db push`) và tệp khoá migration nằm sai chỗ; cấu hình nginx bỏ tiền tố `/api` nên mọi lời gọi API trả 404 và không chuyển tiếp WebSocket; Dockerfile của API gọi health ở đường dẫn sai và chạy tệp không tồn tại. Cả bốn đã được sửa và kiểm chứng (mục 6.3).
