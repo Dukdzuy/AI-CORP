@@ -48,6 +48,9 @@ Bảng sau gắn mỗi mẫu với vấn đề nó giải quyết và lớp hi�
 | Ghi chi phí mọi lời gọi LLM mà không sửa nhà cung cấp | Decorator | `UsageTrackingLLMProvider` |
 | Tác tử gọi LLM qua một điểm duy nhất (cấu hình, nhà cung cấp, chi phí) | Facade | `AgentLLMService`, `OoadArtifactService`, `CodeQualityService` |
 | Nhiều nhà cung cấp LLM sau một giao diện | Adapter + Factory Method | `ILLMProvider`, `LLMProviderFactory` |
+| Quản trị viên thêm nhà cung cấp và mô hình lúc chạy, mỗi loại nhà cung cấp tạo client khác nhau | Aggregate + Strategy + Registry | `LlmProviderConfig` (sở hữu `LlmModel`), `ProviderStrategy` cho mỗi loại, `ProviderStrategyRegistry`, `ConfiguredProviderRegistry` |
+| Khoá API của nhà cung cấp được mã hoá mà miền không phụ thuộc thư viện mật mã | Port / Adapter | `SecretCipher` (miền) ← `AesGcmSecretCipher` (hạ tầng) |
+| Một phê duyệt chỉ được trả lời một lần dù có hai yêu cầu đồng thời | Cập nhật có điều kiện (compare-and-set) | `ApprovalService`: cập nhật chỉ khi trạng thái còn `pending` |
 | Tác tử trao đổi thông điệp có kiểu khi cộng tác | Mediator | `AgentMessageBus`, `EventBus` |
 | Xác thực → giới hạn tần suất → kiểm quyền | Chain of Responsibility | `AuthenticationGuard` → `RateLimitGuard` → `PermissionGuard`; chuỗi rà soát QC → QA |
 | Sự kiện miền thành mục kiểm toán hoặc payload webhook công khai | Adapter | `AuditLogHandler`, `webhook-payloads` |
@@ -84,6 +87,8 @@ Ban đầu mỗi vai trò giữ một máy trạng thái duy nhất. Kiểm th�
 ### Gọi LLM và ghi chi phí
 
 Chiến lược không gọi nhà cung cấp LLM trực tiếp. `AgentLLMService` (Facade) tra cấu hình mô hình của vai trò, lấy nhà cung cấp từ `LLMProviderFactory` và bọc nó bằng `UsageTrackingLLMProvider` (Decorator). Decorator chuyển nguyên lời gọi rồi ghi số token và chi phí vào `ApiUsageLog`, cộng vào chi phí của dự án, và phát `BudgetExceededEvent` một lần khi vượt ngân sách. Nhờ vậy chi phí của cả tám vai trò được ghi đầy đủ mà không chiến lược nào phải biết về chi phí.
+
+Nhà cung cấp và mô hình được quản lý ngay trong ứng dụng thay vì chỉ qua biến môi trường. `LlmProviderConfig` là một aggregate root: nó sở hữu danh sách `LlmModel`, kiểm tra bất biến (tên 1–60 ký tự, URL http hoặc https hợp lệ, loại nhà cung cấp đã biết, không trùng mô hình) và chỉ lưu khoá API ở dạng đã mã hoá. Việc mã hoá đi qua cổng `SecretCipher` của miền; hạ tầng hiện thực bằng AES-256-GCM với khoá `LLM_SECRET_KEY`, và API chỉ trả về bốn ký tự cuối của khoá. Mỗi loại nhà cung cấp (tương thích OpenAI, Anthropic) là một `ProviderStrategy` biết cách tạo client, kiểm tra kết nối và lấy danh sách mô hình; thêm một loại mới là thêm một chiến lược vào sổ đăng ký. Cấu hình mô hình của mỗi vai trò mang thêm `providerId`, và `LLMProviderFactory` hỏi `ConfiguredProviderRegistry` để lấy client đã cấu hình (có bộ đệm), quay về cổng mặc định khi vai trò chưa chọn nhà cung cấp. Lần khởi động đầu với bảng trống nhập cổng cấu hình trong môi trường thành nhà cung cấp đầu tiên, nên một bản cài cũ không phải cấu hình lại. Tác tử, chiến lược và decorator ghi chi phí không thay đổi khi thêm tính năng này, vì chúng chỉ phụ thuộc giao diện `ILLMProvider`.
 
 ### Học từ kết quả
 
@@ -136,11 +141,21 @@ CEO (mốc)
 
 Một nút thất bại được thử lại tối đa ba lần với giãn cách mũ. Nếu vẫn thất bại, lượt chạy đi theo cạnh `onFail` nếu có, ngược lại chuyển sang `failed` và phát `workflow.failed`. Hai lỗi thiết kế đã được kiểm thử phát hiện và sửa: nút thất bại từng để lượt chạy BullMQ ở trạng thái `running` mãi mãi, và từng đi tiếp theo cạnh thành công.
 
+### Điều khiển lượt chạy và ngân sách
+
+Tạm dừng, tiếp tục và huỷ là thao tác trên **lượt chạy** mới nhất của dự án, không chỉ trên trạng thái của dự án; xoá dự án huỷ lượt chạy và xoá kho tệp của nó. Ba quy tắc giữ cho các thao tác này đúng:
+
+- Không tiếp tục khi lượt chạy đang chờ phê duyệt (tiếp tục lúc đó sẽ chạy lại nút phê duyệt và hỏi hai lần), và không tiếp tục khi ngân sách đã hết; cả hai trả lỗi có lý do.
+- **Không nút nào bắt đầu khi ngân sách đã hết.** Bộ máy kiểm tra ngân sách trước mỗi nút và tạm dừng lượt chạy nếu đã hết. Chi phí được cộng bằng phép tăng nguyên tử trong cơ sở dữ liệu thay vì đọc rồi ghi, và thông báo 90% và 100% chỉ phát một lần, khi vượt ngưỡng.
+- Một nút kết thúc trong lúc lượt chạy đang tạm dừng không bị chạy lại khi tiếp tục.
+
+Các quy tắc này được thêm sau một đợt rà soát mã có hệ thống phần giao diện và logic (mục 6.9): trước đó nút *Pause* trên giao diện chỉ đổi trạng thái dự án trong khi lượt chạy vẫn tiếp tục, và ngân sách chỉ được kiểm tra sau khi chi phí đã phát sinh.
+
 ![Máy trạng thái của quy trình](../diagrams/rendered/state-machines/SM-002-workflow-states.svg){.wide}
 
 ## Thiết kế dữ liệu và lưu trữ
 
-Dữ liệu có cấu trúc nằm trong PostgreSQL qua 20 mô hình Prisma (người dùng, dự án, mốc, công việc, tác tử, bộ nhớ, lượt chạy, bước, ảnh chụp, phiên bản định nghĩa, phê duyệt, nhật ký sử dụng API, nhật ký cổng chất lượng, nhật ký kiểm toán, khoá API, webhook, lần gửi webhook, dự báo…). Lược đồ được quản lý bằng migration có phiên bản; một bước kiểm tra so lược đồ dựng từ migration với mô hình để phát hiện lệch.
+Dữ liệu có cấu trúc nằm trong PostgreSQL qua 22 mô hình Prisma (người dùng, dự án, mốc, công việc, tác tử, bộ nhớ, lượt chạy, bước, ảnh chụp, phiên bản định nghĩa, phê duyệt, nhật ký sử dụng API, nhật ký cổng chất lượng, nhật ký kiểm toán, khoá API, webhook, lần gửi webhook, dự báo, nhà cung cấp LLM, mô hình LLM…). Lược đồ được quản lý bằng migration có phiên bản; một bước kiểm tra so lược đồ dựng từ migration với mô hình để phát hiện lệch.
 
 Sản phẩm của tác tử (tài liệu, sơ đồ, mã, kiểm thử, báo cáo) **không** nằm trong cơ sở dữ liệu mà trong `ProjectWorkspace`: một thư mục bền vững cho mỗi dự án, có kiểm tra chống thoát thư mục (đường dẫn `../../etc/...` do LLM đề xuất bị từ chối). Thiết kế ban đầu ghi sản phẩm vào sandbox Docker, vốn chạy mỗi lệnh trong một container mới không có ổ gắn, nên mọi tệp bị mất sau mỗi lệnh; đây là lý do cổng chất lượng và việc quét kiểm thử trước đó không bao giờ thành công.
 
@@ -171,11 +186,12 @@ Khung mã dựng từ mẫu Handlebars theo đúng bốn tầng; giao diện Rep
 ## Bảo mật và tính năng doanh nghiệp
 
 - **Chuỗi guard toàn cục** (Chain of Responsibility): `AuthenticationGuard` (JWT [49] cho người dùng, khoá API cho `/api/v1`) → `RateLimitGuard` → `PermissionGuard`. Mặc định mọi route cần đăng nhập; route công khai phải đánh dấu `@Public`.
-- **Quyền sở hữu**: `AuthorizationService` kiểm tra chủ dự án và người được giao phê duyệt; vi phạm trả 403 và ghi `access.denied`.
+- **Quyền sở hữu**: `AuthorizationService` kiểm tra chủ dự án và người được giao phê duyệt; vi phạm trả 403 và ghi `access.denied`. Việc tạo và sửa công việc kiểm tra chủ dự án như việc sửa dự án.
+- **Đặc quyền tối thiểu khi đăng ký**: tài khoản tự đăng ký nhận vai trò người xem (`SIGNUP_ROLE`), quản trị viên nâng quyền trên trang người dùng, và có thể tắt đăng ký (`ALLOW_REGISTRATION=false`); phiên đăng nhập hết hạn sau `JWT_EXPIRATION`, mặc định 8 giờ.
 - **Nhật ký kiểm toán chỉ ghi thêm**: decorator `@Audited` cùng `AuditInterceptor` ghi hành động của người dùng; `AuditLogHandler` ghi hành động của hệ thống và tác tử từ sự kiện miền. Mật khẩu, token, bí mật và khoá bị che trước khi ghi.
 - **API tích hợp**: khoá API chỉ mang các phạm vi mà vai trò hiện tại của chủ khoá cho phép (giao của hai tập); giới hạn tần suất theo khoá; tài liệu OpenAPI ở `/api/docs` (có thể tắt trong production).
 - **Webhook**: payload ký HMAC-SHA256 [48] kèm dấu thời gian, URL tới mạng nội bộ bị từ chối cả sau khi phân giải DNS (chống SSRF [50]), gửi lại với giãn cách mũ.
-- **Phê duyệt chỉ qua REST**: kiểm thử đầu-cuối của cấu hình triển khai phát hiện rằng giao diện gửi quyết định phê duyệt qua WebSocket, và cổng WebSocket chấp nhận quyết định từ bất kỳ kết nối nào: người xem, vốn nhận 403 từ REST, vẫn duyệt được và dự án được đóng mà không có mục kiểm toán. Thiết kế đã sửa: quyết định chỉ đi qua `POST /api/approvals/:id/approve|reject` (kiểm quyền, kiểm người được giao, ghi kiểm toán), thông điệp WebSocket tương ứng bị từ chối.
+- **Phê duyệt chỉ qua REST**: kiểm thử đầu-cuối của cấu hình triển khai phát hiện rằng giao diện gửi quyết định phê duyệt qua WebSocket, và cổng WebSocket chấp nhận quyết định từ bất kỳ kết nối nào: người xem, vốn nhận 403 từ REST, vẫn duyệt được và dự án được đóng mà không có mục kiểm toán. Thiết kế đã sửa: quyết định chỉ đi qua `POST /api/approvals/:id/approve|reject` (kiểm quyền, kiểm người được giao, ghi kiểm toán), thông điệp WebSocket tương ứng bị từ chối. Câu trả lời là một cập nhật có điều kiện trên trạng thái `pending`, nên hai câu trả lời đồng thời không thể cùng thành công (câu thứ hai nhận 409); quyết định và lý do (bắt buộc khi từ chối) được ghi vào biến của lượt chạy để các tác tử chạy sau đọc được.
 - **Cấu hình production an toàn**: với `NODE_ENV=production`, API không khởi động nếu thiếu `JWT_SECRET` (hoặc ngắn hơn 32 ký tự), thiếu `CORS_ORIGIN` hoặc còn giá trị giữ chỗ như `CHANGE_ME`. Mọi nơi đọc khoá JWT (REST, guard WebSocket, cổng WebSocket) dùng chung một hàm; trước đó ba nơi có ba giá trị dự phòng khác nhau, nên khi không đặt `JWT_SECRET` kết nối thời gian thực luôn bị từ chối.
 
 ![Chuỗi xử lý một yêu cầu có khoá API](../diagrams/rendered/sequences/SD-009-api-key-request.svg){.wide}

@@ -1,0 +1,196 @@
+[
+  {
+    "id": "09b3f563-f801-4665-801b-5beb6969e120",
+    "name": "9Router",
+    "kind": "openai-compatible",
+    "baseUrl": "http://127.0.0.1:20128/v1",
+    "isEnabled": true,
+    "createdAt": "2026-11-03T02:29:16.653Z",
+    "updatedAt": "2026-11-03T02:29:16.653Z",
+    "hasApiKey": true,
+    "apiKeyHint": "••••-key",
+    "models": [
+      {
+        "id": "20346051-e375-428b-8558-fecf541a0ff1",
+        "modelId": "openrouter/openrouter/free",
+        "displayName": "OpenRouter Free",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "90b365c1-5256-4609-91ee-53d6098e5a30",
+        "modelId": "openrouter/openrouter/owl-alpha",
+        "displayName": "OWL Alpha",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "a16ca8ac-5481-47bc-85fe-ec8ed27b36dc",
+        "modelId": "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+        "displayName": "Nemotron 3 Super 120B",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "c017a8f8-56ac-494f-9bde-a1120f58830d",
+        "modelId": "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free",
+        "displayName": "Nemotron 3 Ultra 550B",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "f06adff9-c045-4231-8069-6f82dea9680e",
+        "modelId": "openrouter/poolside/laguna-xs.2:free",
+        "displayName": "Laguna XS",
+        "category": "code",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "a737fea6-d99a-4da7-b9d2-3c70ab3cdedc",
+        "modelId": "openrouter/poolside/laguna-m.1:free",
+        "displayName": "Laguna M",
+        "category": "code",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "c8e17cd5-c569-4064-af5c-b4e991b56ea5",
+        "modelId": "openrouter/cohere/north-mini-code:free",
+        "displayName": "North Mini Code",
+        "category": "code",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "98631c81-456d-4452-8e7c-88195d849a17",
+        "modelId": "openrouter/google/gemma-4-31b-it:free",
+        "displayName": "Gemma 4 31B",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "a260991a-18d4-49c4-acae-2f4c0348858a",
+        "modelId": "openrouter/google/gemma-4-26b-a4b-it:free",
+        "displayName": "Gemma 4 26B",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "e668667f-f3b8-4a2f-90cd-b74a3fb693f3",
+        "modelId": "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "displayName": "Nemotron 3 Nano Omni",
+        "category": "reasoning",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "e1fdb8c3-2205-4ca6-be8b-b1f3a7d42e9d",
+        "modelId": "openrouter/nvidia/nemotron-3-nano-30b-a3b:free",
+        "displayName": "Nemotron 3 Nano",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "cd58f45e-79d9-4004-91c5-6c60a5d8887e",
+        "modelId": "openrouter/nex-agi/nex-n2-pro:free",
+        "displayName": "NEX N2 Pro",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "88ce6390-9115-4b02-9c86-7860a0fd373f",
+        "modelId": "cx/gpt-5.5",
+        "displayName": "GPT-5.5",
+        "category": "premium",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "23f53570-24fc-4868-8c06-80500771699e",
+        "modelId": "cx/gpt-5.4",
+        "displayName": "GPT-5.4",
+        "category": "premium",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "76befe32-bbcf-4414-b173-cdab4593bac5",
+        "modelId": "cx/gpt-5.4-mini",
+        "displayName": "GPT-5.4 Mini",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "8957a755-caa7-407b-a863-8f012789a8e6",
+        "modelId": "ds/deepseek-v4-pro",
+        "displayName": "DeepSeek V4 Pro",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "e5a1a92a-953d-4153-92d7-06d1da619cf1",
+        "modelId": "ds/deepseek-v4-flash",
+        "displayName": "DeepSeek V4 Flash",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "ab37673a-50a8-46fd-97cc-20568bd08a02",
+        "modelId": "groq/llama-3.3-70b-versatile",
+        "displayName": "Llama 3.3 70B",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      },
+      {
+        "id": "a19afa8b-dd28-4c9a-9441-3f3f1329c9d9",
+        "modelId": "groq/qwen/qwen3-32b",
+        "displayName": "Qwen 3 32B",
+        "category": "general",
+        "isEnabled": true,
+        "source": "manual",
+        "createdAt": "2026-11-03T02:29:16.654Z"
+      }
+    ],
+    "usedBy": [
+      "CEO",
+      "BA",
+      "ARCHITECT",
+      "PM",
+      "DEV",
+      "QC",
+      "QA",
+      "MARKETING"
+    ]
+  }
+]

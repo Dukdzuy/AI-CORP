@@ -42,7 +42,7 @@ Phạm vi được giới hạn có chủ đích:
 
 ## Phương pháp nghiên cứu
 
-Luận văn theo phương pháp nghiên cứu khoa học thiết kế (design science) [45]: xây dựng một tạo tác (nền tảng), đánh giá nó bằng các phép đo lặp lại được, và rút ra tri thức thiết kế. Việc phát triển đi theo vòng lặp: rà soát hiện trạng, phân tích yêu cầu thành use case, thiết kế, hiện thực theo hướng kiểm thử trước (TDD) [34], chạy kiểm thử đầu-cuối trên hạ tầng thật (PostgreSQL, Redis, nginx), và ghi lại mọi lỗi phát hiện được cùng cách sửa. Mỗi số liệu trong luận văn có nguồn trong kho mã (tệp kết quả hoặc lệnh để tái tạo).
+Luận văn theo phương pháp nghiên cứu khoa học thiết kế (design science) [45]: xây dựng một tạo tác (nền tảng), đánh giá nó bằng các phép đo lặp lại được, và rút ra tri thức thiết kế. Việc phát triển đi theo vòng lặp: rà soát hiện trạng, phân tích yêu cầu thành use case, thiết kế, hiện thực theo hướng kiểm thử trước (TDD) [34], chạy kiểm thử đầu-cuối trên hạ tầng thật (PostgreSQL, Redis, nginx), rà soát mã có hệ thống phần giao diện và logic, và ghi lại mọi lỗi phát hiện được cùng cách sửa. Mỗi số liệu trong luận văn có nguồn trong kho mã (tệp kết quả hoặc lệnh để tái tạo).
 
 ## Cấu trúc luận văn
 

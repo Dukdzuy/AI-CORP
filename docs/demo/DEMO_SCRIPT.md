@@ -111,16 +111,16 @@ Xem mục 5.
 
 | Chỉ số | Giá trị | Nguồn |
 |--------|---------|-------|
-| Kiểm thử đơn vị/tích hợp API | 47 bộ, 674 test đạt, 15 bỏ qua (cần Docker) | `npx jest` (`apps/api`) |
-| Độ bao phủ tầng domain | dòng 97,1% · lệnh 96,6% · hàm 97,2% · nhánh 89,6% (cổng: 90/90/90/85) | `npm run test:cov` |
-| Độ bao phủ toàn API | lệnh 77,2% · dòng 77,0% · hàm 75,2% · nhánh 63,7% | `npm run test:cov` |
-| Kiểm thử web | 41 test (Vitest) | `npx vitest run` (`apps/web`) |
-| Kiểm thử đầu-cuối | 20/20 (triển khai production + demo), 21/21 (phân tích, dự báo, chất lượng mã), 44/44 (bảo mật, audit, tích hợp) | `docs/phase7-e2e`, `docs/phase6-e2e`, `docs/phase5-e2e` |
-| Thời gian xử lý một nút quy trình (không tính độ trễ LLM thật) | p50 108 ms · p95 1,69 s · p99 1,73 s (nút chậm nhất là QC chạy Jest) | 43 bước, `docs/phase7-e2e/README.md` |
-| Tải 20 người dùng đồng thời | 201,8 req/s, 0% lỗi, p95 ≤ 404 ms mọi endpoint | `docs/phase6-e2e/load-test.md` |
+| Kiểm thử đơn vị/tích hợp API | 50 bộ, 707 test đạt, 15 bỏ qua (cần Docker) | `npx jest` (`apps/api`) |
+| Độ bao phủ tầng domain | dòng 97,1% · lệnh 96,2% · hàm 97,0% · nhánh 88,1% (cổng: 90/90/90/85) | `npm run test:cov` |
+| Độ bao phủ toàn API | lệnh 77,7% · dòng 77,8% · hàm 74,4% · nhánh 63,5% | `npm run test:cov` |
+| Kiểm thử web | 44 test (Vitest) | `npx vitest run` (`apps/web`) |
+| Kiểm thử đầu-cuối | 24/24 (triển khai production + demo), 21/21 (phân tích, dự báo, chất lượng mã), 44/44 (bảo mật, audit, tích hợp) | `docs/phase7-e2e`, `docs/phase6-e2e`, `docs/phase5-e2e` |
+| Thời gian xử lý một nút quy trình (không tính độ trễ LLM thật) | p50 110 ms · p95 1,64 s · p99 1,73 s (nút chậm nhất là QC chạy Jest) | 43 bước, `docs/phase7-e2e/README.md` |
+| Tải 20 người dùng đồng thời | 604,8 req/s, 0% lỗi, p95 ≤ 84 ms mọi endpoint | `docs/phase7-e2e/load-test.md` |
 | Sai số dự báo thời gian agent (leave-one-out) | Architect 3%, CEO 5%, BA 11%, DEV 30% | `docs/phase6-e2e/README.md` |
 | Sơ đồ UML | 39 sơ đồ, 6 góc nhìn, render tự động | `docs/diagrams/INDEX.md` |
-| Use case nền tảng | 31 use case đặc tả; 117 yêu cầu ở trạng thái *Implemented* trong ma trận truy vết | `docs/requirements/` |
+| Use case nền tảng | 31 use case đặc tả; 115/124 yêu cầu ở trạng thái *Implemented* trong ma trận truy vết | `docs/requirements/` |
 
 Không dùng các con số trong bản kế hoạch ban đầu (92% coverage, cải thiện 15% nhờ học, 50 dự án/giây): chúng chưa từng được đo.
 

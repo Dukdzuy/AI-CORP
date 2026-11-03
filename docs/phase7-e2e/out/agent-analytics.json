@@ -1,10 +1,10 @@
 {
   "period": {
-    "start": "2026-09-27T01:53:48.712Z",
-    "end": "2026-10-27T01:53:48.713Z",
-    "previousStart": "2026-08-28T01:53:48.711Z"
+    "start": "2026-10-04T02:29:42.879Z",
+    "end": "2026-11-03T02:29:42.880Z",
+    "previousStart": "2026-09-04T02:29:42.878Z"
   },
-  "generatedAt": "2026-10-27T01:53:48.712Z",
+  "generatedAt": "2026-11-03T02:29:42.879Z",
   "roles": [
     {
       "agentRole": "MARKETING",
@@ -12,8 +12,8 @@
       "completed": 4,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 75,
-      "p95DurationMs": 84,
+      "avgDurationMs": 76,
+      "p95DurationMs": 81,
       "retries": 0,
       "totalCost": 0.003258,
       "costPerExecution": 0.000815,
@@ -61,8 +61,8 @@
       "completed": 10,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 74,
-      "p95DurationMs": 87,
+      "avgDurationMs": 81,
+      "p95DurationMs": 100,
       "retries": 0,
       "totalCost": 0.010374,
       "costPerExecution": 0.001037,
@@ -116,8 +116,8 @@
       "completed": 4,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 99,
-      "p95DurationMs": 104,
+      "avgDurationMs": 106,
+      "p95DurationMs": 110,
       "retries": 0,
       "totalCost": 0.005325,
       "costPerExecution": 0.001331,
@@ -165,8 +165,8 @@
       "completed": 5,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 255,
-      "p95DurationMs": 264,
+      "avgDurationMs": 261,
+      "p95DurationMs": 279,
       "retries": 0,
       "totalCost": 0.018972,
       "costPerExecution": 0.003794,
@@ -215,8 +215,8 @@
       "completed": 5,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 1650,
-      "p95DurationMs": 1710,
+      "avgDurationMs": 1623,
+      "p95DurationMs": 1726,
       "retries": 0,
       "totalCost": 0.032337,
       "costPerExecution": 0.006467,
@@ -265,8 +265,8 @@
       "completed": 5,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 101,
-      "p95DurationMs": 112,
+      "avgDurationMs": 109,
+      "p95DurationMs": 121,
       "retries": 0,
       "totalCost": 0.035517,
       "costPerExecution": 0.007103,
@@ -315,8 +315,8 @@
       "completed": 5,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 565,
-      "p95DurationMs": 593,
+      "avgDurationMs": 581,
+      "p95DurationMs": 607,
       "retries": 0,
       "totalCost": 0.095349,
       "costPerExecution": 0.01907,
@@ -365,7 +365,7 @@
       "completed": 5,
       "failed": 0,
       "successRate": 1,
-      "avgDurationMs": 595,
+      "avgDurationMs": 602,
       "p95DurationMs": 632,
       "retries": 0,
       "totalCost": 0.089565,
@@ -412,49 +412,49 @@
   ],
   "daily": [
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "ARCHITECT",
       "executions": 5,
       "successRate": 1
     },
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "BA",
       "executions": 5,
       "successRate": 1
     },
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "CEO",
       "executions": 10,
       "successRate": 1
     },
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "DEV",
       "executions": 5,
       "successRate": 1
     },
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "MARKETING",
       "executions": 4,
       "successRate": 1
     },
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "PM",
       "executions": 4,
       "successRate": 1
     },
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "QA",
       "executions": 5,
       "successRate": 1
     },
     {
-      "date": "2026-10-27",
+      "date": "2026-11-03",
       "role": "QC",
       "executions": 5,
       "successRate": 1
@@ -463,7 +463,7 @@
   "heatmap": [
     {
       "weekday": 2,
-      "hour": 1,
+      "hour": 2,
       "count": 43
     }
   ],

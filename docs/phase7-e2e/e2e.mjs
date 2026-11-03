@@ -128,6 +128,8 @@ if (pending) {
   const stillPending = ok(await call('GET', `/approvals?projectId=${clinic}`, { token: board }), 'approvals').some((a) => a.id === pending.id);
   check('viewer cannot answer the approval over the WebSocket either', ack?.status === 'error' && stillPending, JSON.stringify(ack));
   ok(await call('POST', `/approvals/${pending.id}/approve`, { token: board, body: { comment: 'Approved during the demo' } }), 'approve');
+  const second = await call('POST', `/approvals/${pending.id}/reject`, { token: board, body: { comment: 'second answer' } });
+  check('an approval is answered once: a second answer is refused', second.status === 409, `${second.status}`);
   let status;
   for (let i = 0; i < 120 && status !== 'completed' && status !== 'failed'; i++) {
     await sleep(500);
@@ -145,7 +147,19 @@ save('agent-analytics.json', analytics);
 const roles = (analytics.agents || analytics.roles || analytics.leaderboard || []).map((a) => a.role ?? a.agentRole);
 check('agent analytics cover the 8 roles', ['CEO', 'BA', 'ARCHITECT', 'PM', 'DEV', 'QC', 'QA', 'MARKETING'].every((r) => roles.includes(r)), roles.join(', '));
 
-const audit = ok(await call('GET', '/audit?pageSize=200', { token: await (async () => ok(await call('POST', '/auth/login', { body: { email: process.env.DEMO_ADMIN_EMAIL || 'admin@aicorp.com', password: process.env.DEMO_ADMIN_PASSWORD || 'admin123' } }), 'admin').accessToken)() }), 'audit');
+const adminToken = ok(await call('POST', '/auth/login', { body: { email: process.env.DEMO_ADMIN_EMAIL || 'admin@aicorp.com', password: process.env.DEMO_ADMIN_PASSWORD || 'admin123' } }), 'admin').accessToken;
+const signup = await call('POST', '/auth/register', { body: { name: 'E2E signup', email: `signup-${Date.now()}@aicorp.demo`, password: 'signup-2026' } });
+const signupRole = signup.data?.role ?? signup.data?.user?.role;
+check('self-registration gives the viewer role (SIGNUP_ROLE default)', signup.status === 201 && signupRole === 'viewer', `${signup.status} ${signupRole}`);
+
+const providers = ok(await call('GET', '/llm-providers', { token: adminToken }), 'providers');
+save('llm-providers.json', providers);
+const raw = JSON.stringify(providers);
+check('LLM providers: the 9Router gateway is imported, keys are never returned',
+  providers.some((p) => p.baseUrl?.includes('20128')) && !/apiKeyEncrypted|"apiKey"|demo-key/.test(raw) && (await call('GET', '/llm-providers', { token: board })).status === 403,
+  providers.map((p) => `${p.name} (${p.kind}, key …${p.apiKeyHint ?? '-'}, ${p.models?.length ?? 0} models)`).join('; '));
+
+const audit = ok(await call('GET', '/audit?pageSize=200', { token: adminToken }), 'audit');
 const actions = new Set((audit.items || audit.entries || audit.data || audit).map((e) => e.action));
 check('audit log records the demo (logins, project creation, approval)', ['auth.login', 'project.create', 'approval.approve'].every((a) => actions.has(a)), [...actions].slice(0, 12).join(', '));
 
