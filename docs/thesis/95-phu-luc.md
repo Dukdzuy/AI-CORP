@@ -1,6 +1,6 @@
 # Phụ lục A. Danh mục sơ đồ UML {.appendix}
 
-Các sơ đồ là mã nguồn PlantUML trong `docs/diagrams/`. Lệnh `scripts/docs/render-diagrams.sh` tải PlantUML (kiểm tra mã băm SHA-1), render toàn bộ sang SVG trong `docs/diagrams/rendered/` và dừng với mã lỗi khác 0 ở sơ đồ đầu tiên có lỗi cú pháp. Danh mục đầy đủ có liên kết nằm ở `docs/diagrams/INDEX.md`.
+Các sơ đồ được viết bằng mã PlantUML và lưu trong thư mục `docs/diagrams/`. Lệnh `scripts/docs/render-diagrams.sh` tải PlantUML (có kiểm tra mã băm SHA-1), render toàn bộ sơ đồ sang định dạng SVG trong `docs/diagrams/rendered/`, và dừng với mã lỗi khác 0 tại sơ đồ đầu tiên có lỗi cú pháp. Danh mục đầy đủ kèm liên kết nằm trong tệp `docs/diagrams/INDEX.md`.
 
 | Góc nhìn | Số sơ đồ | Sơ đồ |
 |----------|---------:|-------|
@@ -18,7 +18,7 @@ Các sơ đồ là mã nguồn PlantUML trong `docs/diagrams/`. Lệnh `scripts/
 
 # Phụ lục B. Giao diện lập trình (API) {.appendix}
 
-Mọi đường dẫn có tiền tố `/api`. Trừ `auth/register`, `auth/login` và `health`, mọi route yêu cầu JWT (giao diện web) hoặc khoá API (nhóm `/v1`), và được kiểm quyền theo vai trò. Khi `ENABLE_SWAGGER=true`, tài liệu OpenAPI đầy đủ có tại `/api/docs`.
+Mọi đường dẫn đều có tiền tố `/api`. Trừ `auth/register`, `auth/login` và `health`, mọi route đều yêu cầu JWT (giao diện web) hoặc khoá API (nhóm `/v1`) và được kiểm tra quyền theo vai trò. Khi `ENABLE_SWAGGER=true`, tài liệu OpenAPI đầy đủ được cung cấp tại `/api/docs`.
 
 | Nhóm | Route |
 |------|-------|
@@ -52,7 +52,7 @@ cd apps/web && npx vitest run && npx tsc --noEmit
 
 ## Kiểm thử đầu-cuối
 
-Mỗi lần chạy có script, kết quả và ảnh chụp trong một thư mục `docs/*-e2e/` của kho mã, kèm README ghi môi trường và lệnh chạy. Script in một dòng cho mỗi kiểm tra và trả mã 1 khi có kiểm tra thất bại.
+Mỗi lần chạy có script, kết quả và ảnh chụp màn hình được lưu trong một thư mục `docs/*-e2e/` của kho mã, kèm tệp README ghi lại môi trường và lệnh chạy. Script in ra một dòng cho mỗi kiểm tra và trả về mã 1 khi có kiểm tra thất bại.
 
 | Lần chạy | Script | Kiểm tra |
 |----------|--------|---------:|
@@ -65,7 +65,7 @@ Môi trường chung: PostgreSQL 16 có pgvector, Redis 7, API build ở chế �
 
 ## LLM kịch bản
 
-Máy chủ trả lời theo vai trò và nội dung lời nhắc. Các quy tắc có ảnh hưởng đến kết quả đánh giá:
+Máy chủ trả lời dựa trên vai trò và nội dung lời nhắc. Các quy tắc có ảnh hưởng đến kết quả đánh giá gồm:
 
 | Điều kiện | Câu trả lời |
 |-----------|-------------|
@@ -76,7 +76,7 @@ Máy chủ trả lời theo vai trò và nội dung lời nhắc. Các quy tắc
 
 ## Dữ liệu trình diễn
 
-`scripts/demo/seed-demo.mjs` tạo hai tài khoản (thành viên hội đồng, người xem) và năm dự án ở mục 6.8. Script lặp lại được: chạy lần hai không tạo bản trùng.
+Script `scripts/demo/seed-demo.mjs` tạo hai tài khoản (thành viên hội đồng quản trị và người xem) cùng năm dự án đã mô tả ở mục 6.8. Script có thể chạy lặp lại: lần chạy thứ hai không tạo ra bản trùng.
 
 # Phụ lục D. Số liệu hiệu năng {.appendix}
 
@@ -111,7 +111,7 @@ Ba lỗi hiệu năng tìm được ở lần đo trước (cơ sở dữ liệu
 | Danh sách dự án tải JSON ngữ cảnh của lượt chạy rồi bỏ đi | Repository chỉ chọn các cột DTO cần | 46 → 9 ms (1 người dùng) |
 | Chi tiết dự án chạy bốn truy vấn độc lập tuần tự | Chạy song song | 16 → 9 ms (1 người dùng) |
 
-Ở lần đo đó, thông lượng ở kịch bản bão hoà tăng từ 98,8 lên 178,3 yêu cầu/giây sau khi sửa.
+Trong lần đo đó, sau khi sửa, thông lượng ở kịch bản bão hoà tăng từ 98,8 lên 178,3 yêu cầu/giây.
 
 ## Thời gian theo bước tác tử
 
@@ -142,7 +142,7 @@ Giao diện web ở `http://localhost:8080` (đổi bằng `WEB_PORT`). Lần kh
 
 ## Các thao tác chính
 
-Giao diện dùng nhãn tiếng Anh; tên màn hình được ghi nguyên văn trong ngoặc.
+Giao diện sử dụng nhãn tiếng Anh; tên màn hình được giữ nguyên văn và in nghiêng.
 
 1. **Tạo dự án:** *Dashboard* → *New Project*, nhập tên, mô tả yêu cầu, ngân sách, chọn mẫu quy trình (ví dụ dự án phần mềm OOAD hoặc chỉ phân tích và thiết kế) và tham số của mẫu. Quy trình bắt đầu ngay.
 2. **Theo dõi:** *Virtual Office* cho thấy trạng thái tám tác tử theo thời gian thực, và *Meeting Room* hiển thị trao đổi giữa các tác tử. Trang chi tiết dự án có tab *Workflow Runs* với dòng thời gian, ảnh chụp và nút khôi phục.
