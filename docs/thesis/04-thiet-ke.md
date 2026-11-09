@@ -1,12 +1,12 @@
 # Thiết kế hệ thống
 
-Chương này trình bày thiết kế của nền tảng theo thứ tự từ tổng thể đến chi tiết: kiến trúc, mẫu thiết kế, tác tử, bộ máy quy trình, dữ liệu, cách áp dụng OOAD cho dự án sinh ra, bảo mật, phân tích và dự báo, và triển khai. Toàn bộ 39 sơ đồ UML được liệt kê ở Phụ lục A.
+Chương này trình bày thiết kế của nền tảng theo trình tự từ tổng thể đến chi tiết, gồm kiến trúc, mẫu thiết kế, thiết kế tác tử, bộ máy quy trình, dữ liệu, cách áp dụng OOAD cho các dự án sinh ra, bảo mật, phân tích và dự báo, và cuối cùng là triển khai. Danh sách đầy đủ 39 sơ đồ UML được trình bày ở Phụ lục A.
 
 ## Kiến trúc tổng thể
 
 ### Kiểu kiến trúc
 
-Nền tảng gồm một máy chủ API (NestJS, TypeScript) và một ứng dụng web một trang (React). Bên trong API, mã được tổ chức theo **kiến trúc phân lớp kết hợp thiết kế hướng miền** [6], [8]:
+Nền tảng gồm một máy chủ API (NestJS, TypeScript) và một ứng dụng web một trang (React). Bên trong API, mã nguồn được tổ chức theo kiến trúc phân lớp kết hợp với thiết kế hướng miền [6], [8], như trình bày trong bảng sau.
 
 | Tầng | Nội dung | Phụ thuộc được phép |
 |------|----------|---------------------|
@@ -15,28 +15,28 @@ Nền tảng gồm một máy chủ API (NestJS, TypeScript) và một ứng d�
 | Miền (`src/domain`) | Thực thể, value object, aggregate, sự kiện miền, máy trạng thái, giao diện Repository và các cổng (port), chính sách thuần (không I/O) | Không gì cả |
 | Hạ tầng | Repository Prisma, nhà cung cấp LLM, sandbox Docker, kho tệp của dự án, phân tích mã TypeScript, xuất PDF | Miền (hiện thực các cổng) |
 
-Tầng miền có 106 tệp và không nhập NestJS, Prisma hay bất kỳ thư viện I/O nào. Nhờ đó mọi quy tắc nghiệp vụ (chuyển trạng thái công việc, phép tính tiền, phát hiện bất thường, hồi quy dự báo, chính sách chất lượng mã) được kiểm thử như hàm thuần, và đây cũng là nơi đặt ngưỡng độ bao phủ cao nhất (mục 6.2).
+Tầng miền gồm 106 tệp và không nhập NestJS, Prisma hay bất kỳ thư viện I/O nào. Nhờ đó, mọi quy tắc nghiệp vụ (chuyển trạng thái công việc, tính toán tiền tệ, phát hiện bất thường, hồi quy dự báo, chính sách chất lượng mã) đều được kiểm thử như các hàm thuần. Tầng miền cũng là nơi áp dụng ngưỡng độ bao phủ cao nhất (mục 6.2).
 
 ![Sơ đồ thành phần](../diagrams/rendered/architecture/component-diagram.svg){.wide}
 
 ### Các quyết định kiến trúc chính
 
-Các quyết định được ghi thành bản ghi quyết định kiến trúc (ADR) trong `docs/design/architecture.md`. Sáu quyết định có ảnh hưởng lớn nhất:
+Các quyết định kiến trúc được ghi thành các bản ghi quyết định kiến trúc (ADR) trong tệp `docs/design/architecture.md`. Sáu quyết định có ảnh hưởng lớn nhất là:
 
-1. **NestJS cho API** vì hệ thống tiêm phụ thuộc và mô-đun của nó hiện thực trực tiếp DIP và cho phép đăng ký nhiều hiện thực cho một token (dùng cho danh sách tác tử và chiến lược nút).
-2. **PostgreSQL** cho dữ liệu quan hệ và JSON (ngữ cảnh lượt chạy, siêu dữ liệu OOAD), với **Prisma** làm lớp ánh xạ phía sau các Repository.
-3. **BullMQ trên Redis** cho hàng đợi nút quy trình, với chế độ dự phòng thực thi trực tiếp khi không có Redis (sức khoẻ hệ thống báo *degraded* thay vì ngừng).
-4. **Repository** cho mọi truy cập dữ liệu từ tầng ứng dụng, để dịch vụ ứng dụng kiểm thử được bằng Repository trong bộ nhớ.
-5. **Strategy cho chuyên môn hoá tác tử** thay vì kế thừa sâu (mục 4.3).
-6. **Sự kiện miền** cho giao tiếp giữa các mô-đun: nhật ký kiểm toán, webhook, học của tác tử, dự báo và giám sát bất thường đều là người nghe sự kiện, không mô-đun nào gọi trực tiếp mô-đun kia.
+1. Dùng NestJS cho API, vì cơ chế tiêm phụ thuộc và hệ thống mô-đun của NestJS hiện thực trực tiếp nguyên lý DIP và cho phép đăng ký nhiều hiện thực cho cùng một token (được dùng cho danh sách tác tử và danh sách chiến lược nút).
+2. Dùng PostgreSQL cho dữ liệu quan hệ và dữ liệu JSON (ngữ cảnh lượt chạy, siêu dữ liệu OOAD), với Prisma làm lớp ánh xạ phía sau các Repository.
+3. Dùng BullMQ trên Redis làm hàng đợi cho các nút quy trình, kèm chế độ dự phòng thực thi trực tiếp khi không có Redis; khi đó điểm kiểm tra sức khoẻ báo trạng thái *degraded* và hệ thống vẫn tiếp tục hoạt động.
+4. Mọi truy cập dữ liệu từ tầng ứng dụng đều đi qua Repository, nhờ đó các dịch vụ ứng dụng kiểm thử được bằng Repository trong bộ nhớ.
+5. Dùng mẫu Strategy để chuyên môn hoá tác tử, thay cho cây kế thừa sâu (mục 4.3).
+6. Các mô-đun giao tiếp với nhau qua sự kiện miền. Nhật ký kiểm toán, webhook, cơ chế học của tác tử, dự báo và giám sát bất thường đều là bộ lắng nghe sự kiện, và các mô-đun này không gọi trực tiếp lẫn nhau.
 
 ## Mẫu thiết kế
 
-Bảng sau gắn mỗi mẫu với vấn đề nó giải quyết và lớp hiện thực. Mỗi lớp trong mã có chú thích `@pattern` tương ứng, nên bảng này có thể kiểm chứng bằng tìm kiếm trong kho mã.
+Bảng dưới đây gắn mỗi mẫu thiết kế với vấn đề mà mẫu đó giải quyết và lớp hiện thực tương ứng. Mỗi lớp trong mã nguồn đều có chú thích `@pattern`, vì vậy có thể kiểm chứng nội dung bảng bằng cách tìm kiếm trong kho mã.
 
 | Vấn đề | Mẫu | Hiện thực |
 |--------|-----|-----------|
-| Tám vai trò cùng một chu trình nhận việc → suy nghĩ → hành động → hoàn tất | Template Method | `BaseAgent.execute()` |
+| Tám vai trò có chung chu trình nhận việc, suy nghĩ, hành động và hoàn tất | Template Method | `BaseAgent.execute()` |
 | Mỗi vai trò suy nghĩ và hành động khác nhau, cần thay được độc lập | Strategy | `IThinkingStrategy`, `IActionStrategy`, 16 lớp chiến lược |
 | Thêm vai trò mới không sửa bộ điều phối | Registry + DIP | `AgentOrchestrator` nhận danh sách `IAgent` qua token `AGENTS`; `RoleProfile` cho mỗi vai trò |
 | Vòng đời tác tử, công việc, dự án, phê duyệt có chuyển trạng thái hợp lệ | State | `AgentStateMachine`, `Task.transitionTo`, value object `ProjectStatus` |
@@ -52,7 +52,7 @@ Bảng sau gắn mỗi mẫu với vấn đề nó giải quyết và lớp hi�
 | Khoá API của nhà cung cấp được mã hoá mà miền không phụ thuộc thư viện mật mã | Port / Adapter | `SecretCipher` (miền) ← `AesGcmSecretCipher` (hạ tầng) |
 | Một phê duyệt chỉ được trả lời một lần dù có hai yêu cầu đồng thời | Cập nhật có điều kiện (compare-and-set) | `ApprovalService`: cập nhật chỉ khi trạng thái còn `pending` |
 | Tác tử trao đổi thông điệp có kiểu khi cộng tác | Mediator | `AgentMessageBus`, `EventBus` |
-| Xác thực → giới hạn tần suất → kiểm quyền | Chain of Responsibility | `AuthenticationGuard` → `RateLimitGuard` → `PermissionGuard`; chuỗi rà soát QC → QA |
+| Xác thực, giới hạn tần suất rồi kiểm tra quyền | Chain of Responsibility | `AuthenticationGuard` → `RateLimitGuard` → `PermissionGuard`; chuỗi rà soát QC → QA |
 | Sự kiện miền thành mục kiểm toán hoặc payload webhook công khai | Adapter | `AuditLogHandler`, `webhook-payloads` |
 | Truy cập dữ liệu tách khỏi miền | Repository, Data Mapper | `I*Repository` trong miền, `Prisma*Repository` trong hạ tầng |
 | Báo cáo chi phí và hiệu năng dựng từng bước | Builder | `CostReportBuilder`, `PerformanceReportBuilder` |
@@ -67,48 +67,48 @@ Bảng sau gắn mỗi mẫu với vấn đề nó giải quyết và lớp hi�
 
 ### Template Method và hai chiến lược
 
-Mỗi tác tử là một đối tượng `BaseAgent` được cấu hình bằng ba thứ: một `RoleProfile` (vai trò, các loại công việc hỗ trợ, loại công việc mặc định, lời nhắc hệ thống), một chiến lược tư duy và một chiến lược hành động. `BaseAgent.execute()` cố định khung thuật toán:
+Mỗi tác tử là một đối tượng `BaseAgent` được cấu hình bằng ba thành phần: một `RoleProfile` (vai trò, các loại công việc được hỗ trợ, loại công việc mặc định, lời nhắc hệ thống), một chiến lược tư duy và một chiến lược hành động. Phương thức `BaseAgent.execute()` cố định khung thuật toán gồm các bước sau:
 
-1. Chuẩn hoá ngữ cảnh: loại công việc được đối chiếu với hồ sơ vai trò, nên chiến lược luôn nhận một loại công việc vai trò đó hỗ trợ.
+1. Chuẩn hoá ngữ cảnh: loại công việc được đối chiếu với hồ sơ vai trò, nhờ đó chiến lược luôn nhận được một loại công việc mà vai trò hỗ trợ.
 2. Phát `TaskAssignedEvent`.
-3. Chuyển `IDLE → THINKING`, gọi `thinkingStrategy.think(context)`: nạp bộ nhớ và bài học liên quan, gọi LLM để lập kế hoạch.
-4. Chuyển `THINKING → ACTING`, gọi `actionStrategy.act(context, thought)`: sinh tài liệu hoặc mã, ghi vào kho tệp của dự án, chạy công cụ.
-5. Chuyển `ACTING → COMPLETED → IDLE`, lưu ký ức, phát `AgentCompletedTaskEvent`.
-6. Khi có ngoại lệ: chuyển sang `ERROR`; lỗi tạm thời cho phép quay lại `IDLE`.
+3. Chuyển trạng thái `IDLE → THINKING` và gọi `thinkingStrategy.think(context)`: nạp bộ nhớ và các bài học liên quan, sau đó gọi LLM để lập kế hoạch.
+4. Chuyển trạng thái `THINKING → ACTING` và gọi `actionStrategy.act(context, thought)`: sinh tài liệu hoặc mã nguồn, ghi vào kho tệp của dự án và chạy các công cụ cần thiết.
+5. Chuyển trạng thái `ACTING → COMPLETED → IDLE`, lưu ký ức và phát `AgentCompletedTaskEvent`.
+6. Khi có ngoại lệ, tác tử chuyển sang trạng thái `ERROR`; với lỗi tạm thời, tác tử được phép quay lại `IDLE`.
 
-Thiết kế này thoả SRP (tác tử chỉ điều phối vòng đời, chiến lược chứa chuyên môn), OCP (thêm vai trò là thêm hồ sơ và hai chiến lược) và LSP (mọi tác tử thay thế được cho nhau qua `IAgent`).
+Thiết kế này thoả mãn SRP (tác tử chỉ điều phối vòng đời, còn chuyên môn nằm trong các chiến lược), OCP (thêm một vai trò chỉ cần thêm một hồ sơ và hai chiến lược) và LSP (mọi tác tử có thể thay thế cho nhau thông qua giao diện `IAgent`).
 
 ### Máy trạng thái theo từng lần thực thi
 
-Ban đầu mỗi vai trò giữ một máy trạng thái duy nhất. Kiểm thử phát hiện hai hậu quả: hai công việc cùng vai trò chạy đồng thời làm hỏng nhau ("Invalid state transition: IDLE → ERROR"), và sau một lỗi vĩnh viễn vai trò kẹt ở `ERROR`, từ chối mọi công việc sau đó. Thiết kế đã sửa: **mỗi lần `execute()` có một máy trạng thái riêng**, tác tử giữ tập các máy đang chạy và báo trạng thái của lần gần nhất. Đây là một ví dụ về việc mẫu State phải gắn với đúng đối tượng có vòng đời (lần thực thi), không phải đối tượng tồn tại lâu (tác tử).
+Trong thiết kế ban đầu, mỗi vai trò chỉ giữ một máy trạng thái duy nhất. Kiểm thử đã phát hiện hai hậu quả của cách làm này. Thứ nhất, hai công việc cùng vai trò chạy đồng thời làm hỏng trạng thái của nhau (lỗi "Invalid state transition: IDLE → ERROR"). Thứ hai, sau một lỗi vĩnh viễn, vai trò bị kẹt ở trạng thái `ERROR` và từ chối mọi công việc sau đó. Trong thiết kế đã sửa, mỗi lần gọi `execute()` có một máy trạng thái riêng; tác tử giữ tập các máy trạng thái đang chạy và báo cáo trạng thái của lần thực thi gần nhất. Trường hợp này cho thấy mẫu State cần được gắn với đối tượng thực sự có vòng đời, ở đây là lần thực thi, thay vì với đối tượng tồn tại lâu dài là tác tử.
 
 ![Máy trạng thái của tác tử](../diagrams/rendered/state-machines/SM-001-agent-states.svg)
 
 ### Gọi LLM và ghi chi phí
 
-Chiến lược không gọi nhà cung cấp LLM trực tiếp. `AgentLLMService` (Facade) tra cấu hình mô hình của vai trò, lấy nhà cung cấp từ `LLMProviderFactory` và bọc nó bằng `UsageTrackingLLMProvider` (Decorator). Decorator chuyển nguyên lời gọi rồi ghi số token và chi phí vào `ApiUsageLog`, cộng vào chi phí của dự án, và phát `BudgetExceededEvent` một lần khi vượt ngân sách. Nhờ vậy chi phí của cả tám vai trò được ghi đầy đủ mà không chiến lược nào phải biết về chi phí.
+Các chiến lược không gọi trực tiếp nhà cung cấp LLM. `AgentLLMService` (mẫu Facade) tra cứu cấu hình mô hình của vai trò, lấy nhà cung cấp từ `LLMProviderFactory` và bọc nhà cung cấp đó bằng `UsageTrackingLLMProvider` (mẫu Decorator). Decorator chuyển tiếp nguyên vẹn lời gọi, sau đó ghi số token và chi phí vào `ApiUsageLog`, cộng vào chi phí của dự án và phát sự kiện `BudgetExceededEvent` một lần khi vượt ngân sách. Nhờ vậy, chi phí của cả tám vai trò được ghi nhận đầy đủ mà không chiến lược nào phải xử lý việc tính chi phí.
 
-Nhà cung cấp và mô hình được quản lý ngay trong ứng dụng thay vì chỉ qua biến môi trường. `LlmProviderConfig` là một aggregate root: nó sở hữu danh sách `LlmModel`, kiểm tra bất biến (tên 1–60 ký tự, URL http hoặc https hợp lệ, loại nhà cung cấp đã biết, không trùng mô hình) và chỉ lưu khoá API ở dạng đã mã hoá. Việc mã hoá đi qua cổng `SecretCipher` của miền; hạ tầng hiện thực bằng AES-256-GCM với khoá `LLM_SECRET_KEY`, và API chỉ trả về bốn ký tự cuối của khoá. Mỗi loại nhà cung cấp (tương thích OpenAI, Anthropic) là một `ProviderStrategy` biết cách tạo client, kiểm tra kết nối và lấy danh sách mô hình; thêm một loại mới là thêm một chiến lược vào sổ đăng ký. Cấu hình mô hình của mỗi vai trò mang thêm `providerId`, và `LLMProviderFactory` hỏi `ConfiguredProviderRegistry` để lấy client đã cấu hình (có bộ đệm), quay về cổng mặc định khi vai trò chưa chọn nhà cung cấp. Lần khởi động đầu với bảng trống nhập cổng cấu hình trong môi trường thành nhà cung cấp đầu tiên, nên một bản cài cũ không phải cấu hình lại. Tác tử, chiến lược và decorator ghi chi phí không thay đổi khi thêm tính năng này, vì chúng chỉ phụ thuộc giao diện `ILLMProvider`.
+Nhà cung cấp và mô hình LLM được quản lý ngay trong ứng dụng, ngoài cách cấu hình qua biến môi trường. `LlmProviderConfig` là một aggregate root: đối tượng này sở hữu danh sách `LlmModel`, kiểm tra các bất biến (tên dài từ 1 đến 60 ký tự, URL http hoặc https hợp lệ, loại nhà cung cấp đã được hỗ trợ, không có mô hình trùng lặp) và chỉ lưu khoá API ở dạng đã mã hoá. Việc mã hoá đi qua cổng `SecretCipher` của tầng miền; tầng hạ tầng hiện thực cổng này bằng thuật toán AES-256-GCM với khoá `LLM_SECRET_KEY`, và API chỉ trả về bốn ký tự cuối của khoá. Mỗi loại nhà cung cấp (tương thích OpenAI, Anthropic) là một `ProviderStrategy` có khả năng tạo client, kiểm tra kết nối và lấy danh sách mô hình; để hỗ trợ một loại mới, chỉ cần thêm một chiến lược vào sổ đăng ký. Cấu hình mô hình của mỗi vai trò có thêm trường `providerId`, và `LLMProviderFactory` truy vấn `ConfiguredProviderRegistry` để lấy client đã cấu hình (có bộ đệm), hoặc dùng cổng mặc định khi vai trò chưa chọn nhà cung cấp. Ở lần khởi động đầu tiên, nếu bảng nhà cung cấp còn trống, hệ thống nhập cổng LLM đang cấu hình trong biến môi trường thành nhà cung cấp đầu tiên, nhờ đó một bản cài đặt cũ không phải cấu hình lại. Tác tử, các chiến lược và decorator ghi chi phí không phải thay đổi khi bổ sung tính năng này, vì chúng chỉ phụ thuộc vào giao diện `ILLMProvider`.
 
 ### Học từ kết quả
 
-Cơ chế học gồm ba phần:
+Cơ chế học gồm ba thành phần:
 
-1. `OutcomeSignalPolicy` (chính sách thuần) quyết định tín hiệu nào chấm lần thực thi nào: kết quả cổng OOAD chấm BA và Architect; kết quả của QC (kiểm thử đạt, use case thiếu) chấm DEV; phán quyết QA chấm DEV và QC.
-2. `LearningService` lưu mỗi kết quả vào bộ nhớ của vai trò; cứ mỗi N kết quả (mặc định 3) nó tinh luyện các kết quả gần đây thành một ký ức `lessons_learned` bằng một lời gọi LLM, được tính chi phí như mọi lời gọi khác.
-3. Chiến lược tư duy nạp các bài học trước tiên khi xây lời nhắc.
+1. `OutcomeSignalPolicy` (một chính sách thuần) xác định tín hiệu nào được dùng để đánh giá lần thực thi nào: kết quả của cổng OOAD đánh giá BA và Architect; kết quả của QC (số kiểm thử đạt, các use case còn thiếu) đánh giá DEV; phán quyết của QA đánh giá DEV và QC.
+2. `LearningService` lưu mỗi kết quả vào bộ nhớ của vai trò; cứ sau N kết quả (mặc định là 3), dịch vụ này chắt lọc các kết quả gần đây thành một ký ức loại `lessons_learned` bằng một lời gọi LLM, và lời gọi này cũng được tính chi phí như mọi lời gọi khác.
+3. Khi xây dựng lời nhắc, chiến lược tư duy nạp các bài học này trước tiên.
 
-Thiết kế này gần với Reflexion [28] ở chỗ phản hồi bằng ngôn ngữ, nhưng tín hiệu là khách quan (cổng, kiểm thử, phán quyết) chứ không do chính tác tử tự đánh giá.
+Thiết kế này gần với Reflexion [28] ở chỗ phản hồi được biểu diễn bằng ngôn ngữ tự nhiên. Điểm khác là tín hiệu đánh giá đến từ nguồn khách quan (cổng chất lượng, kết quả kiểm thử, phán quyết QA), trong khi ở Reflexion tác tử tự đánh giá chính mình.
 
 ### Cộng tác giữa các tác tử
 
-Ba mẫu cộng tác là các chiến lược của một nút quy trình, đăng ký trong `CollaborationRegistry`:
+Ba mẫu cộng tác được hiện thực dưới dạng các chiến lược của một nút quy trình và được đăng ký trong `CollaborationRegistry`:
 
-- **Lập trình cặp** (`pair_develop`): DEV lập kế hoạch; câu hỏi về use case mơ hồ được gửi BA trước (vòng làm rõ); DEV gửi `PROPOSE`, Architect `ACCEPT` hoặc `REJECT` kèm phản hồi; sau khi hiện thực, Architect rà soát mã. Số vòng có giới hạn để chi phí bị chặn.
+- **Lập trình cặp** (`pair_develop`): DEV lập kế hoạch; các câu hỏi về use case còn mơ hồ được gửi cho BA trước (vòng làm rõ); DEV gửi thông điệp `PROPOSE`, Architect trả lời `ACCEPT` hoặc `REJECT` kèm phản hồi; sau khi DEV hiện thực, Architect rà soát mã. Số vòng trao đổi được giới hạn để chi phí không vượt quá mức cho phép.
 - **Vòng làm rõ** (`clarification_loop`): tác tử hỏi BA và nhận câu trả lời trước khi tiếp tục.
-- **Chuỗi rà soát** (`review_chain`, Chain of Responsibility): QC rồi QA; một mắt xích từ chối thì dừng chuỗi.
+- **Chuỗi rà soát** (`review_chain`, mẫu Chain of Responsibility): QC rà soát trước, sau đó đến QA; nếu một mắt xích từ chối thì chuỗi dừng lại.
 
-Mọi lượt trao đổi đi qua `AgentMessageBus` (Mediator) với các performative theo tinh thần FIPA-ACL [16], và được hiển thị trong Phòng họp (Meeting Room) của giao diện.
+Mọi lượt trao đổi đều đi qua `AgentMessageBus` (mẫu Mediator) với các performative theo tinh thần của FIPA-ACL [16], và được hiển thị trong màn hình Phòng họp (Meeting Room) của giao diện.
 
 ![Cộng tác lập trình cặp có vòng làm rõ](../diagrams/rendered/sequences/SD-007-pair-develop.svg){.wide}
 
@@ -116,9 +116,9 @@ Mọi lượt trao đổi đi qua `AgentMessageBus` (Mediator) với các perfor
 
 ### Định nghĩa và thực thi
 
-Một quy trình là một đồ thị gồm các nút có kiểu và các cạnh (mặc định, có điều kiện, `onFail`). `WorkflowEngine` không chứa logic của từng loại nút: mỗi loại là một `NodeExecutionStrategy` tự đăng ký với bộ máy. Thêm loại nút (ví dụ cổng chất lượng) là thêm một lớp, không sửa bộ máy (OCP).
+Một quy trình là một đồ thị gồm các nút có kiểu và các cạnh (cạnh mặc định, cạnh có điều kiện, cạnh `onFail`). `WorkflowEngine` không chứa logic riêng của từng loại nút; mỗi loại nút là một `NodeExecutionStrategy` tự đăng ký với bộ máy. Do đó, để thêm một loại nút mới (ví dụ cổng chất lượng), chỉ cần thêm một lớp mà không phải sửa bộ máy, đúng với nguyên lý OCP.
 
-Quy trình mặc định cho một dự án phần mềm:
+Quy trình mặc định cho một dự án phần mềm như sau:
 
 ```
 CEO (mốc)
@@ -130,38 +130,38 @@ CEO (mốc)
 
 ### Quy trình con, phiên bản và khôi phục
 
-- **Quy trình con (Composite):** nút `sub_workflow` chạy một quy trình khác như một lượt chạy con có `parentRunId`; kết quả của lượt con được gộp vào ngữ cảnh lượt cha. Ba mẫu quy trình có kiểu (dự án phần mềm OOAD, backend REST API, chỉ phân tích và thiết kế) dùng chung các quy trình con.
-- **Phiên bản bất biến:** mỗi định nghĩa được lưu theo `id@phiên_bản` cùng mã băm của nội dung chuẩn hoá; đăng ký lại cùng phiên bản với nội dung khác bị từ chối. Mỗi lượt chạy ghim một phiên bản cụ thể.
-- **Ảnh chụp và khôi phục (Memento):** sau mỗi nút, `WorkflowSnapshotCaretaker` lưu một memento gồm nút hiện tại, ngữ cảnh và trạng thái; người dùng có thể khôi phục một lượt chạy đang tạm dừng về một ảnh chụp, các phê duyệt treo sau ảnh chụp đó bị huỷ.
-- **Song song có phụ thuộc:** nút `parallel` chạy các nhánh theo thứ tự tô-pô của `dependsOn` với giới hạn đồng thời; `DependencyResolver` phát hiện chu trình.
+- **Quy trình con (Composite):** nút `sub_workflow` chạy một quy trình khác dưới dạng một lượt chạy con có `parentRunId`; kết quả của lượt chạy con được gộp vào ngữ cảnh của lượt chạy cha. Ba mẫu quy trình có kiểu (dự án phần mềm OOAD, backend REST API, chỉ phân tích và thiết kế) dùng chung các quy trình con này.
+- **Phiên bản bất biến:** mỗi định nghĩa quy trình được lưu theo khoá `id@phiên_bản` cùng với mã băm của nội dung đã chuẩn hoá; việc đăng ký lại cùng một phiên bản với nội dung khác sẽ bị từ chối. Mỗi lượt chạy được gắn cố định với một phiên bản cụ thể.
+- **Ảnh chụp và khôi phục (Memento):** sau mỗi nút, `WorkflowSnapshotCaretaker` lưu một memento gồm nút hiện tại, ngữ cảnh và trạng thái. Người dùng có thể khôi phục một lượt chạy đang tạm dừng về một ảnh chụp trước đó; khi đó các yêu cầu phê duyệt đang treo phát sinh sau ảnh chụp sẽ bị huỷ.
+- **Song song có phụ thuộc:** nút `parallel` chạy các nhánh theo thứ tự tô-pô xác định bởi `dependsOn`, với giới hạn số nhánh chạy đồng thời; `DependencyResolver` phát hiện các chu trình phụ thuộc.
 
 ![Thực thi quy trình con](../diagrams/rendered/sequences/SD-008-sub-workflow-execution.svg){.wide}
 
 ### Xử lý lỗi
 
-Một nút thất bại được thử lại tối đa ba lần với giãn cách mũ. Nếu vẫn thất bại, lượt chạy đi theo cạnh `onFail` nếu có, ngược lại chuyển sang `failed` và phát `workflow.failed`. Hai lỗi thiết kế đã được kiểm thử phát hiện và sửa: nút thất bại từng để lượt chạy BullMQ ở trạng thái `running` mãi mãi, và từng đi tiếp theo cạnh thành công.
+Một nút thất bại được thử lại tối đa ba lần với thời gian giãn cách tăng theo hàm mũ. Nếu vẫn thất bại, lượt chạy đi theo cạnh `onFail` nếu có; nếu không, lượt chạy chuyển sang trạng thái `failed` và phát sự kiện `workflow.failed`. Kiểm thử đã phát hiện và giúp sửa hai lỗi thiết kế liên quan: trước đây, một nút thất bại có thể khiến lượt chạy BullMQ ở mãi trạng thái `running`, hoặc khiến lượt chạy đi tiếp theo cạnh thành công.
 
 ### Điều khiển lượt chạy và ngân sách
 
-Tạm dừng, tiếp tục và huỷ là thao tác trên **lượt chạy** mới nhất của dự án, không chỉ trên trạng thái của dự án; xoá dự án huỷ lượt chạy và xoá kho tệp của nó. Ba quy tắc giữ cho các thao tác này đúng:
+Các thao tác tạm dừng, tiếp tục và huỷ tác động lên lượt chạy mới nhất của dự án, ngoài việc cập nhật trạng thái của dự án; khi xoá dự án, hệ thống huỷ lượt chạy và xoá kho tệp của dự án đó. Ba quy tắc sau bảo đảm các thao tác này hoạt động đúng:
 
-- Không tiếp tục khi lượt chạy đang chờ phê duyệt (tiếp tục lúc đó sẽ chạy lại nút phê duyệt và hỏi hai lần), và không tiếp tục khi ngân sách đã hết; cả hai trả lỗi có lý do.
-- **Không nút nào bắt đầu khi ngân sách đã hết.** Bộ máy kiểm tra ngân sách trước mỗi nút và tạm dừng lượt chạy nếu đã hết. Chi phí được cộng bằng phép tăng nguyên tử trong cơ sở dữ liệu thay vì đọc rồi ghi, và thông báo 90% và 100% chỉ phát một lần, khi vượt ngưỡng.
-- Một nút kết thúc trong lúc lượt chạy đang tạm dừng không bị chạy lại khi tiếp tục.
+- Không cho phép tiếp tục khi lượt chạy đang chờ phê duyệt (vì khi đó nút phê duyệt sẽ chạy lại và yêu cầu phê duyệt hai lần), cũng như khi ngân sách đã hết; trong cả hai trường hợp, hệ thống trả về lỗi kèm lý do.
+- Không nút nào được bắt đầu khi ngân sách đã hết. Bộ máy kiểm tra ngân sách trước mỗi nút và tạm dừng lượt chạy nếu ngân sách đã hết. Chi phí được cộng dồn bằng phép tăng nguyên tử trong cơ sở dữ liệu thay cho cách đọc rồi ghi, và các thông báo ở mức 90% và 100% chỉ được phát một lần, tại thời điểm vượt ngưỡng.
+- Một nút đã kết thúc trong lúc lượt chạy đang tạm dừng sẽ không bị chạy lại khi lượt chạy tiếp tục.
 
-Các quy tắc này được thêm sau một đợt rà soát mã có hệ thống phần giao diện và logic (mục 6.9): trước đó nút *Pause* trên giao diện chỉ đổi trạng thái dự án trong khi lượt chạy vẫn tiếp tục, và ngân sách chỉ được kiểm tra sau khi chi phí đã phát sinh.
+Các quy tắc này được bổ sung sau một đợt rà soát mã có hệ thống đối với phần giao diện và logic (mục 6.9). Trước đó, nút *Pause* trên giao diện chỉ thay đổi trạng thái của dự án trong khi lượt chạy vẫn tiếp tục, và ngân sách chỉ được kiểm tra sau khi chi phí đã phát sinh.
 
 ![Máy trạng thái của quy trình](../diagrams/rendered/state-machines/SM-002-workflow-states.svg){.wide}
 
 ## Thiết kế dữ liệu và lưu trữ
 
-Dữ liệu có cấu trúc nằm trong PostgreSQL qua 22 mô hình Prisma (người dùng, dự án, mốc, công việc, tác tử, bộ nhớ, lượt chạy, bước, ảnh chụp, phiên bản định nghĩa, phê duyệt, nhật ký sử dụng API, nhật ký cổng chất lượng, nhật ký kiểm toán, khoá API, webhook, lần gửi webhook, dự báo, nhà cung cấp LLM, mô hình LLM…). Lược đồ được quản lý bằng migration có phiên bản; một bước kiểm tra so lược đồ dựng từ migration với mô hình để phát hiện lệch.
+Dữ liệu có cấu trúc được lưu trong PostgreSQL thông qua 22 mô hình Prisma (người dùng, dự án, mốc, công việc, tác tử, bộ nhớ, lượt chạy, bước, ảnh chụp, phiên bản định nghĩa, phê duyệt, nhật ký sử dụng API, nhật ký cổng chất lượng, nhật ký kiểm toán, khoá API, webhook, lần gửi webhook, dự báo, nhà cung cấp LLM, mô hình LLM, v.v.). Lược đồ cơ sở dữ liệu được quản lý bằng các migration có phiên bản; một bước kiểm tra so sánh lược đồ dựng từ migration với mô hình để phát hiện sai lệch.
 
-Sản phẩm của tác tử (tài liệu, sơ đồ, mã, kiểm thử, báo cáo) **không** nằm trong cơ sở dữ liệu mà trong `ProjectWorkspace`: một thư mục bền vững cho mỗi dự án, có kiểm tra chống thoát thư mục (đường dẫn `../../etc/...` do LLM đề xuất bị từ chối). Thiết kế ban đầu ghi sản phẩm vào sandbox Docker, vốn chạy mỗi lệnh trong một container mới không có ổ gắn, nên mọi tệp bị mất sau mỗi lệnh; đây là lý do cổng chất lượng và việc quét kiểm thử trước đó không bao giờ thành công.
+Sản phẩm của tác tử (tài liệu, sơ đồ, mã nguồn, kiểm thử, báo cáo) được lưu trong `ProjectWorkspace` thay vì trong cơ sở dữ liệu. Đây là một thư mục lưu trữ lâu dài cho mỗi dự án, có cơ chế chống thoát khỏi thư mục (ví dụ, đường dẫn `../../etc/...` do LLM đề xuất sẽ bị từ chối). Thiết kế ban đầu ghi sản phẩm vào sandbox Docker; sandbox này chạy mỗi lệnh trong một container mới không gắn ổ lưu trữ, nên mọi tệp đều bị mất sau mỗi lệnh. Đó là lý do cổng chất lượng và bước quét kiểm thử trong thiết kế ban đầu chưa bao giờ chạy thành công.
 
 ## Áp dụng OOAD cho dự án sinh ra
 
-Đây là đóng góp đặc thù của nền tảng: mọi dự án đi qua cùng một chuỗi OOAD và chuỗi đó được **kiểm tra**, không chỉ được sinh ra.
+Mọi dự án do nền tảng sinh ra đều đi qua cùng một chuỗi OOAD, và từng bước trong chuỗi đều được kiểm tra tự động.
 
 ### Chuỗi sản phẩm
 
@@ -175,24 +175,24 @@ Sản phẩm của tác tử (tài liệu, sơ đồ, mã, kiểm thử, báo c�
 | Kiểm thử | QC | `tests/UC-xxx.spec.ts`, kết quả Jest |
 | Truy vết | QC | `docs/traceability-matrix.md` |
 
-Khung mã dựng từ mẫu Handlebars theo đúng bốn tầng; giao diện Repository nằm trong miền, hiện thực trong hạ tầng, và một `composition-root.ts` lắp ghép phụ thuộc. Như vậy kiến trúc mà nền tảng dùng cho chính nó cũng là kiến trúc nó đòi hỏi ở sản phẩm.
+Khung mã được dựng từ các mẫu Handlebars theo đúng bốn tầng: giao diện Repository nằm trong tầng miền, phần hiện thực nằm trong tầng hạ tầng, và tệp `composition-root.ts` lắp ghép các phụ thuộc. Như vậy, kiến trúc mà nền tảng áp dụng cho chính mình cũng là kiến trúc nền tảng yêu cầu ở sản phẩm.
 
 ### Ba lớp kiểm tra
 
-1. **Cổng OOAD** (nút `quality_gate` sau thiết kế): kiểm tra số use case, số thực thể miền, số mẫu thiết kế đạt ngưỡng và các tệp bắt buộc tồn tại. Không đạt thì quay lại Architect. Mỗi lần đánh giá ghi vào `QualityGateLog` và phát `QualityGateEvaluatedEvent`.
-2. **Phân tích tĩnh trước QA** (mục 4.8.3): trong đó có luật phân lớp *miền ← ứng dụng ← hạ tầng/trình bày*; một lệnh `import` hoặc `require()` từ miền vào hạ tầng là vi phạm.
-3. **Kiểm thử chấp nhận đã thực thi**: độ bao phủ use case chỉ tính các use case có kiểm thử chạy đạt; use case thiếu kiểm thử hoặc kiểm thử thất bại được liệt kê đích danh.
+1. **Cổng OOAD** (nút `quality_gate` sau bước thiết kế): kiểm tra số use case, số thực thể miền và số mẫu thiết kế có đạt ngưỡng hay không, và các tệp bắt buộc có tồn tại hay không. Nếu không đạt, quy trình quay lại bước của Architect. Mỗi lần đánh giá được ghi vào `QualityGateLog` và phát sự kiện `QualityGateEvaluatedEvent`.
+2. **Phân tích tĩnh trước khi QA rà soát** (mục 4.8.3), trong đó có luật phân lớp *miền ← ứng dụng ← hạ tầng/trình bày*: mọi lệnh `import` hoặc `require()` từ tầng miền vào tầng hạ tầng đều bị coi là vi phạm.
+3. **Kiểm thử chấp nhận đã thực thi**: độ bao phủ use case chỉ tính các use case có kiểm thử đã chạy và đạt; các use case thiếu kiểm thử hoặc có kiểm thử thất bại được liệt kê cụ thể.
 
 ## Bảo mật và tính năng doanh nghiệp
 
-- **Chuỗi guard toàn cục** (Chain of Responsibility): `AuthenticationGuard` (JWT [49] cho người dùng, khoá API cho `/api/v1`) → `RateLimitGuard` → `PermissionGuard`. Mặc định mọi route cần đăng nhập; route công khai phải đánh dấu `@Public`.
-- **Quyền sở hữu**: `AuthorizationService` kiểm tra chủ dự án và người được giao phê duyệt; vi phạm trả 403 và ghi `access.denied`. Việc tạo và sửa công việc kiểm tra chủ dự án như việc sửa dự án.
-- **Đặc quyền tối thiểu khi đăng ký**: tài khoản tự đăng ký nhận vai trò người xem (`SIGNUP_ROLE`), quản trị viên nâng quyền trên trang người dùng, và có thể tắt đăng ký (`ALLOW_REGISTRATION=false`); phiên đăng nhập hết hạn sau `JWT_EXPIRATION`, mặc định 8 giờ.
-- **Nhật ký kiểm toán chỉ ghi thêm**: decorator `@Audited` cùng `AuditInterceptor` ghi hành động của người dùng; `AuditLogHandler` ghi hành động của hệ thống và tác tử từ sự kiện miền. Mật khẩu, token, bí mật và khoá bị che trước khi ghi.
-- **API tích hợp**: khoá API chỉ mang các phạm vi mà vai trò hiện tại của chủ khoá cho phép (giao của hai tập); giới hạn tần suất theo khoá; tài liệu OpenAPI ở `/api/docs` (có thể tắt trong production).
-- **Webhook**: payload ký HMAC-SHA256 [48] kèm dấu thời gian, URL tới mạng nội bộ bị từ chối cả sau khi phân giải DNS (chống SSRF [50]), gửi lại với giãn cách mũ.
-- **Phê duyệt chỉ qua REST**: kiểm thử đầu-cuối của cấu hình triển khai phát hiện rằng giao diện gửi quyết định phê duyệt qua WebSocket, và cổng WebSocket chấp nhận quyết định từ bất kỳ kết nối nào: người xem, vốn nhận 403 từ REST, vẫn duyệt được và dự án được đóng mà không có mục kiểm toán. Thiết kế đã sửa: quyết định chỉ đi qua `POST /api/approvals/:id/approve|reject` (kiểm quyền, kiểm người được giao, ghi kiểm toán), thông điệp WebSocket tương ứng bị từ chối. Câu trả lời là một cập nhật có điều kiện trên trạng thái `pending`, nên hai câu trả lời đồng thời không thể cùng thành công (câu thứ hai nhận 409); quyết định và lý do (bắt buộc khi từ chối) được ghi vào biến của lượt chạy để các tác tử chạy sau đọc được.
-- **Cấu hình production an toàn**: với `NODE_ENV=production`, API không khởi động nếu thiếu `JWT_SECRET` (hoặc ngắn hơn 32 ký tự), thiếu `CORS_ORIGIN` hoặc còn giá trị giữ chỗ như `CHANGE_ME`. Mọi nơi đọc khoá JWT (REST, guard WebSocket, cổng WebSocket) dùng chung một hàm; trước đó ba nơi có ba giá trị dự phòng khác nhau, nên khi không đặt `JWT_SECRET` kết nối thời gian thực luôn bị từ chối.
+- **Chuỗi guard toàn cục** (mẫu Chain of Responsibility): `AuthenticationGuard` (JWT [49] cho người dùng, khoá API cho `/api/v1`) → `RateLimitGuard` → `PermissionGuard`. Theo mặc định, mọi route đều yêu cầu đăng nhập; route công khai phải được đánh dấu bằng `@Public`.
+- **Quyền sở hữu**: `AuthorizationService` kiểm tra chủ sở hữu dự án và người được giao phê duyệt; khi vi phạm, hệ thống trả về mã 403 và ghi sự kiện `access.denied`. Việc tạo và sửa công việc cũng được kiểm tra quyền chủ sở hữu giống như việc sửa dự án.
+- **Đặc quyền tối thiểu khi đăng ký**: tài khoản tự đăng ký chỉ nhận vai trò người xem (`SIGNUP_ROLE`); quản trị viên nâng quyền trên trang quản lý người dùng và có thể tắt chức năng đăng ký (`ALLOW_REGISTRATION=false`). Phiên đăng nhập hết hạn sau khoảng thời gian `JWT_EXPIRATION`, mặc định là 8 giờ.
+- **Nhật ký kiểm toán chỉ ghi thêm**: decorator `@Audited` cùng với `AuditInterceptor` ghi lại hành động của người dùng; `AuditLogHandler` ghi lại hành động của hệ thống và tác tử dựa trên sự kiện miền. Mật khẩu, token, bí mật và khoá được che trước khi ghi.
+- **API tích hợp**: khoá API chỉ mang các phạm vi mà vai trò hiện tại của chủ khoá cho phép (giao của hai tập phạm vi); tần suất gọi được giới hạn theo từng khoá; tài liệu OpenAPI được cung cấp tại `/api/docs` (có thể tắt trong môi trường production).
+- **Webhook**: payload được ký bằng HMAC-SHA256 [48] kèm dấu thời gian; URL trỏ tới mạng nội bộ bị từ chối, kể cả sau khi phân giải DNS (chống tấn công SSRF [50]); việc gửi lại được thực hiện với thời gian giãn cách tăng theo hàm mũ.
+- **Phê duyệt chỉ qua REST**: kiểm thử đầu-cuối trên cấu hình triển khai phát hiện rằng giao diện gửi quyết định phê duyệt qua WebSocket, và cổng WebSocket chấp nhận quyết định từ bất kỳ kết nối nào. Kết quả là người xem, vốn bị REST trả về mã 403, vẫn phê duyệt được, và dự án được đóng mà không có mục kiểm toán nào. Trong thiết kế đã sửa, quyết định phê duyệt chỉ đi qua `POST /api/approvals/:id/approve|reject` (có kiểm tra quyền, kiểm tra người được giao và ghi kiểm toán), còn thông điệp WebSocket tương ứng bị từ chối. Việc trả lời phê duyệt là một cập nhật có điều kiện trên trạng thái `pending`, nên hai câu trả lời đồng thời không thể cùng thành công (câu trả lời thứ hai nhận mã 409). Quyết định và lý do (bắt buộc khi từ chối) được ghi vào biến của lượt chạy để các tác tử chạy sau có thể đọc.
+- **Cấu hình production an toàn**: khi `NODE_ENV=production`, API sẽ không khởi động nếu thiếu `JWT_SECRET` (hoặc giá trị này ngắn hơn 32 ký tự), thiếu `CORS_ORIGIN`, hoặc vẫn còn giá trị giữ chỗ như `CHANGE_ME`. Mọi nơi đọc khoá JWT (REST, guard WebSocket, cổng WebSocket) đều dùng chung một hàm. Trước đây, ba nơi này có ba giá trị dự phòng khác nhau, nên khi không đặt `JWT_SECRET`, kết nối thời gian thực luôn bị từ chối.
 
 ![Chuỗi xử lý một yêu cầu có khoá API](../diagrams/rendered/sequences/SD-009-api-key-request.svg){.wide}
 
@@ -200,20 +200,20 @@ Khung mã dựng từ mẫu Handlebars theo đúng bốn tầng; giao diện Rep
 
 ### Phân tích hiệu năng tác tử
 
-`AgentPerformanceAnalyzer` (miền, thuần) tính cho mỗi vai trò: số bước, tỉ lệ thành công, thời lượng trung bình và p95, chi phí trên mỗi lần thành công, chất lượng, xu hướng so với kỳ trước và thứ hạng. Điểm thiết kế quan trọng là **chất lượng được đo theo vai trò** bằng các `IQualitySignal` khác nhau: DEV theo tỉ lệ được QA duyệt, QC theo kết quả kiểm thử, Architect theo cổng OOAD, các vai trò khác theo tỉ lệ thành công ngay lần đầu. `AgentAnomalyDetector` áp dụng năm quy tắc (tỉ lệ thành công giảm 20 điểm, ba lần thất bại liên tiếp, chi phí gấp đôi, chậm gấp đôi, chất lượng dưới 50%); mỗi bất thường được phát một lần mỗi ngày qua cùng đường sự kiện, kiểm toán và webhook.
+`AgentPerformanceAnalyzer` (thuộc tầng miền, là hàm thuần) tính các chỉ số sau cho mỗi vai trò: số bước, tỉ lệ thành công, thời lượng trung bình và phân vị 95, chi phí cho mỗi lần thành công, chất lượng, xu hướng so với kỳ trước và thứ hạng. Chất lượng được đo theo từng vai trò bằng các `IQualitySignal` khác nhau: DEV được đo theo tỉ lệ được QA duyệt, QC theo kết quả kiểm thử, Architect theo kết quả cổng OOAD, còn các vai trò khác theo tỉ lệ thành công ngay từ lần đầu. `AgentAnomalyDetector` áp dụng năm quy tắc: tỉ lệ thành công giảm 20 điểm phần trăm, ba lần thất bại liên tiếp, chi phí tăng gấp đôi, thời gian chạy tăng gấp đôi, và chất lượng dưới 50%. Mỗi bất thường được phát tối đa một lần mỗi ngày qua cùng kênh sự kiện, kiểm toán và webhook.
 
 ### Dự báo thời gian và chi phí
 
-Nền tảng không ghi giờ công của con người; cái nó ghi là thời lượng và chi phí LLM của từng bước tác tử. Vì vậy mô hình dự báo **thời gian tác tử và chi phí LLM theo dự án và vai trò**, không phải giờ công của từng công việc. Mỗi vai trò có một hồi quy ridge [40] trên hai đặc trưng (độ dài mô tả, số use case); khi một vai trò có ít hơn 6 mẫu, mô hình dùng trung vị. Độ chính xác được báo bằng sai số leave-one-out (MAPE và MAE) [46], và mỗi dự báo mang mức tin cậy. Dự báo được lưu khi quy trình bắt đầu và khi PM lập kế hoạch, rồi được so với kết quả khi dự án xong. Chi phí ước lượng của mỗi công việc mà PM tạo được suy ra từ dự báo của DEV, QC và QA.
+Nền tảng không ghi nhận giờ công của con người mà ghi nhận thời lượng và chi phí LLM của từng bước do tác tử thực hiện. Vì vậy, mô hình dự báo thời gian của tác tử và chi phí LLM theo từng dự án và từng vai trò, thay cho giờ công của từng công việc. Mỗi vai trò có một mô hình hồi quy ridge [40] trên hai đặc trưng là độ dài mô tả dự án và số use case; khi một vai trò có ít hơn 6 mẫu, mô hình dùng giá trị trung vị. Độ chính xác được báo cáo bằng sai số leave-one-out (MAPE và MAE) [46], và mỗi dự báo đi kèm một mức tin cậy. Dự báo được lưu khi quy trình bắt đầu và khi PM lập kế hoạch, sau đó được so sánh với kết quả thực tế khi dự án hoàn thành. Chi phí ước lượng của mỗi công việc do PM tạo ra được suy ra từ dự báo của DEV, QC và QA.
 
 ### Phân tích tĩnh và vòng sửa có giới hạn
 
-`TypeScriptCodeAnalyzer` (hạ tầng, sau cổng `ICodeAnalyzer`) dùng TypeScript compiler API để tính: lỗi cú pháp, độ phức tạp McCabe từng hàm [35], thể tích Halstead [36], chỉ số bảo trì chuẩn hoá [37], [38], lời gọi không an toàn (`eval`, `Function`), bí mật viết cứng, vi phạm phân lớp và tham chiếu use case. `CodeQualityPolicy` (miền) trừ điểm có trần cho mỗi loại vấn đề, tính điểm trung bình có trọng số theo số dòng, và **dự đoán phán quyết QA** là *fail* khi điểm dưới 70, có lỗi cú pháp hoặc có vi phạm phân lớp. Khi dự đoán là *fail*, DEV được cho **đúng một** vòng sửa kèm danh sách vấn đề; bản sửa chỉ được giữ nếu điểm tăng. QA nhận báo cáo phân tích làm bằng chứng khi rà soát. Dự đoán được đối chiếu với phán quyết thật để đo độ chính xác thay vì được khẳng định.
+`TypeScriptCodeAnalyzer` (thuộc tầng hạ tầng, nằm sau cổng `ICodeAnalyzer`) dùng TypeScript compiler API để xác định: lỗi cú pháp, độ phức tạp McCabe của từng hàm [35], thể tích Halstead [36], chỉ số bảo trì đã chuẩn hoá [37], [38], các lời gọi không an toàn (`eval`, `Function`), bí mật được viết cứng trong mã, vi phạm phân lớp và các tham chiếu đến use case. `CodeQualityPolicy` (thuộc tầng miền) trừ điểm có giới hạn trần cho mỗi loại vấn đề, tính điểm trung bình có trọng số theo số dòng, và dự đoán phán quyết của QA là *fail* khi điểm dưới 70, khi có lỗi cú pháp hoặc khi có vi phạm phân lớp. Khi dự đoán là *fail*, DEV được thực hiện đúng một vòng sửa với danh sách vấn đề kèm theo; bản sửa chỉ được giữ lại nếu điểm tăng. QA nhận báo cáo phân tích làm bằng chứng khi rà soát. Dự đoán này được đối chiếu với phán quyết thực tế để đo độ chính xác.
 
 ![Luồng phân tích chất lượng mã](../diagrams/rendered/activities/AD-004-code-quality-analysis-flow.svg)
 
 ## Thiết kế triển khai
 
-Hệ thống triển khai bằng Docker Compose trên một máy chủ: nginx phục vụ ứng dụng web và làm proxy ngược cho `/api`, `/socket.io` và `/plantuml`; API (Node 20) chạy migration khi khởi động rồi phục vụ; PostgreSQL (có pgvector), Redis (AOF) và máy chủ PlantUML nội bộ; kho tệp của dự án là một volume. Chỉ nginx được công bố ra ngoài. Một hồ sơ `demo` thêm LLM kịch bản để trình diễn ngoại tuyến. API có hai điểm kiểm tra sức khoẻ [54]: `/api/health/live` (tiến trình còn trả lời, dùng cho HEALTHCHECK của Docker) và `/api/health` (sẵn sàng: trả 503 khi mất cơ sở dữ liệu, *degraded* khi mất Redis hoặc cổng LLM).
+Hệ thống được triển khai bằng Docker Compose trên một máy chủ, gồm các dịch vụ: nginx phục vụ ứng dụng web và làm proxy ngược cho `/api`, `/socket.io` và `/plantuml`; API (Node 20) chạy migration khi khởi động rồi bắt đầu phục vụ; PostgreSQL (có pgvector); Redis (chế độ AOF); và máy chủ PlantUML nội bộ. Kho tệp của các dự án là một volume. Chỉ có nginx được công bố ra bên ngoài. Hồ sơ `demo` bổ sung LLM kịch bản để trình diễn khi không có kết nối mạng. API có hai điểm kiểm tra sức khoẻ [54]: `/api/health/live` cho biết tiến trình còn phản hồi và được dùng cho HEALTHCHECK của Docker; `/api/health` cho biết hệ thống đã sẵn sàng, trả về mã 503 khi mất kết nối cơ sở dữ liệu và trạng thái *degraded* khi mất Redis hoặc cổng LLM.
 
 ![Sơ đồ triển khai](../diagrams/rendered/architecture/deployment-diagram.svg){.wide}

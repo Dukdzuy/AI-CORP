@@ -1,12 +1,12 @@
 # Phân tích yêu cầu
 
-Chương này xác định ai dùng nền tảng, nền tảng phải làm gì và phải đạt chất lượng nào. Đặc tả đầy đủ 31 use case nằm trong `docs/requirements/use-cases.md`; ma trận truy vết yêu cầu → use case → thiết kế → mã → kiểm thử nằm trong `docs/requirements/traceability-matrix.md`. Chương này tóm tắt và phân tích các quyết định chính.
+Chương này xác định những đối tượng sử dụng nền tảng, các chức năng nền tảng phải cung cấp và các yêu cầu chất lượng nền tảng phải đạt. Đặc tả đầy đủ của 31 use case nằm trong tệp `docs/requirements/use-cases.md`; ma trận truy vết từ yêu cầu đến use case, thiết kế, mã nguồn và kiểm thử nằm trong tệp `docs/requirements/traceability-matrix.md`. Nội dung chương tóm tắt các tài liệu này và phân tích những quyết định chính.
 
 ## Tác nhân và vai trò tác tử
 
-Nền tảng có hai loại tác nhân: con người và tác tử AI.
+Nền tảng có hai loại tác nhân là con người và tác tử AI.
 
-**Tác nhân con người.** Phân quyền theo vai trò (RBAC) [47] với ba vai trò:
+**Tác nhân con người.** Nền tảng phân quyền theo vai trò (RBAC) [47] với ba vai trò như trong bảng sau.
 
 | Vai trò | Quyền chính |
 |---------|-------------|
@@ -14,13 +14,13 @@ Nền tảng có hai loại tác nhân: con người và tác tử AI.
 | Thành viên hội đồng quản trị (board member) | Tạo và sở hữu dự án, duyệt hoặc từ chối các bước cần con người, xem chi phí, báo cáo và phân tích, xuất dữ liệu, quản lý khoá API và webhook của mình |
 | Người xem (viewer) | Chỉ đọc: xem dự án, báo cáo và tài liệu sinh ra |
 
-Ngoài vai trò, mỗi dự án có một **chủ sở hữu**: thành viên hội đồng chỉ duyệt được các phê duyệt được giao cho mình và chỉ sửa được dự án của mình. Tác tử AI không phải người dùng đăng nhập; mọi hành động của chúng được ghi vào nhật ký kiểm toán với loại tác nhân `agent`.
+Bên cạnh vai trò, mỗi dự án có một chủ sở hữu. Thành viên hội đồng quản trị chỉ xử lý được các yêu cầu phê duyệt được giao cho mình và chỉ chỉnh sửa được dự án của mình. Tác tử AI không phải là người dùng đăng nhập; mọi hành động của tác tử được ghi vào nhật ký kiểm toán với loại tác nhân `agent`.
 
-**Tác tử AI.** Nền tảng ban đầu có năm tác tử. Việc rà soát vai trò dẫn đến ba thay đổi:
+**Tác tử AI.** Nền tảng ban đầu có năm tác tử. Việc rà soát lại các vai trò dẫn đến ba thay đổi sau:
 
-1. **Thêm BA và Architect**, vì một quy trình OOAD cần người viết use case và người dựng mô hình miền trước khi lập kế hoạch.
-2. **Bỏ DevOps.** Sản phẩm của nền tảng là một dự án đã được phân tích, thiết kế, hiện thực và kiểm thử, không phải một bản triển khai đang chạy. Tác tử DevOps chưa từng nằm trong quy trình, chỉ sinh văn bản không ai dùng, và sandbox không có mạng hay ổ lưu trữ để triển khai. Giữ lại nó sẽ thêm một vai trò không có đầu ra kiểm chứng được và kéo phạm vi sang CI/CD.
-3. **Tách QA và QC** theo định nghĩa của ISO 9000 [53]. Tác tử QA cũ trộn cả hai việc và thực tế không làm tốt việc nào.
+1. Bổ sung hai tác tử BA và Architect, vì một quy trình OOAD cần có người viết use case và người xây dựng mô hình miền trước khi lập kế hoạch.
+2. Loại bỏ tác tử DevOps. Sản phẩm của nền tảng là một dự án đã được phân tích, thiết kế, hiện thực và kiểm thử; việc triển khai dự án đó không thuộc phạm vi. Trong nền tảng ban đầu, tác tử DevOps chưa từng được đưa vào quy trình, chỉ sinh ra văn bản không được sử dụng, và sandbox cũng không có mạng hay ổ lưu trữ để triển khai. Nếu giữ lại, tác tử này sẽ là một vai trò không có đầu ra kiểm chứng được và kéo phạm vi đề tài sang CI/CD.
+3. Tách riêng QA và QC theo định nghĩa của ISO 9000 [53]. Tác tử QA cũ đảm nhận cả hai nhiệm vụ và trên thực tế không hoàn thành tốt nhiệm vụ nào.
 
 | Tác tử | Trách nhiệm | Đầu ra kiểm chứng được |
 |--------|-------------|------------------------|
@@ -35,17 +35,17 @@ Ngoài vai trò, mỗi dự án có một **chủ sở hữu**: thành viên h�
 
 ## Yêu cầu chức năng
 
-Các yêu cầu chức năng được nhóm thành bốn nhóm lớn (mã trong ngoặc là nhóm trong ma trận truy vết):
+Các yêu cầu chức năng được chia thành bốn nhóm lớn (mã trong ngoặc là mã nhóm trong ma trận truy vết).
 
-**Hệ thống tác tử (FR1).** Tám vai trò tác tử như trên; tác tử học từ kết quả trước qua bộ nhớ được tinh luyện; tác tử cộng tác theo các mẫu lập trình cặp và chuỗi rà soát; tác tử giao việc con cho nhau qua bus thông điệp.
+**Hệ thống tác tử (FR1).** Nhóm này gồm tám vai trò tác tử nêu trên; khả năng học từ các kết quả trước thông qua bộ nhớ đã được chắt lọc; khả năng cộng tác theo các mẫu lập trình cặp và chuỗi rà soát; và khả năng giao việc con cho nhau qua bus thông điệp.
 
-**Bộ máy quy trình (FR2).** Quy trình con và lồng ghép quy trình; phiên bản bất biến và khôi phục về ảnh chụp; thực thi song song có giải quyết phụ thuộc; mẫu quy trình có tham số kiểu.
+**Bộ máy quy trình (FR2).** Nhóm này gồm quy trình con và lồng ghép quy trình; phiên bản bất biến và khôi phục về ảnh chụp trạng thái; thực thi song song có giải quyết phụ thuộc; và các mẫu quy trình có tham số định kiểu.
 
-**Tính năng doanh nghiệp (FR3).** RBAC với quyền chi tiết và quyền sở hữu dự án; nhật ký kiểm toán đầy đủ; API tích hợp cho công cụ bên ngoài (khoá API, webhook); xuất dữ liệu và báo cáo; quản lý nhà cung cấp và mô hình LLM ngay trong ứng dụng (khoá API được mã hoá); điều khiển lượt chạy (tạm dừng, tiếp tục, huỷ) có ràng buộc ngân sách và phê duyệt.
+**Tính năng doanh nghiệp (FR3).** Nhóm này gồm RBAC với quyền chi tiết và quyền sở hữu dự án; nhật ký kiểm toán đầy đủ; API tích hợp cho công cụ bên ngoài (khoá API, webhook); xuất dữ liệu và báo cáo; quản lý nhà cung cấp và mô hình LLM ngay trong ứng dụng, với khoá API được mã hoá; và điều khiển lượt chạy (tạm dừng, tiếp tục, huỷ) có ràng buộc về ngân sách và phê duyệt.
 
-**Tính năng AI/ML (FR4).** Phân tích hiệu năng và quá trình học của tác tử; mô hình ước lượng dựa trên dữ liệu lịch sử; dự đoán chất lượng mã bằng phân tích tĩnh; gợi ý tối ưu dựa trên bất thường.
+**Tính năng AI/ML (FR4).** Nhóm này gồm phân tích hiệu năng và quá trình học của tác tử; mô hình ước lượng dựa trên dữ liệu lịch sử; dự đoán chất lượng mã bằng phân tích tĩnh; và gợi ý tối ưu dựa trên các bất thường phát hiện được.
 
-Ma trận truy vết có 124 yêu cầu chức năng và phi chức năng: 115 ở trạng thái *Implemented*, 1 ở *Partial* và 8 ở *Planned* (các mục chưa làm được ghi rõ là chưa làm thay vì bị xoá); mỗi yêu cầu đã hiện thực trỏ đến tệp mã và tệp kiểm thử.
+Ma trận truy vết có tổng cộng 124 yêu cầu chức năng và phi chức năng, trong đó 115 yêu cầu ở trạng thái *Implemented*, 1 yêu cầu ở trạng thái *Partial* và 8 yêu cầu ở trạng thái *Planned*. Các yêu cầu chưa thực hiện được giữ lại trong ma trận và ghi rõ trạng thái. Mỗi yêu cầu đã hiện thực đều trỏ đến tệp mã nguồn và tệp kiểm thử tương ứng.
 
 ## Yêu cầu phi chức năng
 
@@ -60,7 +60,7 @@ Ma trận truy vết có 124 yêu cầu chức năng và phi chức năng: 115 �
 
 ## Mô hình use case
 
-Nền tảng có 31 use case được đặc tả, chia thành bốn nhóm.
+Nền tảng có 31 use case đã được đặc tả, chia thành bốn nhóm như trong bảng sau.
 
 | Nhóm | Use case |
 |------|----------|
@@ -71,7 +71,7 @@ Nền tảng có 31 use case được đặc tả, chia thành bốn nhóm.
 
 ![Sơ đồ use case tổng thể của nền tảng](../diagrams/rendered/use-cases/overall-system.svg){.wide}
 
-Các quan hệ giữa use case phản ánh cấu trúc quy trình: UC-004 *Thực thi quy trình* `«include»` UC-005 *Duyệt bước* khi quy trình có nút chờ con người; UC-006 *Từ chối* `«extend»` UC-005; UC-012 *Phát triển* `«include»` UC-023 *Phân tích chất lượng mã* (dự đoán phán quyết QA và sửa một vòng); UC-016 của QC dùng kết quả của UC-009 (use case do BA viết) làm đầu vào.
+Các quan hệ giữa use case phản ánh cấu trúc của quy trình: UC-004 *Thực thi quy trình* `«include»` UC-005 *Duyệt bước* khi quy trình có nút chờ con người; UC-006 *Từ chối* `«extend»` UC-005; UC-012 *Phát triển* `«include»` UC-023 *Phân tích chất lượng mã* (dự đoán phán quyết QA và sửa một vòng); UC-016 của QC dùng kết quả của UC-009 (use case do BA viết) làm đầu vào.
 
 ## Đặc tả use case tiêu biểu
 
@@ -80,29 +80,29 @@ Các quan hệ giữa use case phản ánh cấu trúc quy trình: UC-004 *Thự
 - **Tác nhân:** thành viên hội đồng quản trị.
 - **Tiền điều kiện:** đã đăng nhập, có quyền `project:create`.
 - **Luồng chính:** (1) người dùng chọn mẫu quy trình và điền tham số (ví dụ số use case tối thiểu, có bật bước duyệt của con người không); (2) hệ thống kiểm tra mẫu và tham số trước khi tạo bất cứ thứ gì; (3) thực thể `Project` được tạo qua phương thức nhà máy `Project.create`, áp dụng các bất biến (tên không rỗng, ngân sách dương); (4) dự án được lưu, sự kiện `ProjectCreatedEvent` được phát; (5) bộ máy quy trình tạo một lượt chạy gắn với phiên bản bất biến `mẫu@phiên_bản+băm` của định nghĩa quy trình; (6) một dự báo thời gian và chi phí được lưu khi quy trình bắt đầu.
-- **Luồng thay thế:** mẫu không tồn tại → 404; tham số sai kiểu → 400 trước khi tạo dự án; người xem gọi → 403 và một mục `access.denied` trong nhật ký kiểm toán.
+- **Luồng thay thế:** nếu mẫu không tồn tại, hệ thống trả về mã 404; nếu tham số sai kiểu, hệ thống trả về mã 400 trước khi tạo dự án; nếu người xem gọi chức năng này, hệ thống trả về mã 403 và ghi một mục `access.denied` vào nhật ký kiểm toán.
 - **Hậu điều kiện:** dự án ở trạng thái `active`, có một lượt chạy quy trình; nhật ký kiểm toán có `project.create` và `workflow.started`.
 
 ### UC-004 Thực thi quy trình
 
 - **Tác nhân:** hệ thống (bộ máy quy trình) và các tác tử.
-- **Luồng chính:** bộ máy lấy nút hiện tại, chọn chiến lược thực thi theo loại nút (`agent_task`, `sub_workflow`, `quality_gate`, `condition`, `parallel`, `human_approval`), ghi một bước (`WorkflowStep`) với thời lượng, gộp kết quả vào ngữ cảnh lượt chạy, chụp ảnh trạng thái (Memento), chọn cạnh kế tiếp và lặp lại đến nút kết thúc.
-- **Luồng thay thế:** nút thất bại được thử lại tối đa ba lần với giãn cách mũ; nếu vẫn thất bại, lượt chạy đi theo cạnh `onFail` hoặc chuyển sang `failed` và phát `workflow.failed`; nút chờ duyệt chuyển lượt chạy sang `paused`; ngân sách vượt ngưỡng tạm dừng lượt chạy.
+- **Luồng chính:** bộ máy lấy nút hiện tại, chọn chiến lược thực thi theo loại nút (`agent_task`, `sub_workflow`, `quality_gate`, `condition`, `parallel`, `human_approval`), ghi lại một bước (`WorkflowStep`) kèm thời lượng, gộp kết quả vào ngữ cảnh của lượt chạy, chụp ảnh trạng thái (Memento), chọn cạnh kế tiếp và lặp lại cho đến khi gặp nút kết thúc.
+- **Luồng thay thế:** nút thất bại được thử lại tối đa ba lần với thời gian giãn cách tăng theo hàm mũ; nếu vẫn thất bại, lượt chạy đi theo cạnh `onFail` hoặc chuyển sang trạng thái `failed` và phát sự kiện `workflow.failed`; khi gặp nút chờ duyệt, lượt chạy chuyển sang trạng thái `paused`; khi chi phí vượt ngưỡng ngân sách, lượt chạy bị tạm dừng.
 
 ### UC-016 Kiểm chứng hiện thực theo use case (QC)
 
 - **Tác nhân:** tác tử QC.
-- **Luồng chính:** (1) QC đọc các use case BA đã viết và mã DEV đã viết; (2) viết một tệp kiểm thử Jest cho mỗi use case (`tests/UC-xxx.spec.ts`); (3) hệ thống chạy kiểm thử trong sandbox Docker, hoặc trong một bản sao tạm khi được phép chạy cục bộ; (4) QC dựng ma trận truy vết use case → lớp → tệp hiện thực → kiểm thử và kết quả; (5) độ bao phủ use case được ghi vào siêu dữ liệu OOAD của dự án.
-- **Hậu điều kiện:** độ bao phủ phản ánh **kiểm thử đã chạy đạt**, không phải kiểm thử đã được viết. Use case không có kiểm thử được liệt kê là thiếu.
+- **Luồng chính:** (1) QC đọc các use case do BA viết và mã nguồn do DEV viết; (2) QC viết một tệp kiểm thử Jest cho mỗi use case (`tests/UC-xxx.spec.ts`); (3) hệ thống chạy kiểm thử trong sandbox Docker, hoặc trong một bản sao tạm thời nếu được phép chạy cục bộ; (4) QC xây dựng ma trận truy vết từ use case đến lớp, tệp hiện thực, tệp kiểm thử và kết quả kiểm thử; (5) độ bao phủ use case được ghi vào siêu dữ liệu OOAD của dự án.
+- **Hậu điều kiện:** độ bao phủ chỉ tính các kiểm thử đã chạy và đạt; kiểm thử mới được viết mà chưa chạy đạt thì không được tính. Use case chưa có kiểm thử được liệt kê là còn thiếu.
 
 ## Mô hình miền
 
-Mô hình miền của nền tảng gồm ba aggregate chính và các khái niệm hỗ trợ:
+Mô hình miền của nền tảng gồm ba aggregate chính và một số khái niệm hỗ trợ:
 
-- **Project** (gốc aggregate) chứa các `Milestone` và `Task`; có ngân sách và chi phí tích luỹ dạng giá trị `Money`; trạng thái `ProjectStatus` là một value object có máy trạng thái.
+- **Project** (gốc aggregate) chứa các `Milestone` và `Task`; có ngân sách và chi phí tích luỹ được biểu diễn bằng value object `Money`; trạng thái `ProjectStatus` là một value object có máy trạng thái riêng.
 - **Agent** có `AgentRole`, cấu hình mô hình, bộ nhớ (`AgentMemory`) và máy trạng thái vòng đời.
-- **WorkflowRun** tham chiếu một phiên bản định nghĩa quy trình bất biến, chứa các `WorkflowStep`, các ảnh chụp `WorkflowSnapshot`, có thể có lượt chạy cha (quy trình con) và các `Approval`.
+- **WorkflowRun** tham chiếu đến một phiên bản bất biến của định nghĩa quy trình, chứa các `WorkflowStep` và các ảnh chụp `WorkflowSnapshot`, có thể có lượt chạy cha (trường hợp quy trình con) và các `Approval`.
 
-Các khái niệm hỗ trợ: `User` và `Role`, `AuditLog` (chỉ ghi thêm), `ApiKey`, `Webhook` và `WebhookDelivery`, `ApiUsageLog` (chi phí LLM), `QualityGateLog`, `ProjectEstimate`.
+Các khái niệm hỗ trợ gồm `User` và `Role`, `AuditLog` (chỉ ghi thêm), `ApiKey`, `Webhook` và `WebhookDelivery`, `ApiUsageLog` (chi phí LLM), `QualityGateLog`, `ProjectEstimate`.
 
 ![Mô hình miền tổng quan](../diagrams/rendered/classes/domain-model-overview.svg){.wide}
